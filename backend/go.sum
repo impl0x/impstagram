@@ -1,2 +1,8 @@
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/impl0x/mo v1.4.0 h1:kACrR2bV5Wm+7d9XiwgoBmkg6+OVsY+kZnvBbT3MX+g=
 github.com/impl0x/mo v1.4.0/go.mod h1:xnSqvJSc/5OW1tcEqNOt4cwuCrSnokjUOyTQlnxfInU=
+github.com/impl0x/mo v1.4.1 h1:tj5kZ7npbl9XeFPLuZ190PukcPKOIqpPRdrgSNJ54fE=
+github.com/impl0x/mo v1.4.1/go.mod h1:xnSqvJSc/5OW1tcEqNOt4cwuCrSnokjUOyTQlnxfInU=
+github.com/impl0x/mo v1.4.2 h1:QeL02idCntbqTsMqEwnfDYjqV9nZtGKas2o5/IZGegg=
+github.com/impl0x/mo v1.4.2/go.mod h1:xnSqvJSc/5OW1tcEqNOt4cwuCrSnokjUOyTQlnxfInU=
