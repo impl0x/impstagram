@@ -47,22 +47,18 @@ func NewDobFromString(dobString string) (Dob, error) {
 	return dob, nil
 }
 
-// Calculates Age from dob and reports if it satisfies the age provided
-func IsOldEnough(minimumAge uint8, dob Dob) bool {
+// Calculates age from dob instance
+func (d Dob) Age() uint8 {
 	now := time.Now()
 	year := uint16(now.Year())
 	day := uint8(now.Day())
 	month := uint8(now.Month())
 
-	age := uint8(year - dob.Year)
+	age := uint8(year - d.Year)
 
-	if month < dob.Month ||
-		(month == dob.Month && day < dob.Day) {
+	if month < d.Month ||
+		(month == d.Month && day < d.Day) {
 		age--
 	}
-
-	if age < minimumAge {
-		return false
-	}
-	return true
+	return age
 }

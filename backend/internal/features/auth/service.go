@@ -17,6 +17,7 @@ type Service struct {
 
 var ErrAlreadyExistingUser = errors.New("User already exists")
 var ErrNotOldEnough = errors.New("User not old enough, must be minimum of " + strconv.Itoa(int(config.MinAge)) + " years old to use this service")
+var ErrTooOld = errors.New("User too old, cannot create account")
 
 func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, error) {
 
@@ -26,12 +27,16 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, er
 		return "", err
 	}
 
-	if !dob.IsOldEnough(config.MinAge, userDob) {
+	userAge := userDob.Age()
+
+	if userAge < config.MinAge {
 		return "", ErrNotOldEnough
+	} else if userAge > config.MaxAge {
+		return "", ErrTooOld
 	}
 
 	var user User
-	println(user)//to be removed
+	println(user) //to be removed
 
 	if req.Username != "" {
 		user, err = s.repo.FindByUsername(ctx, req.Username)
