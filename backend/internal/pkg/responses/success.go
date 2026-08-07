@@ -8,6 +8,8 @@ type SuccessResp struct {
 }
 
 // returns a c.JSON with the data
+//
+// json structure is from [SuccessResp]
 func Success(c *mo.Context, code int, data any) error {
 	return c.JSON(code, SuccessResp{code, data})
 }

@@ -3,6 +3,7 @@ package auth
 import (
 	"backend/internal/config"
 	"backend/internal/pkg/dob"
+	"backend/internal/pkg/email"
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/password"
 	"context"
@@ -11,8 +12,9 @@ import (
 )
 
 type Service struct {
-	jwt  jwt.Jwt
-	repo Repository
+	jwt   jwt.Jwt
+	email email.Email
+	repo  Repository
 }
 
 var ErrAlreadyExistingUser = errors.New("User already exists")
@@ -35,12 +37,9 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, er
 		return "", ErrTooOld
 	}
 
-	var user User
-	println(user) //to be removed
+	var user *User
 
-	if req.Username != "" {
-		user, err = s.repo.FindByUsername(ctx, req.Username)
-	} else if req.Email != "" {
+	if req.Email != "" {
 		user, err = s.repo.FindByEmail(ctx, req.Email)
 	} else if req.Phone != "" {
 		user, err = s.repo.FindByPhone(ctx, req.Phone)
@@ -49,7 +48,11 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, er
 	}
 
 	if err != nil {
-		return "", ErrInvalidCredentials // ignoring database level errors as of now.
+		return "", err
+	}
+
+	if user != nil { // if db returned a user
+		return "", ErrAlreadyExistingUser // ignoring database level errors as of now.
 	}
 
 	passwordHash := password.Hash(req.Password)
@@ -62,28 +65,53 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, er
 
 var ErrMissingIdentifier = errors.New("Need at least one of the following: email, phone or username")
 var ErrInvalidCredentials = errors.New("Invalid credentials")
+var ErrUserBanned = errors.New("User is banned from accessing this service")
+var ErrUserUnverified = errors.New("User is unverified, please verify with your email/phone first")
 
 func (s *Service) Login(ctx context.Context, req LoginRequest) (string, error) {
-	var user User
+	var user *User
 	var err error
 
-	if req.Username != "" {
+	switch {
+	case req.Username != "":
 		user, err = s.repo.FindByUsername(ctx, req.Username)
-	} else if req.Email != "" {
+	case req.Email != "":
 		user, err = s.repo.FindByEmail(ctx, req.Email)
-	} else if req.Phone != "" {
+	case req.Phone != "":
 		user, err = s.repo.FindByPhone(ctx, req.Phone)
-	} else {
+	default:
 		return "", ErrMissingIdentifier
 	}
 
 	if err != nil {
-		return "", ErrInvalidCredentials // ignoring database level errors as of now.
+		return "", err
+	}
+
+	if user == nil {
+		return "", ErrInvalidCredentials
 	}
 
 	if !password.Compare(req.Password, user.PasswordHash) {
 		return "", ErrInvalidCredentials
 	}
+
+	if user.Status == StatusBanned {
+		return "", ErrUserBanned
+	} else if user.Status == StatusUnverified {
+		return "", ErrUserUnverified
+	}
+
+	if user.TwoFA != nil {
+		switch user.TwoFA[0] {
+		case IdentifierEmail:
+			// send email with 2fa code
+		case IdentifierPhone:
+			// send sms with 2fa code
+		default:
+			// impossible case so throw panic
+		}
+	}
+
 	token := s.jwt.GenerateToken()
 	return token, nil
 }

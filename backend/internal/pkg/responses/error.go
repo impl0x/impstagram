@@ -9,6 +9,8 @@ type ErrorResp struct {
 }
 
 // returns a c.JSON with the data
+//
+// json structure is from [ErrorResp]
 func Error(c *mo.Context, code int, message string) error {
 	return c.JSON(code, ErrorResp{code, message})
 }
