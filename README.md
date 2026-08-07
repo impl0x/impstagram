@@ -8,5 +8,5 @@ db: postgresql
 
 ## Details:
 Register:  
-- email using cloudflare
+- email using resend and custom domain: done setting up api
 - phone number using telegram
