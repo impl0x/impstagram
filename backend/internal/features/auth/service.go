@@ -5,6 +5,7 @@ import (
 	"backend/internal/pkg/dob"
 	"backend/internal/pkg/email"
 	"backend/internal/pkg/jwt"
+	"backend/internal/pkg/otp"
 	"backend/internal/pkg/password"
 	"context"
 	"errors"
@@ -13,7 +14,7 @@ import (
 
 type Service struct {
 	jwt   jwt.Jwt
-	email email.Email
+	email email.Client
 	repo  Repository
 }
 
@@ -101,14 +102,24 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (string, error) {
 		return "", ErrUserUnverified
 	}
 
+	err = nil
 	if user.TwoFA != nil {
+		twoFaOTP, err := otp.GenerateOTP()
+		if err != nil {
+			return "", err
+		}
 		switch user.TwoFA[0] {
 		case IdentifierEmail:
-			// send email with 2fa code
+			// send a 2fa email
+			err = s.email.Send(email.NewSendRequest(user.Email, email.SubjectTwoFa, email.HtmlOtp.Format(twoFaOTP)))
 		case IdentifierPhone:
 			// send sms with 2fa code
 		default:
 			// impossible case so throw panic
+			panic("dev fucked up somewhere")
+		}
+		if err != nil {
+			return "", err
 		}
 	}
 
