@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"backend/internal/pkg/common"
 	"backend/internal/pkg/responses"
+	"errors"
 	"net/http"
 
 	"github.com/impl0x/mo"
@@ -10,7 +12,7 @@ import (
 type Handler struct {
 	service *Service
 }
-
+// todo: fix the handlers to follow a different error and translation model
 // ? POST - models.RegisterRequest
 func (h *Handler) RegisterHandler(c *mo.Context) error {
 	var req RegisterRequest
@@ -40,6 +42,9 @@ func (h *Handler) LoginHandler(c *mo.Context) error {
 	}
 	token, err := h.service.Login(c.Request().Context(), req)
 	if err != nil {
+		if errors.Is(err, common.ErrInternalServerError){
+			return mo.ErrInternalServerError
+		}
 		return responses.Error(c, http.StatusBadRequest, err.Error())
 	}
 	return responses.Success(

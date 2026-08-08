@@ -2,7 +2,7 @@ package email
 
 import "strings"
 
-// yes i know this is messy and repetitive.
+// yes i know this is messy and repetitive. and unsafe
 // these html's are ai generated, i don't know html nor do i have the energy to learn html and format everything dynamically as of now
 // i have only 2 email cases so this is enough for me as of now
 

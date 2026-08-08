@@ -10,12 +10,23 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"time"
+
+	"github.com/google/uuid"
 )
 
+type Temp2FAState struct {
+	UserID    uuid.UUID
+	SecretOTP string
+	ExpiresAt time.Time
+}
+
 type Service struct {
-	jwt   jwt.Jwt
-	email email.Client
-	repo  Repository
+	Jwt   jwt.Jwt
+	Email email.Client
+	Repo  Repository
+
+	Pending2FA map[string]Temp2FAState // string is the session uuid
 }
 
 var ErrAlreadyExistingUser = errors.New("User already exists")
@@ -41,9 +52,9 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, er
 	var user *User
 
 	if req.Email != "" {
-		user, err = s.repo.FindByEmail(ctx, req.Email)
+		user, err = s.Repo.FindByEmail(ctx, req.Email)
 	} else if req.Phone != "" {
-		user, err = s.repo.FindByPhone(ctx, req.Phone)
+		user, err = s.Repo.FindByPhone(ctx, req.Phone)
 	} else {
 		return "", ErrMissingIdentifier
 	}
@@ -57,72 +68,84 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, er
 	}
 
 	passwordHash := password.Hash(req.Password)
-	token := s.jwt.GenerateToken()
+	token := s.Jwt.GenerateToken()
 
-	s.repo.Create(ctx, NewUser(req, passwordHash))
+	s.Repo.Create(ctx, NewUser(req, passwordHash))
 
 	return token, nil
 }
 
+type LoginResult struct {
+	Token       string
+	Requires2FA bool
+	SessionID   string // Used to link the upcoming OTP request
+}
+
 var ErrMissingIdentifier = errors.New("Need at least one of the following: email, phone or username")
+var ErrUserNotFound = errors.New("User not found")
 var ErrInvalidCredentials = errors.New("Invalid credentials")
 var ErrUserBanned = errors.New("User is banned from accessing this service")
 var ErrUserUnverified = errors.New("User is unverified, please verify with your email/phone first")
 
-func (s *Service) Login(ctx context.Context, req LoginRequest) (string, error) {
+func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResult, error) {
 	var user *User
 	var err error
 
 	switch {
 	case req.Username != "":
-		user, err = s.repo.FindByUsername(ctx, req.Username)
+		user, err = s.Repo.FindByUsername(ctx, req.Username)
 	case req.Email != "":
-		user, err = s.repo.FindByEmail(ctx, req.Email)
+		user, err = s.Repo.FindByEmail(ctx, req.Email)
 	case req.Phone != "":
-		user, err = s.repo.FindByPhone(ctx, req.Phone)
+		user, err = s.Repo.FindByPhone(ctx, req.Phone)
 	default:
-		return "", ErrMissingIdentifier
+		return LoginResult{}, ErrMissingIdentifier
 	}
 
-	if err != nil {
-		return "", err
+	if err != nil { // database error
+		return LoginResult{}, err
 	}
 
 	if user == nil {
-		return "", ErrInvalidCredentials
+		return LoginResult{}, ErrInvalidCredentials
 	}
 
 	if !password.Compare(req.Password, user.PasswordHash) {
-		return "", ErrInvalidCredentials
+		return LoginResult{}, ErrInvalidCredentials
 	}
 
 	if user.Status == StatusBanned {
-		return "", ErrUserBanned
+		return LoginResult{}, ErrUserBanned
 	} else if user.Status == StatusUnverified {
-		return "", ErrUserUnverified
+		return LoginResult{}, ErrUserUnverified
 	}
 
-	err = nil
+	// If user has 2Fa enabled ask for otp.
 	if user.TwoFA != nil {
 		twoFaOTP, err := otp.GenerateOTP()
-		if err != nil {
-			return "", err
+		if err != nil { // otp generation error
+			return LoginResult{}, err
 		}
+		err = nil
 		switch user.TwoFA[0] {
 		case IdentifierEmail:
 			// send a 2fa email
-			err = s.email.Send(email.NewSendRequest(user.Email, email.SubjectTwoFa, email.HtmlOtp.Format(twoFaOTP)))
+			err = s.Email.Send(email.NewSendRequest(user.Email, email.SubjectTwoFa, email.HtmlOtp.Format(twoFaOTP)))
+			// make a session id and store it in the session instance and check for that in the verify otp handler
 		case IdentifierPhone:
 			// send sms with 2fa code
 		default:
 			// impossible case so throw panic
 			panic("dev fucked up somewhere")
 		}
-		if err != nil {
-			return "", err
+		if err != nil { // send otp error
+			return LoginResult{}, err
 		}
+		sessionId := uuid.New()
+		// todo: store the sessions
+		return LoginResult{Requires2FA: true, SessionID: sessionId.String()}, nil
 	}
 
-	token := s.jwt.GenerateToken()
-	return token, nil
+	token := s.Jwt.GenerateToken()
+	return LoginResult{Token: token}, nil
 }
