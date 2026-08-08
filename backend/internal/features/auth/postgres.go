@@ -10,9 +10,10 @@ import (
 type PostgresRepository struct {
 	db *pgxpool.Pool
 }
+
 // todos
 func (pg *PostgresRepository) FindByUsername(ctx context.Context, username string) (User, error) {
-	
+
 }
 func (pg *PostgresRepository) FindByEmail(email string) (User, error) {
 

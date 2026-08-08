@@ -5,8 +5,8 @@ import (
 	"backend/internal/pkg/dob"
 	"backend/internal/pkg/email"
 	"backend/internal/pkg/jwt"
-	"backend/internal/pkg/otp"
 	"backend/internal/pkg/password"
+	"backend/internal/pkg/token"
 	"context"
 	"errors"
 	"strconv"
@@ -66,7 +66,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, er
 	if user != nil { // if db returned a user
 		return "", ErrAlreadyExistingUser // ignoring database level errors as of now.
 	}
-
+	// todo: have email verification here
 	passwordHash := password.Hash(req.Password)
 	token := s.Jwt.GenerateToken()
 
@@ -76,16 +76,25 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, er
 }
 
 type LoginResult struct {
-	Token       string
-	Requires2FA bool
-	SessionID   string // Used to link the upcoming OTP request
+	Token           string
+	Requires2FA     bool   // if this is false then below all fields are zero'd out, else the above token is zero value'd
+	ReferenceId     string // Used to link the upcoming OTP request
+	TwoFAIdentifier Identifier
 }
 
-var ErrMissingIdentifier = errors.New("Need at least one of the following: email, phone or username")
-var ErrUserNotFound = errors.New("User not found")
-var ErrInvalidCredentials = errors.New("Invalid credentials")
-var ErrUserBanned = errors.New("User is banned from accessing this service")
-var ErrUserUnverified = errors.New("User is unverified, please verify with your email/phone first")
+// var ErrMissingIdentifier = errors.New("Need at least one of the following: email, phone or username")
+// var ErrUserNotFound = errors.New("User not found")
+// var ErrInvalidCredentials = errors.New("Invalid credentials")
+// var ErrUserBanned = errors.New("User is banned from accessing this service")
+// var ErrUserUnverified = errors.New("User is unverified, please verify with your email/phone first")d
+
+var (
+	ErrMissingIdentifier = errors.New("missing identifier")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrIncorrectPassword = errors.New("incorrect password")
+	ErrUserBanned        = errors.New("user banned")
+	ErrUserUnverified    = errors.New("user unverified")
+)
 
 func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResult, error) {
 	var user *User
@@ -107,11 +116,11 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResult, err
 	}
 
 	if user == nil {
-		return LoginResult{}, ErrInvalidCredentials
+		return LoginResult{}, ErrUserNotFound
 	}
 
 	if !password.Compare(req.Password, user.PasswordHash) {
-		return LoginResult{}, ErrInvalidCredentials
+		return LoginResult{}, ErrIncorrectPassword
 	}
 
 	if user.Status == StatusBanned {
@@ -122,18 +131,19 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResult, err
 
 	// If user has 2Fa enabled ask for otp.
 	if user.TwoFA != nil {
-		twoFaOTP, err := otp.GenerateOTP()
+		twoFAOTP, err := token.GenerateOTP()
 		if err != nil { // otp generation error
 			return LoginResult{}, err
 		}
 		err = nil
-		switch user.TwoFA[0] {
+		TwoFAIdentifier := user.TwoFA[0] // by default the first element is the priority 2FA identifier
+		switch TwoFAIdentifier {
 		case IdentifierEmail:
-			// send a 2fa email
-			err = s.Email.Send(email.NewSendRequest(user.Email, email.SubjectTwoFa, email.HtmlOtp.Format(twoFaOTP)))
-			// make a session id and store it in the session instance and check for that in the verify otp handler
+			err = s.Email.Send(email.NewSendRequest(user.Email, email.SubjectTwoFa, email.HtmlOtp.Format(twoFAOTP)))
 		case IdentifierPhone:
-			// send sms with 2fa code
+			//todo: send sms with 2fa code
+		case IdentifierTOTP:
+			// todo: setup totp
 		default:
 			// impossible case so throw panic
 			panic("dev fucked up somewhere")
@@ -141,11 +151,15 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResult, err
 		if err != nil { // send otp error
 			return LoginResult{}, err
 		}
-		sessionId := uuid.New()
-		// todo: store the sessions
-		return LoginResult{Requires2FA: true, SessionID: sessionId.String()}, nil
+		referenceId := token.GenerateReferenceID()
+		s.Pending2FA[referenceId] = Temp2FAState{user.Id, twoFAOTP, time.Now().Add(config.OTPExpiryTime)}
+		return LoginResult{
+			Requires2FA:     true,
+			ReferenceId:     referenceId,
+			TwoFAIdentifier: TwoFAIdentifier, // by default we use the first priority 2FA identifier
+		}, nil
 	}
 
-	token := s.Jwt.GenerateToken()
+	token := s.Jwt.GenerateToken() // jwt is still a todo
 	return LoginResult{Token: token}, nil
 }

@@ -4,7 +4,7 @@ package mo
 import (
 	"backend/internal/pkg/errs"
 	"backend/internal/pkg/responses"
-	"backend/internal/utils/errorcodes"
+	"backend/internal/utils/codes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -35,38 +35,38 @@ func CustomErrorHandler(c *mo.Context, err error) {
 		c.NoContent(http.StatusNoContent)
 	case mo.HTTPError: // the framework returned a http error, this happens only on routing errors and therefore only not_found and method_not_allowed
 		// the error struct here is actually json compatible but we want to return errors in our schema so we will format it
-		var codeName errorcodes.Code
+		var codeName codes.Code
 		switch e.StatusCode() {
 		case http.StatusNotFound:
-			codeName = errorcodes.NotFound
+			codeName = codes.NotFound
 		case http.StatusMethodNotAllowed:
-			codeName = errorcodes.MethodNotAllowed
+			codeName = codes.MethodNotAllowed
 		default:
-			codeName = errorcodes.Unknown // impossible logical case unless framework changes and somehow returns a different [mo.HTTPError]
+			codeName = codes.Unknown // impossible logical case unless framework changes and somehow returns a different [mo.HTTPError]
 		}
 		c.JSON(e.StatusCode(), responses.Error(codeName, e.Error())) // e.Error returns the statusText of the statusCode if its a [HttpError]
 	case *validator.GroupedValidationError:
 		c.JSON(
 			http.StatusBadRequest,
 			validationErrorJson{
-				responses.Error(errorcodes.ValidationError, e.Error()),
+				responses.Error(codes.ValidationError, e.Error()),
 				e.ToJsonStructList(),
 			},
 		)
 	case *json.SyntaxError:
 		c.JSON(http.StatusUnprocessableEntity, responses.Error(
-			errorcodes.InvalidJSON,
+			codes.InvalidJSON,
 			fmt.Sprintf("JSON syntax error at offset %d", e.Offset),
 		))
 	case *json.UnmarshalTypeError:
 		c.JSON(http.StatusExpectationFailed, responses.Error(
-			errorcodes.ValidationError,
+			codes.ValidationError,
 			fmt.Sprintf("Wrong type used for field %s", e.Field),
 		))
 	default:
 		if e.Error() == "EOF" { // rare case because json parsing returns a errorString of EOF when a body is empty.
 			c.JSON(http.StatusUnprocessableEntity, responses.Error(
-				errorcodes.EOF,
+				codes.EOF,
 				"End of file",
 			))
 			return
@@ -77,7 +77,7 @@ func CustomErrorHandler(c *mo.Context, err error) {
 		c.JSON(
 			http.StatusInternalServerError,
 			responses.Error(
-				errorcodes.InternalServerError,
+				codes.InternalServerError,
 				errs.InternalServerError.Error(),
 			),
 		)

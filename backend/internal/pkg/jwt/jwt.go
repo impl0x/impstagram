@@ -1,9 +1,10 @@
 package jwt
+
 // todo
-type Jwt struct{
+type Jwt struct {
 	key string
 }
 
-func (j Jwt) GenerateToken()string{
+func (j Jwt) GenerateToken() string {
 	return ""
 }
