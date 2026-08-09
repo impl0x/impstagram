@@ -16,10 +16,9 @@ type Handler struct {
 	service *Service
 }
 
-// todo: fix register
 // ? POST - models.RegisterRequest
 func (h Handler) Register(c *mo.Context) error {
-	var req RegisterRequest
+	var req registerRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
@@ -39,12 +38,11 @@ func (h Handler) Register(c *mo.Context) error {
 			}{result.referenceId},
 		),
 	)
-
 }
 
 // ? POST - models.LoginRequest
 func (h Handler) Login(c *mo.Context) error {
-	var req LoginRequest
+	var req loginRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
@@ -61,8 +59,8 @@ func (h Handler) Login(c *mo.Context) error {
 				codes.TwoFARequired,
 				"Two-factor authentication is required, please check your "+result.twoFAIdentifier.string(),
 				struct {
-					ReferenceId string `json:"reference_id"`
-				}{result.referenceId},
+					ReferenceID string `json:"reference_id"`
+				}{result.referenceID},
 			),
 		)
 	}
@@ -76,6 +74,16 @@ func (h Handler) Login(c *mo.Context) error {
 			}{result.token},
 		),
 	)
+}
+
+func (h Handler) Verify (c *mo.Context) error{
+	var req verifyRequest
+	err:=c.DecodeAndValidateBody(req)
+	if err!=nil{
+		return err
+	}
+	result,err:=h.service.verify(c.Request().Context(),req)
+	
 }
 
 func (h Handler) handleError(c *mo.Context, err error) {

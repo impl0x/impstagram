@@ -61,7 +61,7 @@ func (s *Service) getPending2FA(refID string) (state temp2FAState, ok bool) {
 func (s *Service) removePending2FA(refID string) {
 	s.mu2FA.Lock()
 	defer s.mu2FA.Unlock()
-	delete(s.Pending2FA,refID)
+	delete(s.Pending2FA, refID)
 }
 
 // ? Register
@@ -71,11 +71,13 @@ type registerResult struct {
 	twoFAIdentifier identifier
 }
 
-var errAlreadyExistingUser = errors.New("user already exists")
-var errNotOldEnough = errors.New("user not old enough")
-var errTooOld = errors.New("user too old")
+var (
+	errAlreadyExistingUser = errors.New("user already exists")
+	errNotOldEnough        = errors.New("user not old enough")
+	errTooOld              = errors.New("user too old")
+)
 
-func (s *Service) Register(ctx context.Context, req RegisterRequest) (registerResult, error) {
+func (s *Service) register(ctx context.Context, req registerRequest) (registerResult, error) {
 
 	userDob, err := dob.NewDobFromString(req.Dob)
 
@@ -135,7 +137,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (registerRe
 	}
 
 	referenceId := token.GenerateReferenceID()
-	s.addNewPending2FA(referenceId, primaryIdentifier, user.Id, verificationOTP)
+	s.addNewPending2FA(referenceId, primaryIdentifier, user.ID, verificationOTP)
 
 	return registerResult{
 		referenceId:     referenceId,
@@ -154,7 +156,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (registerRe
 type loginResult struct {
 	token           string
 	requires2FA     bool   // if this is false then below all fields are zero'd out, else the above token is zero value'd
-	referenceId     string // Used to link the upcoming OTP request
+	referenceID     string // Used to link the upcoming OTP request
 	twoFAIdentifier identifier
 }
 
@@ -166,7 +168,7 @@ var (
 	errUserUnverified    = errors.New("user unverified")
 )
 
-func (s *Service) Login(ctx context.Context, req LoginRequest) (loginResult, error) {
+func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, error) {
 	var user *User
 	var err error
 
@@ -221,18 +223,30 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (loginResult, err
 			return loginResult{}, err
 		}
 		referenceId := token.GenerateReferenceID()
-		s.addNewPending2FA(referenceId, primaryIdentifier, user.Id, twoFAOTP)
+		s.addNewPending2FA(referenceId, primaryIdentifier, user.ID, twoFAOTP)
 		return loginResult{
 			requires2FA:     true,
-			referenceId:     referenceId,
+			referenceID:     referenceId,
 			twoFAIdentifier: primaryIdentifier, // by default we use the first priority 2FA identifier
 		}, nil
 	}
 
-	token := s.Jwt.GenerateToken() // jwt is still a todo
+	token := s.Jwt.GenerateToken() // todo: jwt is still a todo
 	return loginResult{token: token}, nil
 }
 
 // ? verify otp
 
-// todo
+type verifyResult struct {
+	token string
+}
+
+var errRefIDNotFound = errors.New("reference ID not found")
+
+func (s *Service) verify(ctx context.Context, req verifyRequest) (verifyResult, error) { // token, error
+	state, ok := s.getPending2FA(req.ReferenceID)
+	if !ok {
+		return verifyResult{}, errRefIDNotFound
+	}
+
+}
