@@ -83,7 +83,7 @@ func (h Handler) Verify (c *mo.Context) error{
 		return err
 	}
 	result,err:=h.service.verify(c.Request().Context(),req)
-	
+	// todo: handle error and return response appropriately
 }
 
 func (h Handler) handleError(c *mo.Context, err error) {

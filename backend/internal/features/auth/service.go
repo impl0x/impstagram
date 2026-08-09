@@ -242,11 +242,20 @@ type verifyResult struct {
 }
 
 var errRefIDNotFound = errors.New("reference ID not found")
+var errOTPExpired = errors.New("otp expired")
+var errIncorrectOTP = errors.New("incorrect otp")
 
 func (s *Service) verify(ctx context.Context, req verifyRequest) (verifyResult, error) { // token, error
 	state, ok := s.getPending2FA(req.ReferenceID)
 	if !ok {
 		return verifyResult{}, errRefIDNotFound
 	}
+	if state.expiresAt.After(time.Now()){
+		s.removePending2FA(req.ReferenceID) // if the otp has expired we remove it from our map and return a error
+		return verifyResult{}, errOTPExpired
+	} else if state.secretOTP != req.OTP {
+		return verifyResult{}, errIncorrectOTP
+	}
+	// todo: generate token and return it
 
 }
