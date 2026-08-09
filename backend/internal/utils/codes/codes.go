@@ -21,10 +21,15 @@ const (
 	InvalidCredentials Code = "INVALID_CREDENTIALS"
 	UserBanned         Code = "USER_BANNED"
 	UserUnverified     Code = "USER_UNVERIFIED"
+
+	UserExists       Code = "USER_ALREADY_EXISTS"
+	UserNotOldEnough Code = "USER_NOT_OLD_ENOUGH"
+	UserTooOld       Code = "USER_TOO_OLD"
 )
 
 // the success codes returned in the json
 const (
 	LoginSuccess  Code = "LOGIN_SUCCESS"
 	TwoFARequired Code = "TWO_FACTOR_REQUIRED"
+	RegisterSuccess Code = "REGISTER_SUCCESS"
 )

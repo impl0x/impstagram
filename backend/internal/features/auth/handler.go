@@ -1,9 +1,13 @@
 package auth
 
 import (
+	"backend/internal/config"
+	"backend/internal/pkg/dob"
 	"backend/internal/pkg/responses"
 	"backend/internal/utils/codes"
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/impl0x/mo"
 )
@@ -14,27 +18,32 @@ type Handler struct {
 
 // todo: fix register
 // ? POST - models.RegisterRequest
-func (h Handler) RegisterHandler(c *mo.Context) error {
+func (h Handler) Register(c *mo.Context) error {
 	var req RegisterRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
 	}
-	// token, err := h.service.Register(c.Request().Context(), req)
-	// if err != nil {
-	// 	return responses.Error(c, http.StatusBadRequest, err.Error())
-	// }
-	// return responses.Success(
-	// 	c,
-	// 	http.StatusOK, struct {
-	// 		Token string `json:"token"`
-	// 	}{token},
-	// )
+	result, err := h.service.Register(c.Request().Context(), req)
+	if err != nil {
+		h.handleError(c, err)
+		return nil
+	}
+	return c.JSON(
+		http.StatusAccepted,
+		responses.Success(
+			codes.RegisterSuccess,
+			"Registration successful, please check your "+result.twoFAIdentifier.string()+" for the OTP to verify your account",
+			struct {
+				ReferenceId string `json:"reference_id"`
+			}{result.referenceId},
+		),
+	)
 
 }
 
 // ? POST - models.LoginRequest
-func (h Handler) LoginHandler(c *mo.Context) error {
+func (h Handler) Login(c *mo.Context) error {
 	var req LoginRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
@@ -43,16 +52,17 @@ func (h Handler) LoginHandler(c *mo.Context) error {
 	result, err := h.service.Login(c.Request().Context(), req)
 	if err != nil {
 		h.handleError(c, err)
+		return nil
 	}
-	if result.Requires2FA {
+	if result.requires2FA {
 		return c.JSON(
 			http.StatusAccepted,
 			responses.Success(
 				codes.TwoFARequired,
-				"Two-factor authentication is required, please check your primary 2FA identifier",
+				"Two-factor authentication is required, please check your "+result.twoFAIdentifier.string(),
 				struct {
-					SessionId string `json:"session_id"`
-				}{result.ReferenceId},
+					ReferenceId string `json:"reference_id"`
+				}{result.referenceId},
 			),
 		)
 	}
@@ -63,14 +73,14 @@ func (h Handler) LoginHandler(c *mo.Context) error {
 			"Login successful",
 			struct {
 				Token string `json:"token"`
-			}{result.Token},
+			}{result.token},
 		),
 	)
 }
 
 func (h Handler) handleError(c *mo.Context, err error) {
 	switch err {
-	case ErrMissingIdentifier:
+	case errMissingIdentifier:
 		c.JSON(
 			http.StatusBadRequest,
 			responses.Error(
@@ -78,7 +88,7 @@ func (h Handler) handleError(c *mo.Context, err error) {
 				"Need at least one of the following: email, phone or username",
 			),
 		)
-	case ErrUserNotFound, ErrIncorrectPassword:
+	case errUserNotFound, errIncorrectPassword:
 		c.JSON(
 			http.StatusUnauthorized,
 			responses.Error(
@@ -86,7 +96,7 @@ func (h Handler) handleError(c *mo.Context, err error) {
 				"Invalid identifier or password",
 			),
 		)
-	case ErrUserBanned:
+	case errUserBanned:
 		c.JSON(
 			http.StatusForbidden,
 			responses.Error(
@@ -94,7 +104,7 @@ func (h Handler) handleError(c *mo.Context, err error) {
 				"User is permanently banned from accessing this service",
 			),
 		)
-	case ErrUserUnverified:
+	case errUserUnverified:
 		c.JSON(
 			http.StatusForbidden,
 			responses.Error(
@@ -102,5 +112,47 @@ func (h Handler) handleError(c *mo.Context, err error) {
 				"User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to sign up",
 			),
 		)
+	case dob.ErrImpossibleDob, dob.ErrInvalidDobString:
+		c.JSON(
+			http.StatusBadRequest,
+			responses.Error(
+				codes.ValidationError,
+				err.Error(),
+			),
+		)
+	case errAlreadyExistingUser:
+		c.JSON(
+			http.StatusForbidden,
+			responses.Error(
+				codes.UserExists,
+				"This user already exists, please try to log in",
+			),
+		)
+	case errNotOldEnough:
+		c.JSON(
+			http.StatusForbidden,
+			responses.Error(
+				codes.UserNotOldEnough,
+				"User not old enough, must be minimum of "+strconv.Itoa(int(config.MinAge))+" years old to use this service",
+			),
+		)
+	case errTooOld:
+		c.JSON(
+			http.StatusForbidden,
+			responses.Error(
+				codes.UserTooOld,
+				"User too old, cannot create account",
+			),
+		)
+	default:
+		fmt.Println("Internal server error: %v", err)
+		c.JSON(
+			http.StatusInternalServerError,
+			responses.Error(
+				codes.InternalServerError,
+				"An unexpected error occurred",
+			),
+		)
+
 	}
 }

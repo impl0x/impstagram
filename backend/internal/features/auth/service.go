@@ -9,94 +9,164 @@ import (
 	"backend/internal/pkg/token"
 	"context"
 	"errors"
-	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
-
-type Temp2FAState struct {
-	UserID    uuid.UUID
-	SecretOTP string
-	ExpiresAt time.Time
-}
 
 type Service struct {
 	Jwt   jwt.Jwt
 	Email email.Client
 	Repo  Repository
 
-	Pending2FA map[string]Temp2FAState // string is the session uuid
+	mu2FA      sync.RWMutex
+	Pending2FA map[string]temp2FAState // string is the session uuid
 }
 
-var ErrAlreadyExistingUser = errors.New("User already exists")
-var ErrNotOldEnough = errors.New("User not old enough, must be minimum of " + strconv.Itoa(int(config.MinAge)) + " years old to use this service")
-var ErrTooOld = errors.New("User too old, cannot create account")
+type temp2FAState struct {
+	userID    uuid.UUID
+	secretOTP string
+	expiresAt time.Time
+}
 
-func (s *Service) Register(ctx context.Context, req RegisterRequest) (string, error) {
+// ? 2fa helper functions
+
+// The reason these are all separate functions is to ensure mutexes are used and its separated from the business logic,
+// it is a bit redundant to do this but I feel its better than putting mutexes in the business logic every time
+
+func (s *Service) addNewPending2FA(refID string, identifier identifier, userID uuid.UUID, otp string) {
+	var expiryTime time.Duration
+	switch identifier {
+	case identifierEmail, identifierPhone:
+		expiryTime = config.OTPExpiryTime
+	case identifierTOTP:
+		expiryTime = config.TOTPExpiryTime
+	default:
+		panic("invalid identifier, please update code if added new identifiers")
+	}
+	twoFAState := temp2FAState{userID, otp, time.Now().Add(expiryTime)}
+	s.mu2FA.Lock()
+	defer s.mu2FA.Unlock()
+	s.Pending2FA[refID] = twoFAState
+}
+
+func (s *Service) getPending2FA(refID string) (state temp2FAState, ok bool) {
+	s.mu2FA.RLock()
+	defer s.mu2FA.RUnlock()
+	state, ok = s.Pending2FA[refID]
+	return
+}
+
+func (s *Service) removePending2FA(refID string) {
+	s.mu2FA.Lock()
+	defer s.mu2FA.Unlock()
+	delete(s.Pending2FA,refID)
+}
+
+// ? Register
+
+type registerResult struct {
+	referenceId     string // Used to link the upcoming OTP request
+	twoFAIdentifier identifier
+}
+
+var errAlreadyExistingUser = errors.New("user already exists")
+var errNotOldEnough = errors.New("user not old enough")
+var errTooOld = errors.New("user too old")
+
+func (s *Service) Register(ctx context.Context, req RegisterRequest) (registerResult, error) {
 
 	userDob, err := dob.NewDobFromString(req.Dob)
 
 	if err != nil {
-		return "", err
+		return registerResult{}, err // returns dob sentinel errors, which we handle in the handler.handleError function
 	}
 
 	userAge := userDob.Age()
 
 	if userAge < config.MinAge {
-		return "", ErrNotOldEnough
+		return registerResult{}, errNotOldEnough
 	} else if userAge > config.MaxAge {
-		return "", ErrTooOld
+		return registerResult{}, errTooOld
 	}
 
 	var user *User
+	var primaryIdentifier identifier
 
 	if req.Email != "" {
 		user, err = s.Repo.FindByEmail(ctx, req.Email)
+		primaryIdentifier = identifierEmail
 	} else if req.Phone != "" {
 		user, err = s.Repo.FindByPhone(ctx, req.Phone)
+		primaryIdentifier = identifierPhone
 	} else {
-		return "", ErrMissingIdentifier
+		return registerResult{}, errMissingIdentifier
 	}
 
 	if err != nil {
-		return "", err
+		return registerResult{}, err // ignoring database level errors as of now.
 	}
 
 	if user != nil { // if db returned a user
-		return "", ErrAlreadyExistingUser // ignoring database level errors as of now.
+		return registerResult{}, errAlreadyExistingUser // yes i acknowledge that user has chances of being banned/unverified, but this is intended. We want user to login and then hit those errors if they exist.
 	}
-	// todo: have email verification here
+
 	passwordHash := password.Hash(req.Password)
-	token := s.Jwt.GenerateToken()
 
-	s.Repo.Create(ctx, NewUser(req, passwordHash))
+	user = NewUser(req, passwordHash) // returns a unverified user by default
+	err = s.Repo.Create(ctx, user)    // we create a user before sending otp
+	if err != nil {
+		return registerResult{}, nil
+	}
 
-	return token, nil
+	verificationOTP, err := token.GenerateOTP()
+	if err != nil {
+		return registerResult{}, nil
+	}
+	switch primaryIdentifier {
+	case identifierEmail:
+		err = s.Email.Send(email.NewSendRequest(user.Email, email.SubjectVerifyEmail, email.HtmlOtp.Format(verificationOTP)))
+	case identifierPhone:
+		// todo: send otp on phone
+	}
+	if err != nil { // send otp error
+		return registerResult{}, err
+	}
+
+	referenceId := token.GenerateReferenceID()
+	s.addNewPending2FA(referenceId, primaryIdentifier, user.Id, verificationOTP)
+
+	return registerResult{
+		referenceId:     referenceId,
+		twoFAIdentifier: primaryIdentifier,
+	}, nil
+} // one of the design choices in this function was to first create the user in the database and then send a verification email/sms
+// this is because if the db call fails then we exit early with no otp sent,
+// and if the db call succeeds but sending email fails we have a unverified user but no otp
+// if the frontend shows the internal error the user may try to register again which will trigger a already exists
+// which then will prompt the user to login and if they login they will be prompted to verify their email which is a secure workflow,
+// although more work for the user but this is considering that this is the worst case scenario.
+// better than a dangling otp with no registered user.
+
+// ? Login
+
+type loginResult struct {
+	token           string
+	requires2FA     bool   // if this is false then below all fields are zero'd out, else the above token is zero value'd
+	referenceId     string // Used to link the upcoming OTP request
+	twoFAIdentifier identifier
 }
-
-type LoginResult struct {
-	Token           string
-	Requires2FA     bool   // if this is false then below all fields are zero'd out, else the above token is zero value'd
-	ReferenceId     string // Used to link the upcoming OTP request
-	TwoFAIdentifier Identifier
-}
-
-// var ErrMissingIdentifier = errors.New("Need at least one of the following: email, phone or username")
-// var ErrUserNotFound = errors.New("User not found")
-// var ErrInvalidCredentials = errors.New("Invalid credentials")
-// var ErrUserBanned = errors.New("User is banned from accessing this service")
-// var ErrUserUnverified = errors.New("User is unverified, please verify with your email/phone first")d
 
 var (
-	ErrMissingIdentifier = errors.New("missing identifier")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrIncorrectPassword = errors.New("incorrect password")
-	ErrUserBanned        = errors.New("user banned")
-	ErrUserUnverified    = errors.New("user unverified")
+	errMissingIdentifier = errors.New("missing identifier")
+	errUserNotFound      = errors.New("user not found")
+	errIncorrectPassword = errors.New("incorrect password")
+	errUserBanned        = errors.New("user banned")
+	errUserUnverified    = errors.New("user unverified")
 )
 
-func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResult, error) {
+func (s *Service) Login(ctx context.Context, req LoginRequest) (loginResult, error) {
 	var user *User
 	var err error
 
@@ -108,58 +178,61 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (LoginResult, err
 	case req.Phone != "":
 		user, err = s.Repo.FindByPhone(ctx, req.Phone)
 	default:
-		return LoginResult{}, ErrMissingIdentifier
+		return loginResult{}, errMissingIdentifier
 	}
 
 	if err != nil { // database error
-		return LoginResult{}, err
+		return loginResult{}, err
 	}
 
 	if user == nil {
-		return LoginResult{}, ErrUserNotFound
+		return loginResult{}, errUserNotFound
 	}
 
 	if !password.Compare(req.Password, user.PasswordHash) {
-		return LoginResult{}, ErrIncorrectPassword
+		return loginResult{}, errIncorrectPassword
 	}
 
-	if user.Status == StatusBanned {
-		return LoginResult{}, ErrUserBanned
-	} else if user.Status == StatusUnverified {
-		return LoginResult{}, ErrUserUnverified
+	if user.Status == statusBanned {
+		return loginResult{}, errUserBanned
+	} else if user.Status == statusUnverified {
+		return loginResult{}, errUserUnverified
 	}
 
 	// If user has 2Fa enabled ask for otp.
 	if user.TwoFA != nil {
 		twoFAOTP, err := token.GenerateOTP()
 		if err != nil { // otp generation error
-			return LoginResult{}, err
+			return loginResult{}, err
 		}
-		err = nil
-		TwoFAIdentifier := user.TwoFA[0] // by default the first element is the priority 2FA identifier
-		switch TwoFAIdentifier {
-		case IdentifierEmail:
+		primaryIdentifier := user.TwoFA[0] // by default the first element is the primary 2FA identifier
+		switch primaryIdentifier {
+		case identifierEmail:
 			err = s.Email.Send(email.NewSendRequest(user.Email, email.SubjectTwoFa, email.HtmlOtp.Format(twoFAOTP)))
-		case IdentifierPhone:
+		case identifierPhone:
 			//todo: send sms with 2fa code
-		case IdentifierTOTP:
+		case identifierTOTP:
 			// todo: setup totp
 		default:
 			// impossible case so throw panic
-			panic("dev fucked up somewhere")
+			panic("invalid identifier, please update code if added new identifiers")
 		}
 		if err != nil { // send otp error
-			return LoginResult{}, err
+			return loginResult{}, err
 		}
 		referenceId := token.GenerateReferenceID()
-		s.Pending2FA[referenceId] = Temp2FAState{user.Id, twoFAOTP, time.Now().Add(config.OTPExpiryTime)}
-		return LoginResult{
-			Requires2FA:     true,
-			ReferenceId:     referenceId,
-			TwoFAIdentifier: TwoFAIdentifier, // by default we use the first priority 2FA identifier
+		s.addNewPending2FA(referenceId, primaryIdentifier, user.Id, twoFAOTP)
+		return loginResult{
+			requires2FA:     true,
+			referenceId:     referenceId,
+			twoFAIdentifier: primaryIdentifier, // by default we use the first priority 2FA identifier
 		}, nil
 	}
 
 	token := s.Jwt.GenerateToken() // jwt is still a todo
-	return LoginResult{Token: token}, nil
+	return loginResult{token: token}, nil
 }
+
+// ? verify otp
+
+// todo
