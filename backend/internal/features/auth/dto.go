@@ -34,7 +34,7 @@ func (i identifier) string() string {
 type twoFAs []identifier
 
 type User struct { // not complete, will do after i setup database properly
-	Id            uuid.UUID
+	ID            uuid.UUID
 	Username      string
 	Email         string
 	Phone         string
@@ -46,7 +46,7 @@ type User struct { // not complete, will do after i setup database properly
 	TwoFA  twoFAs        // slice of identifiers, if null means twoFa not enabled, else its enabled on whichever identifiers are in the slice
 }
 
-func NewUser(req RegisterRequest, passwordHash string) *User {
+func NewUser(req registerRequest, passwordHash string) *User {
 	return &User{
 		Username:     req.Username,
 		Email:        req.Email,
