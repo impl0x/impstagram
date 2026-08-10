@@ -11,5 +11,5 @@ const (
 	EmailID string = Env + "@impstagram.ripgod.xyz"
 
 	OTPExpiryTime = 10 * time.Minute
-	TOTPExpiryTime = 30 * time.Second
+
 )

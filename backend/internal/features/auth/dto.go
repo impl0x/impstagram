@@ -13,9 +13,10 @@ const (
 type identifier uint8
 
 const (
-	identifierEmail =iota
+	identifierEmail identifier =iota
 	identifierPhone 
 	identifierTOTP  
+	identifierUsername	 // make sure this can NEVER be a 2fa identifier because this cannot be validated against anything.
 )
 
 func (i identifier) string() string {
@@ -26,6 +27,8 @@ func (i identifier) string() string {
 		return "telegram"	// *CHANGE* if switched to sms
 	case identifierTOTP:
 		return "authenticator"
+	case identifierUsername:
+		return "username"
 	default:
 		panic("invalid identifier, please update code if added new identifiers")
 	}

@@ -25,9 +25,10 @@ type Service struct {
 }
 
 type temp2FAState struct {
-	userID    uuid.UUID
-	secretOTP string
-	expiresAt time.Time
+	userID     uuid.UUID
+	secretOTP  string
+	identifier identifier
+	expiresAt  time.Time
 }
 
 // ? 2fa helper functions
@@ -36,16 +37,7 @@ type temp2FAState struct {
 // it is a bit redundant to do this but I feel its better than putting mutexes in the business logic every time
 
 func (s *Service) addNewPending2FA(refID string, identifier identifier, userID uuid.UUID, otp string) {
-	var expiryTime time.Duration
-	switch identifier {
-	case identifierEmail, identifierPhone:
-		expiryTime = config.OTPExpiryTime
-	case identifierTOTP:
-		expiryTime = config.TOTPExpiryTime
-	default:
-		panic("invalid identifier, please update code if added new identifiers")
-	}
-	twoFAState := temp2FAState{userID, otp, time.Now().Add(expiryTime)}
+	twoFAState := temp2FAState{userID, otp, identifier, time.Now().Add(config.OTPExpiryTime)}
 	s.mu2FA.Lock()
 	defer s.mu2FA.Unlock()
 	s.Pending2FA[refID] = twoFAState
@@ -75,6 +67,7 @@ var (
 	errAlreadyExistingUser = errors.New("user already exists")
 	errNotOldEnough        = errors.New("user not old enough")
 	errTooOld              = errors.New("user too old")
+	errUsernameAlreadyExists = errors.New("username already exists")
 )
 
 func (s *Service) register(ctx context.Context, req registerRequest) (registerResult, error) {
@@ -97,10 +90,10 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	var primaryIdentifier identifier
 
 	if req.Email != "" {
-		user, err = s.Repo.FindByEmail(ctx, req.Email)
+		user, err = s.Repo.FindByIdentifier(ctx, identifierEmail, req.Email)
 		primaryIdentifier = identifierEmail
 	} else if req.Phone != "" {
-		user, err = s.Repo.FindByPhone(ctx, req.Phone)
+		user, err = s.Repo.FindByIdentifier(ctx, identifierPhone, req.Phone)
 		primaryIdentifier = identifierPhone
 	} else {
 		return registerResult{}, errMissingIdentifier
@@ -112,6 +105,11 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 
 	if user != nil { // if db returned a user
 		return registerResult{}, errAlreadyExistingUser // yes i acknowledge that user has chances of being banned/unverified, but this is intended. We want user to login and then hit those errors if they exist.
+	}
+	// checks if the username already exists because usernames are unique
+	sameUsernameUser,err:=s.Repo.FindByIdentifier(ctx, identifierUsername, req.Username) // assuming req.Username is validated in validator
+	if sameUsernameUser!=nil || err==nil { // todo: handle db level errors
+		return registerResult{}, errUsernameAlreadyExists
 	}
 
 	passwordHash := password.Hash(req.Password)
@@ -171,14 +169,13 @@ var (
 func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, error) {
 	var user *User
 	var err error
-
 	switch {
 	case req.Username != "":
-		user, err = s.Repo.FindByUsername(ctx, req.Username)
+		user, err = s.Repo.FindByIdentifier(ctx, identifierUsername, req.Username)
 	case req.Email != "":
-		user, err = s.Repo.FindByEmail(ctx, req.Email)
+		user, err = s.Repo.FindByIdentifier(ctx, identifierEmail, req.Email)
 	case req.Phone != "":
-		user, err = s.Repo.FindByPhone(ctx, req.Phone)
+		user, err = s.Repo.FindByIdentifier(ctx, identifierPhone, req.Phone)
 	default:
 		return loginResult{}, errMissingIdentifier
 	}
@@ -186,7 +183,7 @@ func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, err
 	if err != nil { // database error
 		return loginResult{}, err
 	}
-
+	// todo : fix db error and user not found error
 	if user == nil {
 		return loginResult{}, errUserNotFound
 	}
@@ -203,25 +200,35 @@ func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, err
 
 	// If user has 2Fa enabled ask for otp.
 	if user.TwoFA != nil {
+		primaryIdentifier := user.TwoFA[0] // by default the first element is the primary 2FA identifier
+		// if it is TOTP
+		if primaryIdentifier == identifierTOTP { // if its a time based otp we don't bother generating it now
+			referenceId := token.GenerateReferenceID()
+			s.addNewPending2FA(referenceId, primaryIdentifier, user.ID, user.TotpSecretKey) // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
+			return loginResult{
+				requires2FA:     true,
+				referenceID:     referenceId,
+				twoFAIdentifier: primaryIdentifier, // by default we use the first priority 2FA identifier
+			}, nil
+		}
+		// else if its email or phone
 		twoFAOTP, err := token.GenerateOTP()
 		if err != nil { // otp generation error
 			return loginResult{}, err
 		}
-		primaryIdentifier := user.TwoFA[0] // by default the first element is the primary 2FA identifier
 		switch primaryIdentifier {
 		case identifierEmail:
 			err = s.Email.Send(email.NewSendRequest(user.Email, email.SubjectTwoFa, email.HtmlOtp.Format(twoFAOTP)))
 		case identifierPhone:
 			//todo: send sms with 2fa code
-		case identifierTOTP:
-			// todo: setup totp
 		default:
 			// impossible case so throw panic
-			panic("invalid identifier, please update code if added new identifiers")
+			panic("invalid identifier, please update code if added new identifiers") // make sure [identifierUsername] can NEVER be a 2fa identifier
 		}
 		if err != nil { // send otp error
 			return loginResult{}, err
 		}
+		// save the ref id and otp for future use by the verify endpoint
 		referenceId := token.GenerateReferenceID()
 		s.addNewPending2FA(referenceId, primaryIdentifier, user.ID, twoFAOTP)
 		return loginResult{
@@ -250,12 +257,29 @@ func (s *Service) verify(ctx context.Context, req verifyRequest) (verifyResult, 
 	if !ok {
 		return verifyResult{}, errRefIDNotFound
 	}
-	if state.expiresAt.After(time.Now()){
+	if state.expiresAt.After(time.Now()) {
 		s.removePending2FA(req.ReferenceID) // if the otp has expired we remove it from our map and return a error
 		return verifyResult{}, errOTPExpired
-	} else if state.secretOTP != req.OTP {
+	}
+	var err error
+	if state.identifier == identifierTOTP {
+		state.secretOTP, err = token.GenerateTOTP(state.secretOTP) // in this case secretOTP is actually the secretKey for the TOTP which is used to compute the otp.
+		if err != nil {
+			return verifyResult{}, err
+		}
+	}
+	if state.secretOTP != req.OTP { // we check the otp if it does not match we return early with a incorrect otp error
 		return verifyResult{}, errIncorrectOTP
 	}
-	// todo: generate token and return it
-
+	user, err := s.Repo.FindByID(ctx, state.userID)
+	if err != nil {
+		return verifyResult{}, err
+	}
+	if user != nil {
+		return verifyResult{}, errUserNotFound
+	}
+	token := s.Jwt.GenerateToken() // todo
+	return verifyResult{
+		token: token,
+	}, nil
 }

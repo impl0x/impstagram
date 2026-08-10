@@ -16,6 +16,13 @@ type Handler struct {
 	service *Service
 }
 
+// some info: 
+// - we are handling all the service level errors via the [Handler.handleError] function,
+// 	 we return the function result in the handler purely due to idiom it is never actually gonna return an actual error
+// 	 except if json encode error occurs which is not probable because its our function with valid syntax and logic.
+//
+// - we use anonymous structs to return the json response because using a map is more expensive as it allocates to the heap
+
 // ? POST - models.RegisterRequest
 func (h Handler) Register(c *mo.Context) error {
 	var req registerRequest
@@ -23,10 +30,9 @@ func (h Handler) Register(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.service.Register(c.Request().Context(), req)
+	result, err := h.service.register(c.Request().Context(), req)
 	if err != nil {
-		h.handleError(c, err)
-		return nil
+		return h.handleError(c, err) // always returns nil
 	}
 	return c.JSON(
 		http.StatusAccepted,
@@ -47,10 +53,9 @@ func (h Handler) Login(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.service.Login(c.Request().Context(), req)
+	result, err := h.service.login(c.Request().Context(), req)
 	if err != nil {
-		h.handleError(c, err)
-		return nil
+		return h.handleError(c, err)
 	}
 	if result.requires2FA {
 		return c.JSON(
@@ -76,20 +81,28 @@ func (h Handler) Login(c *mo.Context) error {
 	)
 }
 
-func (h Handler) Verify (c *mo.Context) error{
+func (h Handler) Verify(c *mo.Context) error {
 	var req verifyRequest
-	err:=c.DecodeAndValidateBody(req)
-	if err!=nil{
+	err := c.DecodeAndValidateBody(req)
+	if err != nil {
 		return err
 	}
-	result,err:=h.service.verify(c.Request().Context(),req)
-	// todo: handle error and return response appropriately
+	result, err := h.service.verify(c.Request().Context(), req)
+	if err != nil {
+		return h.handleError(c, err)
+	}
+	return c.JSON(
+		http.StatusOK,
+		struct {
+			Token string `json:"token"`
+		}{result.token},
+	)
 }
 
-func (h Handler) handleError(c *mo.Context, err error) {
+func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one
 	switch err {
 	case errMissingIdentifier:
-		c.JSON(
+		return c.JSON(
 			http.StatusBadRequest,
 			responses.Error(
 				codes.MissingIdentifier,
@@ -97,7 +110,7 @@ func (h Handler) handleError(c *mo.Context, err error) {
 			),
 		)
 	case errUserNotFound, errIncorrectPassword:
-		c.JSON(
+		return c.JSON(
 			http.StatusUnauthorized,
 			responses.Error(
 				codes.InvalidCredentials,
@@ -105,7 +118,7 @@ func (h Handler) handleError(c *mo.Context, err error) {
 			),
 		)
 	case errUserBanned:
-		c.JSON(
+		return c.JSON(
 			http.StatusForbidden,
 			responses.Error(
 				codes.UserBanned,
@@ -113,7 +126,7 @@ func (h Handler) handleError(c *mo.Context, err error) {
 			),
 		)
 	case errUserUnverified:
-		c.JSON(
+		return c.JSON(
 			http.StatusForbidden,
 			responses.Error(
 				codes.UserUnverified,
@@ -121,7 +134,7 @@ func (h Handler) handleError(c *mo.Context, err error) {
 			),
 		)
 	case dob.ErrImpossibleDob, dob.ErrInvalidDobString:
-		c.JSON(
+		return c.JSON(
 			http.StatusBadRequest,
 			responses.Error(
 				codes.ValidationError,
@@ -129,7 +142,7 @@ func (h Handler) handleError(c *mo.Context, err error) {
 			),
 		)
 	case errAlreadyExistingUser:
-		c.JSON(
+		return c.JSON(
 			http.StatusForbidden,
 			responses.Error(
 				codes.UserExists,
@@ -137,7 +150,7 @@ func (h Handler) handleError(c *mo.Context, err error) {
 			),
 		)
 	case errNotOldEnough:
-		c.JSON(
+		return c.JSON(
 			http.StatusForbidden,
 			responses.Error(
 				codes.UserNotOldEnough,
@@ -145,16 +158,48 @@ func (h Handler) handleError(c *mo.Context, err error) {
 			),
 		)
 	case errTooOld:
-		c.JSON(
+		return c.JSON(
 			http.StatusForbidden,
 			responses.Error(
 				codes.UserTooOld,
 				"User too old, cannot create account",
 			),
 		)
+	case errUsernameAlreadyExists:
+		return c.JSON(
+			http.StatusForbidden,
+			responses.Error(
+				codes.UsernameAlreadyExists,
+				"This username is already registered, please try a different username",
+			),
+		)
+	case errRefIDNotFound:
+		return c.JSON(
+			http.StatusNotFound,
+			responses.Error(
+				codes.ReferenceIDNotFound,
+				"Reference ID for this verify request not found, please try to request a new otp again",
+			),
+		)
+	case errOTPExpired:
+		return c.JSON(
+			http.StatusForbidden,
+			responses.Error(
+				codes.OTPExpired,
+				"The OTP provided is expired",
+			),
+		)
+	case errIncorrectOTP:
+		return c.JSON(
+			http.StatusBadRequest,
+			responses.Error(
+				codes.OTPIncorrect,
+				"The OTP provided is incorrect",
+			),
+		)
 	default:
 		fmt.Println("Internal server error: %v", err)
-		c.JSON(
+		return c.JSON(
 			http.StatusInternalServerError,
 			responses.Error(
 				codes.InternalServerError,

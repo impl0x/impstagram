@@ -15,3 +15,8 @@ func GenerateOTP() (string, error) {
 	}
 	return fmt.Sprintf("%06d", num.Int64()), nil
 }
+
+func GenerateTOTP(secretKey string) (string, error) {
+	// todo
+	return "",nil
+}

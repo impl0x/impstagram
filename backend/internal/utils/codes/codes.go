@@ -25,6 +25,11 @@ const (
 	UserExists       Code = "USER_ALREADY_EXISTS"
 	UserNotOldEnough Code = "USER_NOT_OLD_ENOUGH"
 	UserTooOld       Code = "USER_TOO_OLD"
+	UsernameAlreadyExists Code = "USERNAME_ALREADY_EXISTS"
+
+	ReferenceIDNotFound Code = "REFERENCE_ID_NOT_FOUND"
+	OTPExpired Code = "OTP_EXPIRED"
+	OTPIncorrect Code = "OTP_INCORRECT"
 )
 
 // the success codes returned in the json

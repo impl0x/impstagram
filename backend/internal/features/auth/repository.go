@@ -7,10 +7,8 @@ import (
 )
 
 type Repository interface {
-	FindByUsername(ctx context.Context, username string) (*User, error)
-	FindByEmail(ctx context.Context, email string) (*User, error)
-	FindByPhone(ctx context.Context, phone string) (*User, error)
-
+	FindByID(ctx context.Context, userID uuid.UUID) (*User, error)
+	FindByIdentifier(ctx context.Context, identifier identifier, identifierValue string) (*User, error)
 	Create(ctx context.Context, user *User) error
 
 	Get(ctx context.Context, id uuid.UUID) (*User, error)
