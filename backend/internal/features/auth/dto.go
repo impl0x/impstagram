@@ -10,31 +10,34 @@ const (
 	statusBanned
 )
 
-type identifier uint8
+type identifier uint
 
 const (
 	identifierEmail identifier =iota
 	identifierPhone 
-	identifierTOTP  
-	identifierUsername	 // make sure this can NEVER be a 2fa identifier because this cannot be validated against anything.
+	identifierUsername
 )
 
-func (i identifier) string() string {
-	switch i{
-	case identifierEmail:
+type twoFactorType uint
+
+const (
+	twoFactorEmail twoFactorType = iota
+	twoFactorPhone
+	twoFactorTOTP
+)
+
+func (tft twoFactorType) string()string{
+	switch tft{
+	case twoFactorEmail:
 		return "email"
-	case identifierPhone:
-		return "telegram"	// *CHANGE* if switched to sms
-	case identifierTOTP:
+	case twoFactorPhone:
+		return "telegram" // change if switched to sms
+	case twoFactorTOTP:
 		return "authenticator"
-	case identifierUsername:
-		return "username"
 	default:
-		panic("invalid identifier, please update code if added new identifiers")
+		panic("Invalid two factor authentication type, please add more cases in the string method for this enum if added new types")
 	}
 }
-
-type twoFAs []identifier
 
 type User struct { // not complete, will do after i setup database properly
 	ID            uuid.UUID
@@ -46,7 +49,7 @@ type User struct { // not complete, will do after i setup database properly
 	Dob           string
 
 	Status accountStatus // account status which can either be unverified, verified or banned.
-	TwoFA  twoFAs        // slice of identifiers, if null means twoFa not enabled, else its enabled on whichever identifiers are in the slice
+	TwoFAs  []twoFactorType        // slice of 2FA identifiers, if null means twoFa not enabled, else its enabled on whichever identifiers are in the slice
 }
 
 func NewUser(req registerRequest, passwordHash string) *User {
