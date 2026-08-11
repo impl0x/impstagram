@@ -38,10 +38,10 @@ func (h Handler) Register(c *mo.Context) error {
 		http.StatusAccepted,
 		responses.Success(
 			codes.RegisterSuccess,
-			"Registration successful, please check your "+result.twoFAIdentifier.string()+" for the OTP to verify your account",
+			"Registration successful, please check your "+string(result.channel)+" for the OTP to verify your account",
 			struct {
-				ReferenceId string `json:"reference_id"`
-			}{result.referenceId},
+				ReferenceID string `json:"reference_id"`
+			}{result.referenceID},
 		),
 	)
 }
@@ -62,7 +62,7 @@ func (h Handler) Login(c *mo.Context) error {
 			http.StatusAccepted,
 			responses.Success(
 				codes.TwoFARequired,
-				"Two-factor authentication is required, please check your "+result.twoFAIdentifier.string(),
+				"Two-factor authentication is required, please check your "+string(result.channel),
 				struct {
 					ReferenceID string `json:"reference_id"`
 				}{result.referenceID},
@@ -82,12 +82,12 @@ func (h Handler) Login(c *mo.Context) error {
 }
 
 func (h Handler) Verify(c *mo.Context) error {
-	var req verifyRequest
+	var req verifyOTPRequest
 	err := c.DecodeAndValidateBody(req)
 	if err != nil {
 		return err
 	}
-	result, err := h.service.verify(c.Request().Context(), req)
+	result, err := h.service.verifyOTP(c.Request().Context(), req)
 	if err != nil {
 		return h.handleError(c, err)
 	}

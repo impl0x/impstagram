@@ -20,49 +20,64 @@ type Service struct {
 	Email email.Client
 	Repo  Repository
 
-	mu2FA      sync.RWMutex
-	Pending2FA map[string]temp2FAState // string is the session uuid
+	mu      sync.RWMutex // mutex for the OTPSessions
+	OTPSessions map[string]otpSession // string is the reference id
 }
 
-type temp2FAState struct {
+// Used to store the pending otp sessions
+type otpSession struct {
 	userID    uuid.UUID
+	channel   authChannel // e.g., channelEmail
 	secretOTP string
-	twoFAType twoFactorType
 	expiresAt time.Time
 }
 
-// ? 2fa helper functions
+// the reason we choose to keep 2fa type when verification types are also used is because
+// [twoFactorType] is a superset of [verificationIdentifier], so this is more appropriate and
+// we manually store the appropriate 2fa type when using for verification purposes
+
+// ? [HELPER] ----+-----+-----2FA-----+-----+-----
 
 // The reason these are all separate functions is to ensure mutexes are used and its separated from the business logic,
 // it is a bit redundant to do this but I feel its better than putting mutexes in the business logic every time
 
-func (s *Service) addNewPending2FA(refID string, twoFAType twoFactorType, userID uuid.UUID, otp string) {
-	twoFAState := temp2FAState{userID, otp, twoFAType, time.Now().Add(config.OTPExpiryTime)}
-	s.mu2FA.Lock()
-	defer s.mu2FA.Unlock()
-	s.Pending2FA[refID] = twoFAState
+// Adds a new 2FA request to the map with the reference id passed, with mutex.
+func (s *Service) addOTPSession(refID string, channel authChannel, userID uuid.UUID, otp string) {
+	session := otpSession{
+		userID,
+		channel,
+		otp,
+		time.Now().Add(config.OTPExpiryTime), // calculating expires at by adding OTP expiry time defined in config + current time
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.OTPSessions[refID] = session
 }
 
-func (s *Service) getPending2FA(refID string) (state temp2FAState, ok bool) {
-	s.mu2FA.RLock()
-	defer s.mu2FA.RUnlock()
-	state, ok = s.Pending2FA[refID]
+// Gets a 2FA request from the reference id passed, with mutex.
+func (s *Service) getOTPSession(refID string) (session otpSession, ok bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	session, ok = s.OTPSessions[refID]
 	return
 }
 
-func (s *Service) removePending2FA(refID string) {
-	s.mu2FA.Lock()
-	defer s.mu2FA.Unlock()
-	delete(s.Pending2FA, refID)
+// Removes a 2FA from the map from the reference id passed, with mutex.
+func (s *Service) removeOTPSession(refID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.OTPSessions, refID)
 }
 
-// ? Register
+// ? ----+-----+-----Register-----+-----+-----
 
+// Stores the result to the register call
 type registerResult struct {
-	referenceId     string // Used to link the upcoming OTP request
-	twoFAIdentifier identifier
+	referenceID string      // Used to link the upcoming OTP request
+	channel     authChannel // the identifier/channel used to register, eg: email/phone
 }
 
+// Registration sentinel errors
 var (
 	errAlreadyExistingUser   = errors.New("user already exists")
 	errNotOldEnough          = errors.New("user not old enough")
@@ -70,33 +85,37 @@ var (
 	errUsernameAlreadyExists = errors.New("username already exists")
 )
 
+// Registers a new user
 func (s *Service) register(ctx context.Context, req registerRequest) (registerResult, error) {
-
+	// validate the date of birth string (this technically should be in the handler layer but then I would have to pass dob object separately in this function which would look bad so i just did it here)
 	userDob, err := dob.NewDobFromString(req.Dob)
-
 	if err != nil {
-		return registerResult{}, err // returns dob sentinel errors, which we handle in the handler.handleError function
+		return registerResult{}, err // returns dob sentinel errors, which we handle in the handler layer
 	}
 
+	// validate the user's age against our business rules
 	userAge := userDob.Age()
-
 	if userAge < config.MinAge {
 		return registerResult{}, errNotOldEnough
 	} else if userAge > config.MaxAge {
 		return registerResult{}, errTooOld
 	}
 
+	// Figure out what identifier the user sent, that is if the user registered with a email or a phone,
+	// and check if the same identifier exists in our database already or not.
 	var user *User
-	var primaryIdentifier identifier
-
+	var channel authChannel // identifier, eg: email/phone
+	var target string // the identifier literal, eg: jon@email.com/+1-234567890
 	if req.Email != "" {
-		user, err = s.Repo.FindByIdentifier(ctx, identifierEmail, req.Email)
-		primaryIdentifier = identifierEmail
+		user, err = s.Repo.FindByChannel(ctx, channelEmail, req.Email)
+		channel = channelEmail
+		target = req.Email
 	} else if req.Phone != "" {
-		user, err = s.Repo.FindByIdentifier(ctx, identifierPhone, req.Phone)
-		primaryIdentifier = identifierPhone
+		user, err = s.Repo.FindByChannel(ctx, channelPhone, req.Phone)
+		channel = channelPhone
+		target = req.Phone
 	} else {
-		return registerResult{}, errMissingIdentifier
+		return registerResult{}, errMissingIdentifier // if user sent neither a email or a phone then we reject the registration request
 	}
 
 	if err != nil {
@@ -106,45 +125,39 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	if user != nil { // if db returned a user
 		return registerResult{}, errAlreadyExistingUser // yes i acknowledge that user has chances of being banned/unverified, but this is intended. We want user to login and then hit those errors if they exist.
 	}
+
 	// checks if the username already exists because usernames are unique
-	sameUsernameUser, err := s.Repo.FindByIdentifier(ctx, identifierUsername, req.Username) // assuming req.Username is validated in validator
-	if sameUsernameUser != nil || err == nil {                                              // todo: handle db level errors
+	sameUsernameUser, err := s.Repo.FindByChannel(ctx, channelUsername, req.Username) // assuming req.Username is validated in validator
+	if sameUsernameUser != nil || err == nil {                                        // todo: handle db level errors
 		return registerResult{}, errUsernameAlreadyExists
 	}
 
+	// Now we hash the user's password and create a new user in the database
 	passwordHash := password.Hash(req.Password)
 
 	user = NewUser(req, passwordHash) // returns a unverified user by default
 	err = s.Repo.Create(ctx, user)    // we create a user before sending otp
 	if err != nil {
-		return registerResult{}, nil
-	}
-
-	verificationOTP, err := token.GenerateOTP()
-	if err != nil {
-		return registerResult{}, nil
-	}
-	var twoFAtype twoFactorType
-	switch primaryIdentifier {
-	case identifierEmail:
-		err = s.Email.Send(email.NewSendRequest(user.Email, email.SubjectVerifyEmail, email.HtmlOtp.Format(verificationOTP)))
-		twoFAtype=twoFactorEmail
-	case identifierPhone:
-		// todo: send otp on phone
-		twoFAtype=twoFactorPhone
-	}
-	if err != nil { // send otp error
 		return registerResult{}, err
 	}
 
-	referenceId := token.GenerateReferenceID()
-	s.addNewPending2FA(referenceId, twoFAtype, user.ID, verificationOTP)
+	// Verify the identifier. By sending an otp
+	otp, err := s.sendOTP(channel, purposeRegistration, target)
+	if err != nil {
+		return registerResult{}, err
+	}
+	// generate a new reference id for a otp session and add it to our otp sessions map
+	refID := token.GenerateReferenceID()
+	s.addOTPSession(refID, channel, user.ID, otp)
 
 	return registerResult{
-		referenceId:     referenceId,
-		twoFAIdentifier: primaryIdentifier,
+		referenceID: refID,
+		channel:     channel,
 	}, nil
-} // one of the design choices in this function was to first create the user in the database and then send a verification email/sms
+}
+
+// Explanation on some of the design choices in the above function:
+// one of the design choices in this function was to first create the user in the database and then send a verification email/sms
 // this is because if the db call fails then we exit early with no otp sent,
 // and if the db call succeeds but sending email fails we have a unverified user but no otp
 // if the frontend shows the internal error the user may try to register again which will trigger a already exists
@@ -152,15 +165,17 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 // although more work for the user but this is considering that this is the worst case scenario.
 // better than a dangling otp with no registered user.
 
-// ? Login
+// ? ----+-----+-----Login-----+-----+-----
 
+// Stores the result to the login call
 type loginResult struct {
 	token       string
 	requires2FA bool // if this is false then below all fields are zero'd out, else the above token is zero value'd
-	twoFAType   twoFactorType
+	channel     authChannel
 	referenceID string // Used to link the upcoming OTP request
 }
 
+// Login sentinel errors
 var (
 	errMissingIdentifier = errors.New("missing identifier")
 	errUserNotFound      = errors.New("user not found")
@@ -169,16 +184,18 @@ var (
 	errUserUnverified    = errors.New("user unverified")
 )
 
+// Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint
 func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, error) {
+	// Figure out what identifier the user sent, i.e. email/phone/username to log in
 	var user *User
 	var err error
 	switch {
 	case req.Username != "":
-		user, err = s.Repo.FindByIdentifier(ctx, identifierUsername, req.Username)
+		user, err = s.Repo.FindByChannel(ctx, channelUsername, req.Username)
 	case req.Email != "":
-		user, err = s.Repo.FindByIdentifier(ctx, identifierEmail, req.Email)
+		user, err = s.Repo.FindByChannel(ctx, channelEmail, req.Email)
 	case req.Phone != "":
-		user, err = s.Repo.FindByIdentifier(ctx, identifierPhone, req.Phone)
+		user, err = s.Repo.FindByChannel(ctx, channelPhone, req.Phone)
 	default:
 		return loginResult{}, errMissingIdentifier
 	}
@@ -191,53 +208,49 @@ func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, err
 		return loginResult{}, errUserNotFound
 	}
 
+	// if user is found in database we compare the passwords and the password hash in the database to see if the user has the correct password
 	if !password.Compare(req.Password, user.PasswordHash) {
 		return loginResult{}, errIncorrectPassword
 	}
-
+	// check if user is banned then we return immediately not allowing a login, else if unverified, in which case we trigger a resend otp request
 	if user.Status == statusBanned {
 		return loginResult{}, errUserBanned
 	} else if user.Status == statusUnverified {
-		return loginResult{}, errUserUnverified
+		return loginResult{}, errUserUnverified // todo: make a way for the user be able to resend a otp, otherwise this ends up being a edge deadlock condition
 	}
 
 	// If user has 2Fa enabled ask for otp.
 	if user.TwoFAs != nil {
-		primaryTwoFAType := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
+		referenceID := token.GenerateReferenceID()
+		primaryTwoFAChannel := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
 		// if it is TOTP
-		if primaryTwoFAType == twoFactorTOTP { // if its a time based otp we don't bother generating it now
-			referenceId := token.GenerateReferenceID()
-			s.addNewPending2FA(referenceId, primaryTwoFAType, user.ID, user.TotpSecretKey) // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
+		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
+			s.addOTPSession(referenceID, primaryTwoFAChannel, user.ID, user.TotpSecretKey) // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
 			return loginResult{
 				requires2FA: true,
-				referenceID: referenceId,
-				twoFAType:   primaryTwoFAType, // by default we use the first priority 2FA identifier
+				referenceID: referenceID,
+				channel:     primaryTwoFAChannel,
 			}, nil
 		}
 		// else if its email or phone
-		twoFAOTP, err := token.GenerateOTP()
-		if err != nil { // otp generation error
-			return loginResult{}, err
-		}
-		switch primaryTwoFAType {
-		case twoFactorEmail:
-			err = s.Email.Send(email.NewSendRequest(user.Email, email.SubjectTwoFa, email.HtmlOtp.Format(twoFAOTP)))
-		case twoFactorPhone:
-			//todo: send sms with 2fa code
+		var target string // either the email or the phone literal
+		switch primaryTwoFAChannel {
+		case channelEmail:
+			target = user.Email
+		case channelPhone:
+			target = user.Phone
 		default:
-			// impossible case so throw panic
-			panic("invalid identifier, please update code if added new identifiers") // make sure [identifierUsername] can NEVER be a 2fa identifier
+			panic("invalid identifier found in 2fa slice of user")
 		}
-		if err != nil { // send otp error
+		otp, err := s.sendOTP(primaryTwoFAChannel, purpose2FA, target)
+		if err != nil {
 			return loginResult{}, err
 		}
-		// save the ref id and otp for future use by the verify endpoint
-		referenceId := token.GenerateReferenceID()
-		s.addNewPending2FA(referenceId, primaryTwoFAType, user.ID, twoFAOTP)
+		s.addOTPSession(referenceID, primaryTwoFAChannel, user.ID, otp) // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
 		return loginResult{
 			requires2FA: true,
-			twoFAType:   primaryTwoFAType, // by default we use the first priority 2FA identifier
-			referenceID: referenceId,
+			channel:     primaryTwoFAChannel,
+			referenceID: referenceID,
 		}, nil
 	}
 
@@ -245,7 +258,40 @@ func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, err
 	return loginResult{token: token}, nil
 }
 
-// ? verify otp
+// ? [HELPER] ----+-----+-----Send otp-----+-----+-----
+
+// SendOTP sends a one-time password challenge to a user destination.
+// The behavior of this function changes based on the following configurations:
+//   - channel: The transport medium used to deliver the token (Email or SMS)
+//   - purpose: The system context (2FA, Reset password or Registration) used to select templates
+//   - target: The absolute address string (e.g., an email address or E.164 phone number)
+func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target string) (string, error) {
+	otp, err := token.GenerateOTP()
+	if err != nil { // generate otp error
+		return "", err
+	}
+	// Send otp based on the identifier
+	switch channel {
+	case channelEmail:
+		var emailSendRequest email.SendRequest
+		if purpose == purpose2FA {
+			emailSendRequest = email.NewSendRequest(target, email.SubjectTwoFa, email.Html2FAOTP.Format(otp))
+		} else if purpose == purposeRegistration {
+			emailSendRequest = email.NewSendRequest(target, email.SubjectVerifyEmail, email.HtmlRegistrationVerificationOTP.Format(otp))
+		}
+		err = s.Email.Send(emailSendRequest)
+	case channelPhone:
+		// todo: send otp on phone
+	default:
+		panic("invalid otp channel")
+	}
+	if err != nil { // send otp error
+		return "", err
+	}
+	return otp, nil
+}
+
+// ? ----+-----+-----Verify otp-----+-----+-----
 
 type verifyResult struct {
 	token string
@@ -255,31 +301,36 @@ var errRefIDNotFound = errors.New("reference ID not found")
 var errOTPExpired = errors.New("otp expired")
 var errIncorrectOTP = errors.New("incorrect otp")
 
-func (s *Service) verify(ctx context.Context, req verifyRequest) (verifyResult, error) { // token, error
-	state, ok := s.getPending2FA(req.ReferenceID)
-	if !ok {
+// Verifies the two factor / verification OTP and generates a token for the user
+func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest) (verifyResult, error) { // token, error
+	// retrieve the session from the reference id in the request
+	session, ok := s.getOTPSession(req.ReferenceID)
+	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification 
 		return verifyResult{}, errRefIDNotFound
 	}
-	if state.expiresAt.After(time.Now()) {
-		s.removePending2FA(req.ReferenceID) // if the otp has expired we remove it from our map and return a error
+	if session.expiresAt.After(time.Now()) { // if the otp has expired we remove it from our map and return a error
+		s.removeOTPSession(req.ReferenceID) 
 		return verifyResult{}, errOTPExpired
 	}
 	var err error
-	if state.twoFAType == twoFactorTOTP {
-		state.secretOTP, err = token.GenerateTOTP(state.secretOTP) // in this case secretOTP is actually the secretKey for the TOTP which is used to compute the otp.
+	if session.channel == channelTOTP { // if its a authenticator time based 2 factor code
+		session.secretOTP, err = token.GenerateTOTP(session.secretOTP) // in this case secretOTP is actually the secretKey for the TOTP which is used to compute the otp.
 		if err != nil {
 			return verifyResult{}, err
 		}
 	}
-	if state.secretOTP != req.OTP { // we check the otp if it does not match we return early with a incorrect otp error
+	if session.secretOTP != req.OTP { // we check the otp if it does not match we return early with a incorrect otp error
 		return verifyResult{}, errIncorrectOTP
 	}
-	user, err := s.Repo.FindByID(ctx, state.userID)
+	// if the otp matches then we remove the reference id from our map immediately
+	s.removeOTPSession(req.ReferenceID)
+	// find the user 
+	user, err := s.Repo.FindByID(ctx, session.userID)
 	if err != nil {
 		return verifyResult{}, err
 	}
-	if user != nil {
-		return verifyResult{}, errUserNotFound
+	if user != nil { // if the user mysteriously got deleted after just trying to log in or register...
+		return verifyResult{}, errUserNotFound 
 	}
 	token := s.Jwt.GenerateToken() // todo
 	return verifyResult{
