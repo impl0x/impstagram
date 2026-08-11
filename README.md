@@ -19,3 +19,6 @@ Json response schema:
 }
 with data omitted on errors
 and code being a string, such as TWO_FACTOR_REQUIRED, INVALID_TWO_FACTOR_CODE, etc.
+
+## Codebase
+to understand the codebase, in most functions every section is labelled with a comment at the top of the section, reading that will explain what that part of the code is doing 
