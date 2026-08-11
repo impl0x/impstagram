@@ -7,12 +7,16 @@ import "strings"
 // i have only 2 email cases so this is enough for me as of now
 
 type HTML struct {
-	Html        string
-	Placeholder string
+	Html            string
+	MainPlaceholder string
+	Placeholders    []string
 }
 
-func (h HTML) Format(str string) string {
-	return strings.ReplaceAll(h.Html, h.Placeholder, str)
+func (h HTML) Format(mainReplacement string) string {
+	finalSlice := make([]string, len(h.Placeholders)+1)
+	finalSlice = append(finalSlice, h.Placeholders...)
+	finalSlice = append(finalSlice, h.MainPlaceholder, mainReplacement)
+	return strings.NewReplacer(finalSlice...).Replace(h.Html)
 }
 
 var HtmlWelcome = HTML{`
@@ -160,9 +164,21 @@ var HtmlWelcome = HTML{`
 
 </body>
 </html>
-`, "{{username}}"}
+`, "{{username}}", nil}
 
-var HtmlOtp = HTML{`
+// verification
+// content: Verify your account
+// sub-content: Use the verification code below to continue with your Impstagram account.
+// 2fa
+// content: Two-factor authorization code
+// sub-content: Use the Two-factor authorization code below to log into your Impstagram account.
+var HtmlRegistrationVerificationOTP = HTML{
+	OTPBaseHTML, "{{otp}}", []string{"{{content}}", "Verify your account", "{{sub-content}}", "Use the verification code below to continue with your Impstagram account."},
+}
+var Html2FAOTP = HTML{
+	OTPBaseHTML, "{{otp}}", []string{"{{content}}", "Two-factor authorization code", "{{sub-content}}", "Use the Two-factor authorization code below to log into your Impstagram account."},
+}
+var OTPBaseHTML = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -223,7 +239,7 @@ var HtmlOtp = HTML{`
                 color:#ffffff;
                 text-align:center;
               ">
-                Verify your email
+                {{content}}
               </h1>
 
               <p style="
@@ -233,8 +249,7 @@ var HtmlOtp = HTML{`
                 color:#b8b8b8;
                 text-align:center;
               ">
-                Use the verification code below to continue with your
-                Impstagram account.
+                {{sub-content}}
               </p>
 
               <!-- OTP -->
@@ -314,4 +329,4 @@ var HtmlOtp = HTML{`
 
 </body>
 </html>
-`, "{{otp}}"}
+`
