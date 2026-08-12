@@ -33,4 +33,3 @@ func (pg PostgresRepository) FindByChannel(ctx context.Context, channel authChan
 func (pg PostgresRepository) Create(ctx context.Context, user *User) error {
 	return nil
 }
-

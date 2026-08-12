@@ -20,7 +20,7 @@ type Service struct {
 	Email email.Client
 	Repo  Repository
 
-	mu      sync.RWMutex // mutex for the OTPSessions
+	mu          sync.RWMutex          // mutex for the OTPSessions
 	OTPSessions map[string]otpSession // string is the reference id
 }
 
@@ -105,7 +105,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	// and check if the same identifier exists in our database already or not.
 	var user *User
 	var channel authChannel // identifier, eg: email/phone
-	var target string // the identifier literal, eg: jon@email.com/+1-234567890
+	var target string       // the identifier literal, eg: jon@email.com/+1-234567890
 	if req.Email != "" {
 		user, err = s.Repo.FindByChannel(ctx, channelEmail, req.Email)
 		channel = channelEmail
@@ -133,8 +133,10 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 
 	// Now we hash the user's password and create a new user in the database
-	passwordHash := password.Hash(req.Password)
-
+	passwordHash, err := password.Hash(req.Password)
+	if err != nil {
+		return registerResult{}, err
+	}
 	user = NewUser(req, passwordHash) // returns a unverified user by default
 	err = s.Repo.Create(ctx, user)    // we create a user before sending otp
 	if err != nil {
@@ -209,13 +211,18 @@ func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, err
 	}
 
 	// if user is found in database we compare the passwords and the password hash in the database to see if the user has the correct password
-	if !password.Compare(req.Password, user.PasswordHash) {
+	ok, err := password.Compare(req.Password, user.PasswordHash)
+	if err != nil {
+		return loginResult{}, err
+	}
+	if !ok {
 		return loginResult{}, errIncorrectPassword
 	}
 	// check if user is banned then we return immediately not allowing a login, else if unverified, in which case we trigger a resend otp request
-	if user.Status == statusBanned {
+	switch user.Status {
+	case statusBanned:
 		return loginResult{}, errUserBanned
-	} else if user.Status == statusUnverified {
+	case statusUnverified:
 		return loginResult{}, errUserUnverified // todo: make a way for the user be able to resend a otp, otherwise this ends up being a edge deadlock condition
 	}
 
@@ -305,11 +312,11 @@ var errIncorrectOTP = errors.New("incorrect otp")
 func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest) (verifyResult, error) { // token, error
 	// retrieve the session from the reference id in the request
 	session, ok := s.getOTPSession(req.ReferenceID)
-	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification 
+	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
 		return verifyResult{}, errRefIDNotFound
 	}
 	if session.expiresAt.After(time.Now()) { // if the otp has expired we remove it from our map and return a error
-		s.removeOTPSession(req.ReferenceID) 
+		s.removeOTPSession(req.ReferenceID)
 		return verifyResult{}, errOTPExpired
 	}
 	var err error
@@ -324,13 +331,13 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest) (verifyRe
 	}
 	// if the otp matches then we remove the reference id from our map immediately
 	s.removeOTPSession(req.ReferenceID)
-	// find the user 
+	// find the user
 	user, err := s.Repo.FindByID(ctx, session.userID)
 	if err != nil {
 		return verifyResult{}, err
 	}
 	if user != nil { // if the user mysteriously got deleted after just trying to log in or register...
-		return verifyResult{}, errUserNotFound 
+		return verifyResult{}, errUserNotFound
 	}
 	token := s.Jwt.GenerateToken() // todo
 	return verifyResult{
