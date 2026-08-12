@@ -16,7 +16,6 @@ import (
 )
 
 type Service struct {
-	Jwt   jwt.Jwt
 	Email email.Client
 	Repo  Repository
 
@@ -261,7 +260,10 @@ func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, err
 		}, nil
 	}
 
-	token := s.Jwt.GenerateToken() // todo: jwt is still a todo
+	token, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID))
+	if err != nil {
+		panic(err)
+	}
 	return loginResult{token: token}, nil
 }
 
@@ -336,10 +338,14 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest) (verifyRe
 	if err != nil {
 		return verifyResult{}, err
 	}
-	if user != nil { // if the user mysteriously got deleted after just trying to log in or register...
+	if user == nil { // if the user mysteriously got deleted after just trying to log in or register...
 		return verifyResult{}, errUserNotFound
 	}
-	token := s.Jwt.GenerateToken() // todo
+
+	token, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID))
+	if err != nil {
+		panic(err)
+	}
 	return verifyResult{
 		token: token,
 	}, nil
