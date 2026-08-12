@@ -6,5 +6,5 @@ type Jwt struct {
 }
 
 func (j Jwt) GenerateToken() string {
-	return ""
+	return "token"
 }

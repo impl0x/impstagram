@@ -1,4 +1,4 @@
-package mo
+package utils
 
 // this file is mostly copied from the default error handler present in mo.
 import (
@@ -44,12 +44,12 @@ func CustomErrorHandler(c *mo.Context, err error) {
 		default:
 			codeName = codes.Unknown // impossible logical case unless framework changes and somehow returns a different [mo.HTTPError]
 		}
-		c.JSON(e.StatusCode(), responses.Error(codeName, e.Error())) // e.Error returns the statusText of the statusCode if its a [HttpError]
-	case *validator.GroupedValidationError:
+		c.JSON(e.StatusCode(), responses.Error(codeName, http.StatusText(e.StatusCode()))) // e.Error returns the statusText of the statusCode if its a [HttpError]
+	case validator.GroupedValidationError:
 		c.JSON(
 			http.StatusBadRequest,
 			validationErrorJson{
-				responses.Error(codes.ValidationError, e.Error()),
+				responses.Error(codes.ValidationError, "Validation error, missing data or incorrect data"),
 				e.ToJsonStructList(),
 			},
 		)

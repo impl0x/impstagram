@@ -5,7 +5,6 @@ import (
 	"backend/internal/pkg/dob"
 	"backend/internal/pkg/responses"
 	"backend/internal/utils/codes"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -13,10 +12,10 @@ import (
 )
 
 type Handler struct {
-	service *Service
+	Service *Service
 }
 
-// some info: 
+// some info:
 // - we are handling all the service level errors via the [Handler.handleError] function,
 // 	 we return the function result in the handler purely due to idiom it is never actually gonna return an actual error
 // 	 except if json encode error occurs which is not probable because its our function with valid syntax and logic.
@@ -30,7 +29,7 @@ func (h Handler) Register(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.service.register(c.Request().Context(), req)
+	result, err := h.Service.register(c.Request().Context(), req)
 	if err != nil {
 		return h.handleError(c, err) // always returns nil
 	}
@@ -53,7 +52,7 @@ func (h Handler) Login(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.service.login(c.Request().Context(), req)
+	result, err := h.Service.login(c.Request().Context(), req)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -87,7 +86,7 @@ func (h Handler) Verify(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.service.verifyOTP(c.Request().Context(), req)
+	result, err := h.Service.verifyOTP(c.Request().Context(), req)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -198,7 +197,7 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 			),
 		)
 	default:
-		fmt.Println("Internal server error: %v", err)
+		println("Internal server error: " + err.Error())
 		return c.JSON(
 			http.StatusInternalServerError,
 			responses.Error(

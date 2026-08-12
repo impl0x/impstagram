@@ -8,22 +8,29 @@ import (
 )
 
 type PostgresRepository struct {
-	db *pgxpool.Pool
+	Db *pgxpool.Pool
+}
+
+var demoUser = &User{
+	uuid.New(),
+	"test",
+	"email@email.com",
+	"1234567890",
+	"abcedxyz",
+	"passwhash",
+	"dob",
+	statusVerified,
+	nil,
 }
 
 // todos
-func (pg *PostgresRepository) FindByUsername(ctx context.Context, username string) (User, error) {
-
+func (pg PostgresRepository) FindByID(ctx context.Context, id uuid.UUID) (*User, error) {
+	return demoUser, nil
 }
-func (pg *PostgresRepository) FindByEmail(email string) (User, error) {
-
+func (pg PostgresRepository) FindByChannel(ctx context.Context, channel authChannel, target string) (*User, error) {
+	return demoUser, nil
 }
-func (pg *PostgresRepository) FindByPhone(phone string) (User, error) {
-
+func (pg PostgresRepository) Create(ctx context.Context, user *User) error {
+	return nil
 }
-func (pg *PostgresRepository) Create(user User) error {
 
-}
-func (pg *PostgresRepository) Get(id uuid.UUID) (User, error) {
-
-}
