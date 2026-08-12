@@ -16,6 +16,8 @@ var DefaultArgon2HashSettings = argon2id.Params{
 }
 
 // Hash generates a random salt and returns the hashed password and the salt.
+//
+// errors returned are only read errors
 func Hash(password string) (string, error) {
 	salt, err := generateRandomBytes(DefaultArgon2HashSettings.SaltLength)
 	if err != nil {
@@ -25,6 +27,10 @@ func Hash(password string) (string, error) {
 	return hash, nil
 }
 
+// Compares the two passwords, i.e. the request password and the password hash stored in the database
+//
+// note that the error returned here can be anything from rand read errors to argon2id format errors
+// it mostly will not trigger if the data isn't invalid
 func Compare(reqPassword string, dbPasswordHash string) (bool, error) {
 	params, salt, rawDbPasswordHash, err := argon2id.DecodeHash(dbPasswordHash)
 	if err != nil {
