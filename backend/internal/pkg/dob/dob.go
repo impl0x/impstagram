@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-var ErrInvalidDobString = errors.New("Invalid date of birth string")
-var ErrImpossibleDob = errors.New("Impossible date of birth")
+var ErrInvalidDobString = errors.New("dob: Invalid date of birth string")
+var ErrImpossibleDob = errors.New("dob: Impossible date of birth")
 
 type Dob struct {
 	Year  uint16
