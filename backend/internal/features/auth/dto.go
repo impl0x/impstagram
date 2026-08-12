@@ -2,8 +2,6 @@ package auth
 
 import "github.com/google/uuid"
 
-
-
 type User struct { // not complete, will do after i setup database properly
 	ID            uuid.UUID
 	Username      string
@@ -14,7 +12,7 @@ type User struct { // not complete, will do after i setup database properly
 	Dob           string
 
 	Status accountStatus // account status which can either be unverified, verified or banned.
-	TwoFAs  []authChannel        // slice of 2FA identifiers, if null means twoFa not enabled, else its enabled on whichever identifiers are in the slice
+	TwoFAs []authChannel // slice of 2FA identifiers, if null means twoFa not enabled, else its enabled on whichever identifiers are in the slice
 }
 
 func NewUser(req registerRequest, passwordHash string) *User {

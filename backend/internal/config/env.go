@@ -7,4 +7,4 @@ const (
 	prodEnv environment = "prod"
 )
 
-const Env = devEnv
+const Env = devEnv // switch when env is prod

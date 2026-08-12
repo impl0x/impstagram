@@ -9,5 +9,5 @@ import (
 type Repository interface {
 	FindByID(ctx context.Context, userID uuid.UUID) (*User, error)
 	FindByChannel(ctx context.Context, channel authChannel, target string) (*User, error)
-	Create(ctx context.Context, user *User) error	
+	Create(ctx context.Context, user *User) error
 }
