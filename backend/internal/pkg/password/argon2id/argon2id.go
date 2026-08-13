@@ -1,5 +1,5 @@
 // this package is stolen from github.com/alexedwards/argon2id
-//
+// reason i didn't import it because it was just a one file and i also did some modifications
 // all rights and credits to him
 package argon2id
 
