@@ -81,6 +81,7 @@ func (h Handler) Login(c *mo.Context) error {
 	)
 }
 
+// ? POST - models.verifyOTPRequest
 func (h Handler) Verify(c *mo.Context) error {
 	var req verifyOTPRequest
 	err := c.DecodeAndValidateBody(req)

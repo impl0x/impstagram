@@ -3,14 +3,12 @@ module backend
 go 1.26.2
 
 require (
-	github.com/google/uuid v1.6.0
-	github.com/impl0x/mo v1.5.0
+	github.com/google/uuid v1.6.0 // used for uuid in database and general uuid generation
+	github.com/impl0x/mo v1.5.0 // web api framework
+	github.com/mileusna/useragent v1.3.5 // user agent parsing
 )
 
-require (
-	github.com/mileusna/useragent v1.3.5 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-)
+require golang.org/x/sys v0.47.0 // indirect
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
