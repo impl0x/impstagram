@@ -7,7 +7,13 @@ import (
 )
 
 type Repository interface {
-	FindByID(ctx context.Context, userID uuid.UUID) (*User, error)
-	FindByChannel(ctx context.Context, channel authChannel, target string) (*User, error)
-	Create(ctx context.Context, user *User) error
+	// users table
+	FindUserByID(ctx context.Context, userID uuid.UUID) (*user, error)
+	FindUserByChannel(ctx context.Context, channel authChannel, target string) (*user, error)
+	CreateUser(ctx context.Context, user *user) error
+
+	// user_sessions table
+	FindSessionByToken(ctx context.Context, tokenHash string)
+	FindSessionByUserID(ctx context.Context, userID uuid.UUID)
+	CreateSession(ctx context.Context, session *userSession) error
 }

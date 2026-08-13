@@ -11,7 +11,7 @@ type PostgresRepository struct {
 	Db *pgxpool.Pool
 }
 
-var demoUser = &User{
+var demoUser = &user{
 	uuid.New(),
 	"test",
 	"email@email.com",
@@ -24,12 +24,12 @@ var demoUser = &User{
 }
 
 // todos
-func (pg PostgresRepository) FindByID(ctx context.Context, id uuid.UUID) (*User, error) {
+func (pg PostgresRepository) FindByID(ctx context.Context, id uuid.UUID) (*user, error) {
 	return demoUser, nil
 }
-func (pg PostgresRepository) FindByChannel(ctx context.Context, channel authChannel, target string) (*User, error) {
+func (pg PostgresRepository) FindByChannel(ctx context.Context, channel authChannel, target string) (*user, error) {
 	return demoUser, nil
 }
-func (pg PostgresRepository) Create(ctx context.Context, user *User) error {
+func (pg PostgresRepository) Create(ctx context.Context, user *user) error {
 	return nil
 }

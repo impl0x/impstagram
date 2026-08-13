@@ -7,8 +7,10 @@ import (
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/password"
 	"backend/internal/pkg/token"
+	"backend/internal/utils"
 	"context"
 	"errors"
+	"net/http"
 	"sync"
 	"time"
 
@@ -78,6 +80,7 @@ type registerResult struct {
 
 // Registration sentinel errors
 var (
+	errMissingIdentifier     = errors.New("missing identifier")
 	errAlreadyExistingUser   = errors.New("user already exists")
 	errNotOldEnough          = errors.New("user not old enough")
 	errTooOld                = errors.New("user too old")
@@ -102,15 +105,15 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 
 	// Figure out what identifier the user sent, that is if the user registered with a email or a phone,
 	// and check if the same identifier exists in our database already or not.
-	var user *User
+	var user *user
 	var channel authChannel // identifier, eg: email/phone
 	var target string       // the identifier literal, eg: jon@email.com/+1-234567890
 	if req.Email != "" {
-		user, err = s.Repo.FindByChannel(ctx, channelEmail, req.Email)
+		user, err = s.Repo.FindUserByChannel(ctx, channelEmail, req.Email)
 		channel = channelEmail
 		target = req.Email
 	} else if req.Phone != "" {
-		user, err = s.Repo.FindByChannel(ctx, channelPhone, req.Phone)
+		user, err = s.Repo.FindUserByChannel(ctx, channelPhone, req.Phone)
 		channel = channelPhone
 		target = req.Phone
 	} else {
@@ -126,8 +129,8 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 
 	// checks if the username already exists because usernames are unique
-	sameUsernameUser, err := s.Repo.FindByChannel(ctx, channelUsername, req.Username) // assuming req.Username is validated in validator
-	if sameUsernameUser != nil || err == nil {                                        // todo: handle db level errors
+	sameUsernameUser, err := s.Repo.FindUserByChannel(ctx, channelUsername, req.Username) // assuming req.Username is validated in validator
+	if sameUsernameUser != nil || err == nil {                                            // todo: handle db level errors
 		return registerResult{}, errUsernameAlreadyExists
 	}
 
@@ -136,8 +139,8 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	if err != nil {
 		return registerResult{}, err
 	}
-	user = NewUser(req, passwordHash) // returns a unverified user by default
-	err = s.Repo.Create(ctx, user)    // we create a user before sending otp
+	user = NewUser(req, passwordHash)  // returns a unverified user by default
+	err = s.Repo.CreateUser(ctx, user) // we create a user before sending otp
 	if err != nil {
 		return registerResult{}, err
 	}
@@ -170,33 +173,34 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 
 // Stores the result to the login call
 type loginResult struct {
-	token       string
-	requires2FA bool // if this is false then below all fields are zero'd out, else the above token is zero value'd
-	channel     authChannel
-	referenceID string // Used to link the upcoming OTP request
+	accessToken  string
+	refreshToken string
+	requires2FA  bool // if this is false then below all fields are zero'd out, else the above token is zero value'd
+	channel      authChannel
+	referenceID  string // Used to link the upcoming OTP request
 }
 
 // Login sentinel errors
 var (
-	errMissingIdentifier = errors.New("missing identifier")
 	errUserNotFound      = errors.New("user not found")
 	errIncorrectPassword = errors.New("incorrect password")
 	errUserBanned        = errors.New("user banned")
 	errUserUnverified    = errors.New("user unverified")
 )
 
-// Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint
-func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, error) {
+// Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint.
+// The reason *http.request is required is to retrieve the ip address and user agent of the client.
+func (s *Service) login(ctx context.Context, req loginRequest, request *http.Request) (loginResult, error) {
 	// Figure out what identifier the user sent, i.e. email/phone/username to log in
-	var user *User
+	var user *user
 	var err error
 	switch {
 	case req.Username != "":
-		user, err = s.Repo.FindByChannel(ctx, channelUsername, req.Username)
+		user, err = s.Repo.FindUserByChannel(ctx, channelUsername, req.Username)
 	case req.Email != "":
-		user, err = s.Repo.FindByChannel(ctx, channelEmail, req.Email)
+		user, err = s.Repo.FindUserByChannel(ctx, channelEmail, req.Email)
 	case req.Phone != "":
-		user, err = s.Repo.FindByChannel(ctx, channelPhone, req.Phone)
+		user, err = s.Repo.FindUserByChannel(ctx, channelPhone, req.Phone)
 	default:
 		return loginResult{}, errMissingIdentifier
 	}
@@ -259,12 +263,33 @@ func (s *Service) login(ctx context.Context, req loginRequest) (loginResult, err
 			referenceID: referenceID,
 		}, nil
 	}
+	// else
 
-	token, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID))
+	// Generate tokens
+	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID))
 	if err != nil {
 		panic(err)
 	}
-	return loginResult{token: token}, nil
+	refreshToken := token.GenerateRefreshToken()
+	
+	// Add a new user session to the database
+	err = s.Repo.CreateSession(
+		ctx,
+		newUserSession(
+			token.GenerateMD5Hash(refreshToken), // tokenHash
+			utils.GetIpFromRequest(request),     // userIP	- assumes the function has the correct implementation of ip retrieval depending upon environment and reverse proxy configurations
+			request.UserAgent(),                 // userAgent - assumes that past middleware has checked if a valid ua is present
+			user.ID,                             // userID
+		),
+	)
+	if err != nil {
+		return loginResult{}, err // db error
+	}
+
+	return loginResult{
+		accessToken:  accessToken,
+		refreshToken: refreshToken,
+	}, nil
 }
 
 // ? [HELPER] ----+-----+-----Send otp-----+-----+-----
@@ -283,9 +308,10 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 	switch channel {
 	case channelEmail:
 		var emailSendRequest email.SendRequest
-		if purpose == purpose2FA {
+		switch purpose {
+		case purpose2FA:
 			emailSendRequest = email.NewSendRequest(target, email.SubjectTwoFa, email.Html2FAOTP.Format(otp))
-		} else if purpose == purposeRegistration {
+		case purposeRegistration:
 			emailSendRequest = email.NewSendRequest(target, email.SubjectVerifyEmail, email.HtmlRegistrationVerificationOTP.Format(otp))
 		}
 		err = s.Email.Send(emailSendRequest)
@@ -303,15 +329,17 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 // ? ----+-----+-----Verify otp-----+-----+-----
 
 type verifyResult struct {
-	token string
+	accessToken  string
+	refreshToken string
 }
 
 var errRefIDNotFound = errors.New("reference ID not found")
 var errOTPExpired = errors.New("otp expired")
 var errIncorrectOTP = errors.New("incorrect otp")
 
-// Verifies the two factor / verification OTP and generates a token for the user
-func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest) (verifyResult, error) { // token, error
+// Verifies the two factor / verification OTP and generates a token for the user.
+// The reason *http.request is required is to retrieve the ip address and user agent of the client.
+func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, request *http.Request) (verifyResult, error) { // token, error
 	// retrieve the session from the reference id in the request
 	session, ok := s.getOTPSession(req.ReferenceID)
 	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
@@ -334,7 +362,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest) (verifyRe
 	// if the otp matches then we remove the reference id from our map immediately
 	s.removeOTPSession(req.ReferenceID)
 	// find the user
-	user, err := s.Repo.FindByID(ctx, session.userID)
+	user, err := s.Repo.FindUserByID(ctx, session.userID)
 	if err != nil {
 		return verifyResult{}, err
 	}
@@ -342,11 +370,24 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest) (verifyRe
 		return verifyResult{}, errUserNotFound
 	}
 
-	token, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID))
+	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID))
+	refreshToken := token.GenerateRefreshToken()
 	if err != nil {
 		panic(err)
 	}
+
+	err = s.Repo.CreateSession(
+		ctx,
+		newUserSession(
+			token.GenerateMD5Hash(refreshToken), // tokenHash
+			utils.GetIpFromRequest(request),     // userIP	- assumes the function has the correct implementation of ip retrieval depending upon environment and reverse proxy configurations
+			request.UserAgent(),                 // userAgent - assumes that past middleware has checked if a valid ua is present
+			user.ID,                             // userID
+		),
+	)
+
 	return verifyResult{
-		token: token,
+		accessToken:  accessToken,
+		refreshToken: refreshToken,
 	}, nil
 }

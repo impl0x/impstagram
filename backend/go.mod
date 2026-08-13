@@ -7,7 +7,10 @@ require (
 	github.com/impl0x/mo v1.5.0
 )
 
-require golang.org/x/sys v0.47.0 // indirect
+require (
+	github.com/mileusna/useragent v1.3.5 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+)
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect

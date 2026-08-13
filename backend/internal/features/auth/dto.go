@@ -1,8 +1,14 @@
 package auth
 
-import "github.com/google/uuid"
+import (
+	"backend/internal/config"
+	"time"
 
-type User struct { // not complete, will do after i setup database properly
+	"github.com/google/uuid"
+	"github.com/mileusna/useragent"
+)
+
+type user struct { // not complete, will do after i setup database properly
 	ID            uuid.UUID
 	Username      string
 	Email         string
@@ -15,13 +21,43 @@ type User struct { // not complete, will do after i setup database properly
 	TwoFAs []authChannel // slice of 2FA identifiers, if null means twoFa not enabled, else its enabled on whichever identifiers are in the slice
 }
 
-func NewUser(req registerRequest, passwordHash string) *User {
-	return &User{
+func NewUser(req registerRequest, passwordHash string) *user {
+	return &user{
 		Username:     req.Username,
 		Email:        req.Email,
 		Phone:        req.Phone,
 		PasswordHash: passwordHash,
 		Dob:          req.Dob,
 		Status:       statusUnverified,
+	}
+}
+
+type userSession struct {
+	ID          uuid.UUID
+	TokenHash   string
+	UserID      uuid.UUID
+	IPAddress   string
+	OSName      string
+	BrowserName string
+	DeviceType  string
+	ExpiresAt   time.Time
+	CreatedAt   time.Time
+}
+
+func newUserSession(tokenHash string, userIP string, userAgent string, userID uuid.UUID) *userSession {
+	// parsing the user agent and storing the current time
+	ua := useragent.Parse(userAgent)
+	now := time.Now()
+
+	// creating and returning the userSession struct
+	return &userSession{
+		TokenHash:   tokenHash,
+		UserID:      userID,
+		IPAddress:   userIP,
+		OSName:      ua.OS,
+		BrowserName: ua.Name,
+		DeviceType:  ua.Device,
+		ExpiresAt:   now.AddDate(0, 0, config.RefreshTokenExpiryTime),
+		CreatedAt:   now,
 	}
 }

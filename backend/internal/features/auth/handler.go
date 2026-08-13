@@ -52,7 +52,7 @@ func (h Handler) Login(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.login(c.Request().Context(), req)
+	result, err := h.Service.login(c.Request().Context(), req, c.Request())
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -74,8 +74,9 @@ func (h Handler) Login(c *mo.Context) error {
 			codes.LoginSuccess,
 			"Login successful",
 			struct {
-				Token string `json:"token"`
-			}{result.token},
+				AccessToken  string `json:"access_token"`
+				RefreshToken string `json:"refresh_token"`
+			}{result.accessToken, result.refreshToken},
 		),
 	)
 }
@@ -86,15 +87,16 @@ func (h Handler) Verify(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.verifyOTP(c.Request().Context(), req)
+	result, err := h.Service.verifyOTP(c.Request().Context(), req, c.Request())
 	if err != nil {
 		return h.handleError(c, err)
 	}
 	return c.JSON(
 		http.StatusOK,
 		struct {
-			Token string `json:"token"`
-		}{result.token},
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+		}{result.accessToken, result.refreshToken},
 	)
 }
 
