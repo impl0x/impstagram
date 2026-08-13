@@ -55,7 +55,7 @@ func CustomErrorHandler(c *mo.Context, err error) {
 		)
 	case *json.SyntaxError:
 		c.JSON(http.StatusUnprocessableEntity, responses.Error(
-			codes.InvalidJSON,
+			codes.JSONInvalid,
 			fmt.Sprintf("JSON syntax error at offset %d", e.Offset),
 		))
 	case *json.UnmarshalTypeError:

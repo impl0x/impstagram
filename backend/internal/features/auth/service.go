@@ -271,7 +271,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, request *http.Req
 		panic(err)
 	}
 	refreshToken := token.GenerateRefreshToken()
-	
+
 	// Add a new user session to the database
 	err = s.Repo.CreateSession(
 		ctx,
@@ -345,7 +345,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, request *
 	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
 		return verifyResult{}, errRefIDNotFound
 	}
-	if session.expiresAt.After(time.Now()) { // if the otp has expired we remove it from our map and return a error
+	if session.expiresAt.Before(time.Now()) { // if the otp has expired we remove it from our map and return a error
 		s.removeOTPSession(req.ReferenceID)
 		return verifyResult{}, errOTPExpired
 	}
@@ -387,6 +387,63 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, request *
 	)
 
 	return verifyResult{
+		accessToken:  accessToken,
+		refreshToken: refreshToken,
+	}, nil
+}
+
+// ? ----+-----+-----Refresh-----+-----+-----
+
+type refreshResult struct {
+	accessToken  string
+	refreshToken string
+}
+
+var (
+	errInvalidRefreshToken = errors.New("invalid refresh token")
+	errExpiredRefreshToken = errors.New("expired refresh token")
+)
+
+func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResult, error) {
+	// Do a db lookup with the refresh token's hash
+	userSesh, err := s.Repo.FindSessionByToken(ctx, token.GenerateMD5Hash(req.RefreshToken))
+	if err != nil {
+		return refreshResult{}, err // db error
+	}
+	if userSesh == nil {
+		return refreshResult{}, errInvalidRefreshToken
+	}
+
+	// Check if the session has expired
+	if userSesh.ExpiresAt.Before(time.Now()) {
+		// Deleting the user session if it is expired, the user will have to create a new session again by logging in.
+		err = s.Repo.DeleteSession(ctx, userSesh.ID)
+		if err != nil {
+			return refreshResult{}, err // db error
+		}
+		return refreshResult{}, errExpiredRefreshToken
+	}
+
+	// if everything is good we generate both new tokens
+	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(userSesh.UserID))
+	if err != nil {
+		panic(err)
+	}
+	refreshToken := token.GenerateRefreshToken()
+
+	// update the session with the new refresh token and also update the expires at field to the max capacity again.
+	err = s.Repo.UpdateSessionToken(
+		ctx,
+		userSesh.ID,
+		token.GenerateMD5Hash(refreshToken), // we store a hash of the token
+		time.Now().AddDate(0, 0, config.RefreshTokenExpiryTime),
+	)
+	if err != nil {
+		return refreshResult{}, err // db err
+	}
+	
+	// return both tokens
+	return refreshResult{
 		accessToken:  accessToken,
 		refreshToken: refreshToken,
 	}, nil

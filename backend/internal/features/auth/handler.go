@@ -34,7 +34,7 @@ func (h Handler) Register(c *mo.Context) error {
 		return h.handleError(c, err) // always returns nil
 	}
 	return c.JSON(
-		http.StatusAccepted,
+		http.StatusCreated,
 		responses.Success(
 			codes.RegisterSuccess,
 			"Registration successful, please check your "+string(result.channel)+" for the OTP to verify your account",
@@ -82,7 +82,7 @@ func (h Handler) Login(c *mo.Context) error {
 }
 
 // ? POST - models.verifyOTPRequest
-func (h Handler) Verify(c *mo.Context) error {
+func (h Handler) VerifyOTP(c *mo.Context) error {
 	var req verifyOTPRequest
 	err := c.DecodeAndValidateBody(req)
 	if err != nil {
@@ -101,13 +101,37 @@ func (h Handler) Verify(c *mo.Context) error {
 	)
 }
 
+// ? POST - models.RefreshRequest
+func (h Handler) Refresh(c *mo.Context) error {
+	var req refreshRequest
+	err := c.DecodeAndValidateBody(req)
+	if err != nil {
+		return err
+	}
+	result, err := h.Service.refresh(c.Request().Context(), req)
+	if err != nil {
+		return h.handleError(c, err)
+	}
+	return c.JSON(
+		http.StatusOK,
+		responses.Success(
+			codes.RefreshSuccess,
+			"Token successfully refreshed",
+			struct {
+				AccessToken string `json:"access_token"`
+				RefreshToken string `json:"refresh_token"`
+			}{result.accessToken, result.refreshToken},
+		),
+	)
+}
+
 func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one
 	switch err {
 	case errMissingIdentifier:
 		return c.JSON(
 			http.StatusBadRequest,
 			responses.Error(
-				codes.MissingIdentifier,
+				codes.IdentifierMissing,
 				"Need at least one of the following: email, phone or username",
 			),
 		)
@@ -115,7 +139,7 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 		return c.JSON(
 			http.StatusUnauthorized,
 			responses.Error(
-				codes.InvalidCredentials,
+				codes.CredentialsInvalid,
 				"Invalid identifier or password",
 			),
 		)
@@ -179,8 +203,8 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 		return c.JSON(
 			http.StatusNotFound,
 			responses.Error(
-				codes.ReferenceIDNotFound,
-				"Reference ID for this verify request not found, please try to request a new otp again",
+				codes.NotFound,
+				"Reference ID for this verify request not found, please request a new otp again",
 			),
 		)
 	case errOTPExpired:
@@ -197,6 +221,22 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 			responses.Error(
 				codes.OTPIncorrect,
 				"The OTP provided is incorrect",
+			),
+		)
+	case errInvalidRefreshToken:
+		return c.JSON(
+			http.StatusBadRequest,
+			responses.Error(
+				codes.RefreshTokenInvalid,
+				"Invalid refresh token, please login again",
+			),
+		)
+	case errExpiredRefreshToken:
+		return c.JSON(
+			http.StatusNotAcceptable,
+			responses.Error(
+				codes.RefreshTokenExpired,
+				"Refresh token has expired, please login again",
 			),
 		)
 	default:

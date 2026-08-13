@@ -52,3 +52,7 @@ type verifyOTPRequest struct {
 	ReferenceID string `json:"reference_id" validate:"required,startswith=ref_"`
 	OTP         string `json:"otp" validate:"required,numeric,len=6"`
 }
+
+type refreshRequest struct{
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
