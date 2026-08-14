@@ -27,6 +27,7 @@ type Service struct {
 type otpSession struct {
 	userID    uuid.UUID
 	channel   authChannel // e.g., channelEmail
+	purpose   authPurpose
 	secretOTP string
 	expiresAt time.Time
 }
@@ -41,10 +42,11 @@ type otpSession struct {
 // it is a bit redundant to do this but I feel its better than putting mutexes in the business logic every time
 
 // Adds a new 2FA request to the map with the reference id passed, with mutex.
-func (s *Service) addOTPSession(refID string, channel authChannel, userID uuid.UUID, otp string) {
+func (s *Service) addOTPSession(refID string, channel authChannel, purpose authPurpose, userID uuid.UUID, otp string) {
 	session := otpSession{
 		userID,
 		channel,
+		purpose,
 		otp,
 		time.Now().Add(config.OTPExpiryTime), // calculating expires at by adding OTP expiry time defined in config + current time
 	}
@@ -53,7 +55,7 @@ func (s *Service) addOTPSession(refID string, channel authChannel, userID uuid.U
 	s.OTPSessions[refID] = session
 }
 
-// Gets a 2FA request from the reference id passed, with mutex.
+// change cmt
 func (s *Service) getOTPSession(refID string) (session otpSession, ok bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -150,7 +152,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 	// generate a new reference id for a otp session and add it to our otp sessions map
 	refID := token.GenerateReferenceID()
-	s.addOTPSession(refID, channel, user.ID, otp)
+	s.addOTPSession(refID, channel, purposeRegistration, user.ID, otp)
 
 	return registerResult{
 		referenceID: refID,
@@ -234,11 +236,11 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		primaryTwoFAChannel := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
 		// if it is TOTP
 		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
-			s.addOTPSession(referenceID, primaryTwoFAChannel, user.ID, user.TotpSecretKey) // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
+			s.addOTPSession(referenceID, channelTOTP, purpose2FA, user.ID, user.TotpSecretKey) // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
 			return loginResult{
 				requires2FA: true,
+				channel:     channelTOTP,
 				referenceID: referenceID,
-				channel:     primaryTwoFAChannel,
 			}, nil
 		}
 		// else if its email or phone
@@ -255,7 +257,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		if err != nil {
 			return loginResult{}, err
 		}
-		s.addOTPSession(referenceID, primaryTwoFAChannel, user.ID, otp) // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
+		s.addOTPSession(referenceID, primaryTwoFAChannel, purpose2FA, user.ID, otp)
 		return loginResult{
 			requires2FA: true,
 			channel:     primaryTwoFAChannel,
@@ -276,7 +278,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	err = s.Repo.CreateSession(
 		ctx,
 		newUserSession(
-			jwtID,                      // jwtID
+			jwtID,                               // jwtID
 			token.GenerateMD5Hash(refreshToken), // tokenHash
 			rmd.IP,                              // userIP
 			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present
@@ -334,12 +336,13 @@ type verifyResult struct {
 	refreshToken string
 }
 
-var errRefIDNotFound = errors.New("reference ID not found")
-var errOTPExpired = errors.New("otp expired")
-var errIncorrectOTP = errors.New("incorrect otp")
+var (
+	errRefIDNotFound = errors.New("reference ID not found")
+	errOTPExpired    = errors.New("otp expired")
+	errIncorrectOTP  = errors.New("incorrect otp")
+)
 
 // Verifies the two factor / verification OTP and generates a token for the user.
-// The reason *http.request is required is to retrieve the ip address and user agent of the client.
 func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd requestMetadata) (verifyResult, error) { // token, error
 	// retrieve the session from the reference id in the request
 	session, ok := s.getOTPSession(req.ReferenceID)
@@ -371,6 +374,16 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		return verifyResult{}, errUserNotFound
 	}
 
+	// If the verification purpose was registration we also need to set the user status to verified in the database
+	if session.purpose == purposeRegistration {
+		user.Status = statusVerified
+		err = s.Repo.UpdateUser(ctx, user.ID, user)
+		if err != nil {
+			return verifyResult{}, err
+		}
+	}
+
+	// generate new tokens and return them to the user for future usage
 	jwtID := uuid.New()
 	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID))
 	if err != nil {
@@ -382,7 +395,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	err = s.Repo.CreateSession(
 		ctx,
 		newUserSession(
-			jwtID,                      // jwtID
+			jwtID,                               // jwtID
 			token.GenerateMD5Hash(refreshToken), // tokenHash
 			rmd.IP,                              // userIP
 			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present

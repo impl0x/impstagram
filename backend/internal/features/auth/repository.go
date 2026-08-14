@@ -12,6 +12,7 @@ type Repository interface {
 	FindUserByID(ctx context.Context, userID uuid.UUID) (*user, error)
 	FindUserByChannel(ctx context.Context, channel authChannel, target string) (*user, error)
 	CreateUser(ctx context.Context, user *user) error
+	UpdateUser(ctx context.Context, userID uuid.UUID, updatedUser *user) error
 
 	// user_sessions table
 	FindSessionByToken(ctx context.Context, tokenHash string) (*userSession, error)

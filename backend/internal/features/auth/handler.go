@@ -46,7 +46,7 @@ func (h Handler) Register(c *mo.Context) error {
 	)
 }
 
-// ? POST - models.LoginRequest
+// ? POST - models.loginRequest
 func (h Handler) Login(c *mo.Context) error {
 	var req loginRequest
 	err := c.DecodeAndValidateBody(&req)
