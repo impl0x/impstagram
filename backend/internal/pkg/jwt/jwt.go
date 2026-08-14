@@ -41,7 +41,7 @@ func GenerateToken(payload any) (string, error) {
 
 var (
 	ErrInvalidJWTToken   = errors.New("jwt: invalid jwt token")
-	ErrIncorrectJWTToken = errors.New("jwt: incorrect jwt token")
+	ErrIncorrectJWTToken = errors.New("jwt: incorrect jwt token") // only returned if the signature does not match, it means the token has been tampered with
 )
 
 // If error is nil then token is valid, error can be the jwt errors listed in here or a json decode error.
@@ -65,7 +65,7 @@ func VerifyToken(token string, target any) error {
 
 	err := json.Unmarshal([]byte(parts[0]), target)
 	if err != nil {
-		return err
+		return ErrInvalidJWTToken
 	}
 	return nil
 }
