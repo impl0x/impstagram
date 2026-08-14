@@ -19,4 +19,5 @@ type Repository interface {
 	CreateSession(ctx context.Context, session *userSession) error
 	UpdateSessionToken(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error
 	DeleteSession(ctx context.Context, id uuid.UUID) error
+	DeleteSessionByJwtID(ctx context.Context, jwtID uuid.UUID) error
 }

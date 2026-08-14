@@ -3,6 +3,7 @@ package auth
 import (
 	"backend/internal/config"
 	"backend/internal/pkg/dob"
+	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/responses"
 	"backend/internal/utils"
 	"backend/internal/utils/codes"
@@ -139,6 +140,23 @@ func (h Handler) Refresh(c *mo.Context) error {
 			}{result.accessToken, result.refreshToken},
 		),
 	)
+}
+
+// ? [AUTH PROTECTED] POST - empty
+func (h Handler) Logout(c *mo.Context) error{
+	accessTokenMaybe ,ok := c.Store["jwt"]
+	if !ok{
+		panic("auth.Logout: authorization middleware not applied")
+	}
+	accessToken,ok:=accessTokenMaybe.(jwt.AccessTokenPayload)
+	if !ok{
+		panic("auth.Logout: not valid jwt access token payload instance in context store")
+	}
+	err:= h.Service.logout(c.Request().Context(), accessToken)
+	if err!=nil{
+		return h.handleError(c, err)
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one

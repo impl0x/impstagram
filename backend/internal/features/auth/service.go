@@ -469,3 +469,13 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 		refreshToken: refreshToken,
 	}, nil
 }
+
+// ? ----+-----+-----Logout-----+-----+-----
+
+func (s *Service) logout(ctx context.Context, accessTokenData jwt.AccessTokenPayload) error {
+	err := s.Repo.DeleteSessionByJwtID(ctx, uuid.MustParse(accessTokenData.JwtID))
+	if err != nil {
+		return err // db error
+	}
+	return nil
+}

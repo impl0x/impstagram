@@ -9,10 +9,10 @@ import (
 
 // The access token jwt payload for this app
 type AccessTokenPayload struct {
-	UserID    string `json:"sub" validate:"len=36"`
-	IssuedAt  uint   `json:"iat"`
-	ExpiresAt uint   `json:"exp"`
-	JwtID     string `json:"jti" validate:"len=36"`
+	UserID    string `json:"sub" validate:"required,len=36"`
+	IssuedAt  uint   `json:"iat" validate:"required"`
+	ExpiresAt uint   `json:"exp" validate:"required"`
+	JwtID     string `json:"jti" validate:"required,len=36"`
 }
 
 // Generates a new payload with the Access Token expiry time in it using the [BasicPayload]
