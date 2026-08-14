@@ -2,7 +2,6 @@
 //
 // This is a custom jwt implementation according to my needs,
 // this may or may not follow what the industry does.
-// because that is not my concerns.
 //
 // I'll be using 2 parts in the jwt instead of 3, as my header values will always be fixed to using HS256
 // so it'll just be payload.signature, b64 encoded of course.

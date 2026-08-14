@@ -7,18 +7,21 @@ import (
 	"github.com/google/uuid"
 )
 
-type BasicPayload struct {
-	UserID string `json:"sub" validate:"len=36"`
-	Iat    uint   `json:"iat"`
-	Exp    uint   `json:"exp"`
+// The access token jwt payload for this app
+type AccessTokenPayload struct {
+	UserID    string `json:"sub" validate:"len=36"`
+	IssuedAt  uint   `json:"iat"`
+	ExpiresAt uint   `json:"exp"`
+	JwtID     string `json:"jti" validate:"len=36"`
 }
 
 // Generates a new payload with the Access Token expiry time in it using the [BasicPayload]
-func NewAccessTokenPayload(userID uuid.UUID) BasicPayload {
+func NewAccessTokenPayload(userID uuid.UUID, jwtID uuid.UUID) AccessTokenPayload {
 	now := time.Now()
-	return BasicPayload{
-		UserID: userID.String(),
-		Iat:    uint(now.Unix()),
-		Exp:    uint(now.Add(config.AccessTokenExpiryTime).Unix()),
+	return AccessTokenPayload{
+		UserID:    userID.String(),
+		IssuedAt:  uint(now.Unix()),
+		ExpiresAt: uint(now.Add(config.AccessTokenExpiryTime).Unix()),
+		JwtID:     jwtID.String(),
 	}
 }
