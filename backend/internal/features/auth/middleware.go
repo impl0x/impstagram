@@ -52,11 +52,14 @@ var AccessTokenBlockList = accessTokenBlockList{
 }
 
 // ? ----+-----+-----Cleaning solutions for token block list-----+-----+-----
+// ? only one of the two solutions below should be used at a time
+
+var AccessTokenBlockListCleaner = TimerCleaner // The active solution used to clean the map of the block list to prevent it from filling up, Do not mutate at runtime
 
 // MUST BE ONLY LAUNCHED ONCE PER RUNTIME!
 //
 // starts one global goroutine: ticks on each interval and clears all expired jwt ids
-func tickerCleaner() {
+func TickerCleaner() {
 	ticker := time.NewTicker(config.AccessTokenExpiryTime) // default interval is the expiry time for a access token
 	defer ticker.Stop()
 	for range ticker.C {
@@ -73,7 +76,7 @@ func tickerCleaner() {
 // Launch on every new jwt id addition to the block list
 //
 // starts a goroutine per jwt id: runs after expiration time and clears the particular jwt id
-func timerCleaner(jwtID uuid.UUID, expiresAt time.Time) {
+func TimerCleaner(jwtID uuid.UUID, expiresAt time.Time) {
 	time.AfterFunc(time.Until(expiresAt), func() { AccessTokenBlockList.Delete(jwtID, true) })
 }
 
@@ -139,8 +142,8 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 		}
 
 		// Checking if the jwt is in access token block list
-		ok:=AccessTokenBlockList.Find(uuid.MustParse(accessTokenData.JwtID))
-		if ok{
+		ok := AccessTokenBlockList.Find(uuid.MustParse(accessTokenData.JwtID))
+		if ok {
 			errorMessage = "Unauthorized" // try not to give the client much info about *why* it is unauthorized, even though we know that this jwt is blacklisted
 			return
 		}

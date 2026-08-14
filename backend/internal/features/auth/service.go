@@ -41,7 +41,7 @@ type otpSession struct {
 // The reason these are all separate functions is to ensure mutexes are used and its separated from the business logic,
 // it is a bit redundant to do this but I feel its better than putting mutexes in the business logic every time
 
-// Adds a new 2FA request to the map with the reference id passed, with mutex.
+// Adds a new OTP session to the map with the reference id passed, with mutex.
 func (s *Service) addOTPSession(refID string, channel authChannel, purpose authPurpose, userID uuid.UUID, otp string) {
 	session := otpSession{
 		userID,
@@ -55,7 +55,7 @@ func (s *Service) addOTPSession(refID string, channel authChannel, purpose authP
 	s.OTPSessions[refID] = session
 }
 
-// change cmt
+// Gets a OTP session from the map
 func (s *Service) getOTPSession(refID string) (session otpSession, ok bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -63,7 +63,7 @@ func (s *Service) getOTPSession(refID string) (session otpSession, ok bool) {
 	return
 }
 
-// Removes a 2FA from the map from the reference id passed, with mutex.
+// Removes a OTP session from the map, with mutex.
 func (s *Service) removeOTPSession(refID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -473,9 +473,12 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 // ? ----+-----+-----Logout-----+-----+-----
 
 func (s *Service) logout(ctx context.Context, accessTokenData jwt.AccessTokenPayload) error {
-	err := s.Repo.DeleteSessionByJwtID(ctx, uuid.MustParse(accessTokenData.JwtID))
+	jwtID := uuid.MustParse(accessTokenData.JwtID)
+	err := s.Repo.DeleteSessionByJwtID(ctx, jwtID)
 	if err != nil {
 		return err // db error
 	}
+	AccessTokenBlockList.Add(jwtID, time.Unix(int64(accessTokenData.ExpiresAt), 0))
+	// todo figure out a way to dynamically run a timerCleaner if the cleaning func is set to that otherwise let the global goroutine clean it up for you
 	return nil
 }
