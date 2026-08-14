@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"backend/internal/config"
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/responses"
 	"backend/internal/utils/codes"
@@ -16,41 +17,65 @@ import (
 // ? ----+-----+-----Token block list-----+-----+-----
 
 type accessTokenBlockList struct {
-	blockRequestList map[uuid.UUID]struct{}
+	blockRequestList map[uuid.UUID]time.Time // jwtID : ExpiresAt
 	mu               sync.RWMutex
 }
 
-func (bl *accessTokenBlockList) Add(jwtID uuid.UUID) {
+func (bl *accessTokenBlockList) Add(jwtID uuid.UUID, expiresAt time.Time) {
 	bl.mu.Lock()
 	defer bl.mu.Unlock()
-	bl.blockRequestList[jwtID] = struct{}{}
+	bl.blockRequestList[jwtID] = expiresAt
 }
 
-func (bl *accessTokenBlockList) IsPresent(jwtID uuid.UUID) bool {
+func (bl *accessTokenBlockList) Find(jwtID uuid.UUID) bool {
 	bl.mu.RLock()
 	defer bl.mu.RUnlock()
 	_, ok := bl.blockRequestList[jwtID]
 	return ok
 }
 
-func (bl *accessTokenBlockList) Delete(jwtID uuid.UUID) {
-	bl.mu.Lock()
-	defer bl.mu.Unlock()
+func (bl *accessTokenBlockList) Delete(jwtID uuid.UUID, useMutex bool) {
+	if useMutex {
+		bl.mu.Lock()
+		defer bl.mu.Unlock()
+	}
 	delete(bl.blockRequestList, jwtID)
 }
 
-// This variable is a constant and must not be changed at runtime
+// This variable is a singleton constant and must not be changed at runtime
 //
-// This is used to block JWT access tokens before they expire, used especially if a user logs out and then we put the jwt id in this list
+// this is used to block JWT access tokens before they expire, used especially if a user logs out and then we put the jwt id in this list
 //
 // Any jwt id in this block list will be blocked and be sent a 401 unauthorized
 var AccessTokenBlockList = accessTokenBlockList{
-	blockRequestList: make(map[uuid.UUID]struct{}),
+	blockRequestList: make(map[uuid.UUID]time.Time),
 }
 
 // ? ----+-----+-----Cleaning solutions for token block list-----+-----+-----
 
-func passiveCleaner()
+// MUST BE ONLY LAUNCHED ONCE PER RUNTIME!
+//
+// starts one global goroutine: ticks on each interval and clears all expired jwt ids
+func tickerCleaner() {
+	ticker := time.NewTicker(config.AccessTokenExpiryTime) // default interval is the expiry time for a access token
+	defer ticker.Stop()
+	for range ticker.C {
+		AccessTokenBlockList.mu.Lock()
+		for k, v := range AccessTokenBlockList.blockRequestList {
+			if v.After(time.Now()) {
+				AccessTokenBlockList.Delete(k, false)
+			}
+		}
+		AccessTokenBlockList.mu.Unlock()
+	}
+}
+
+// Launch on every new jwt id addition to the block list
+//
+// starts a goroutine per jwt id: runs after expiration time and clears the particular jwt id
+func timerCleaner(jwtID uuid.UUID, expiresAt time.Time) {
+	time.AfterFunc(time.Until(expiresAt), func() { AccessTokenBlockList.Delete(jwtID, true) })
+}
 
 // ? ----+-----+-----Auth Middleware-----+-----+-----
 
@@ -110,6 +135,13 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 		expiresAt := time.Unix(int64(accessTokenData.ExpiresAt), 0)
 		if expiresAt.Before(time.Now()) {
 			errorMessage = "Token has expired, please refresh it using the refresh token"
+			return
+		}
+
+		// Checking if the jwt is in access token block list
+		ok:=AccessTokenBlockList.Find(uuid.MustParse(accessTokenData.JwtID))
+		if ok{
+			errorMessage = "Unauthorized" // try not to give the client much info about *why* it is unauthorized, even though we know that this jwt is blacklisted
 			return
 		}
 
