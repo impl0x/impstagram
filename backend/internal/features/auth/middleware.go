@@ -1,17 +1,65 @@
-package middlewares
+package auth
 
 import (
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/responses"
 	"backend/internal/utils/codes"
 	"net/http"
+	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/impl0x/mo"
 	"github.com/impl0x/mo/validator"
 )
 
-func Authorization(next mo.HandlerFunc) mo.HandlerFunc {
+// ? ----+-----+-----Token block list-----+-----+-----
+
+type accessTokenBlockList struct {
+	blockRequestList map[uuid.UUID]struct{}
+	mu               sync.RWMutex
+}
+
+func (bl *accessTokenBlockList) Add(jwtID uuid.UUID) {
+	bl.mu.Lock()
+	defer bl.mu.Unlock()
+	bl.blockRequestList[jwtID] = struct{}{}
+}
+
+func (bl *accessTokenBlockList) IsPresent(jwtID uuid.UUID) bool {
+	bl.mu.RLock()
+	defer bl.mu.RUnlock()
+	_, ok := bl.blockRequestList[jwtID]
+	return ok
+}
+
+func (bl *accessTokenBlockList) Delete(jwtID uuid.UUID) {
+	bl.mu.Lock()
+	defer bl.mu.Unlock()
+	delete(bl.blockRequestList, jwtID)
+}
+
+// This variable is a constant and must not be changed at runtime
+//
+// This is used to block JWT access tokens before they expire, used especially if a user logs out and then we put the jwt id in this list
+//
+// Any jwt id in this block list will be blocked and be sent a 401 unauthorized
+var AccessTokenBlockList = accessTokenBlockList{
+	blockRequestList: make(map[uuid.UUID]struct{}),
+}
+
+// ? ----+-----+-----Cleaning solutions for token block list-----+-----+-----
+
+func passiveCleaner()
+
+// ? ----+-----+-----Auth Middleware-----+-----+-----
+
+// Checks for authorization header and expects a valid JWT, if satisfied stores it in the [mo.Context.Store] map with the key "jwt"
+//
+// else it returns a 401 Unauthorized error to the client if header not present, not valid jwt, jwt expired, etc other errors.
+//
+// Any handler wrapped with this middleware can safely assure that mo.Context["jwt"] will ALWAYS return a valid [jwt.AccessTokenPayload] struct
+func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 	return func(c *mo.Context) (handlerErr error) {
 		// We defer a function which returns a unauthorized error with a errorMessage message variable if the variable has been set.
 		// this is done to reduce redundancy of the same type of code
