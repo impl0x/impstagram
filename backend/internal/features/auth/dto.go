@@ -34,6 +34,7 @@ func NewUser(req registerRequest, passwordHash string) *user {
 
 type userSession struct {
 	ID          uuid.UUID
+	JwtID       uuid.UUID
 	TokenHash   string
 	UserID      uuid.UUID
 	IPAddress   string
@@ -44,13 +45,14 @@ type userSession struct {
 	CreatedAt   time.Time
 }
 
-func newUserSession(tokenHash string, userIP string, userAgent string, userID uuid.UUID) *userSession {
+func newUserSession(jwtID uuid.UUID, tokenHash, userIP, userAgent string, userID uuid.UUID) *userSession {
 	// parsing the user agent and storing the current time
 	ua := useragent.Parse(userAgent)
 	now := time.Now()
 
 	// creating and returning the userSession struct
 	return &userSession{
+		JwtID:       jwtID,
 		TokenHash:   tokenHash,
 		UserID:      userID,
 		IPAddress:   userIP,

@@ -187,7 +187,7 @@ var (
 )
 
 // Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint.
-// 
+//
 // rmd requestMetadata is required for userSession storage on successful login
 func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetadata) (loginResult, error) {
 	// Figure out what identifier the user sent, i.e. email/phone/username to log in
@@ -265,7 +265,8 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	// else
 
 	// Generate tokens
-	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID))
+	jwtID := uuid.New()
+	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID))
 	if err != nil {
 		panic(err)
 	}
@@ -275,6 +276,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	err = s.Repo.CreateSession(
 		ctx,
 		newUserSession(
+			jwtID,                      // jwtID
 			token.GenerateMD5Hash(refreshToken), // tokenHash
 			rmd.IP,                              // userIP
 			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present
@@ -369,21 +371,28 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		return verifyResult{}, errUserNotFound
 	}
 
-	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID))
-	refreshToken := token.GenerateRefreshToken()
+	jwtID := uuid.New()
+	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID))
 	if err != nil {
 		panic(err)
 	}
+	refreshToken := token.GenerateRefreshToken()
 
+	// Add a new user session to the database
 	err = s.Repo.CreateSession(
 		ctx,
 		newUserSession(
+			jwtID,                      // jwtID
 			token.GenerateMD5Hash(refreshToken), // tokenHash
 			rmd.IP,                              // userIP
 			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present
 			user.ID,                             // userID
 		),
 	)
+
+	if err != nil {
+		return verifyResult{}, err
+	}
 
 	return verifyResult{
 		accessToken:  accessToken,
@@ -423,8 +432,8 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 		return refreshResult{}, errExpiredRefreshToken
 	}
 
-	// if everything is good we generate both new tokens
-	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(userSesh.UserID))
+	// if everything is good we generate both new tokens, we do not have to regenerate and re update the jwt id as its unnecessary. it is a fixed value which is linked with the user session in database
+	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(userSesh.UserID, userSesh.JwtID))
 	if err != nil {
 		panic(err)
 	}
