@@ -7,10 +7,8 @@ import (
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/password"
 	"backend/internal/pkg/token"
-	"backend/internal/utils"
 	"context"
 	"errors"
-	"net/http"
 	"sync"
 	"time"
 
@@ -189,8 +187,9 @@ var (
 )
 
 // Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint.
-// The reason *http.request is required is to retrieve the ip address and user agent of the client.
-func (s *Service) login(ctx context.Context, req loginRequest, request *http.Request) (loginResult, error) {
+// 
+// rmd requestMetadata is required for userSession storage on successful login
+func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetadata) (loginResult, error) {
 	// Figure out what identifier the user sent, i.e. email/phone/username to log in
 	var user *user
 	var err error
@@ -277,8 +276,8 @@ func (s *Service) login(ctx context.Context, req loginRequest, request *http.Req
 		ctx,
 		newUserSession(
 			token.GenerateMD5Hash(refreshToken), // tokenHash
-			utils.GetIpFromRequest(request),     // userIP	- assumes the function has the correct implementation of ip retrieval depending upon environment and reverse proxy configurations
-			request.UserAgent(),                 // userAgent - assumes that past middleware has checked if a valid ua is present
+			rmd.IP,                              // userIP
+			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present
 			user.ID,                             // userID
 		),
 	)
@@ -339,7 +338,7 @@ var errIncorrectOTP = errors.New("incorrect otp")
 
 // Verifies the two factor / verification OTP and generates a token for the user.
 // The reason *http.request is required is to retrieve the ip address and user agent of the client.
-func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, request *http.Request) (verifyResult, error) { // token, error
+func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd requestMetadata) (verifyResult, error) { // token, error
 	// retrieve the session from the reference id in the request
 	session, ok := s.getOTPSession(req.ReferenceID)
 	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
@@ -380,8 +379,8 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, request *
 		ctx,
 		newUserSession(
 			token.GenerateMD5Hash(refreshToken), // tokenHash
-			utils.GetIpFromRequest(request),     // userIP	- assumes the function has the correct implementation of ip retrieval depending upon environment and reverse proxy configurations
-			request.UserAgent(),                 // userAgent - assumes that past middleware has checked if a valid ua is present
+			rmd.IP,                              // userIP
+			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present
 			user.ID,                             // userID
 		),
 	)
@@ -441,7 +440,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	if err != nil {
 		return refreshResult{}, err // db err
 	}
-	
+
 	// return both tokens
 	return refreshResult{
 		accessToken:  accessToken,

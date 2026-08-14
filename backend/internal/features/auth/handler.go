@@ -4,6 +4,7 @@ import (
 	"backend/internal/config"
 	"backend/internal/pkg/dob"
 	"backend/internal/pkg/responses"
+	"backend/internal/utils"
 	"backend/internal/utils/codes"
 	"net/http"
 	"strconv"
@@ -52,7 +53,15 @@ func (h Handler) Login(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.login(c.Request().Context(), req, c.Request())
+	result, err := h.Service.login(
+		c.Request().Context(),
+		req,
+		requestMetadata{
+			utils.GetIpFromRequest(c.Request()), // assumes the function has the correct implementation of ip retrieval depending upon environment and reverse proxy configurations
+			c.Request().UserAgent(),
+		},
+	
+	)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -88,7 +97,14 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.verifyOTP(c.Request().Context(), req, c.Request())
+	result, err := h.Service.verifyOTP(
+		c.Request().Context(),
+		req,
+		requestMetadata{
+			utils.GetIpFromRequest(c.Request()), // assumes the function has the correct implementation of ip retrieval depending upon environment and reverse proxy configurations
+			c.Request().UserAgent(),
+		},
+	)
 	if err != nil {
 		return h.handleError(c, err)
 	}
@@ -118,7 +134,7 @@ func (h Handler) Refresh(c *mo.Context) error {
 			codes.RefreshSuccess,
 			"Token successfully refreshed",
 			struct {
-				AccessToken string `json:"access_token"`
+				AccessToken  string `json:"access_token"`
 				RefreshToken string `json:"refresh_token"`
 			}{result.accessToken, result.refreshToken},
 		),

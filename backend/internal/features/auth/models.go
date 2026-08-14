@@ -31,6 +31,12 @@ const (
 	purposeResetPass    authPurpose = "reset_password"
 )
 
+// Some service functions require this metadata for session storage
+type requestMetadata struct{
+	IP string
+	userAgent string
+}
+
 type registerRequest struct {
 	Username string `json:"username" validate:"required,min=3,max=15"`
 	Email    string `json:"email" validate:"optional,email"`
