@@ -1,6 +1,9 @@
 package email
 
-import "strings"
+import (
+	"backend/internal/config"
+	"strings"
+)
 
 // yes i know this is messy and repetitive. and unsafe
 // these html's are ai generated, i don't know html nor do i have the energy to learn html and format everything dynamically as of now
@@ -173,11 +176,16 @@ var HtmlWelcome = HTML{`
 // content: Two-factor authorization code
 // sub-content: Use the Two-factor authorization code below to log into your Impstagram account.
 var HtmlRegistrationVerificationOTP = HTML{
-	OTPBaseHTML, "{{otp}}", []string{"{{content}}", "Verify your account", "{{sub-content}}", "Use the verification code below to continue with your Impstagram account."},
+	OTPBaseHTML, "{{otp}}", []string{"{{content}}", "Verify your account", "{{sub-content}}", "Use the verification code below to continue with your " + config.ServiceName + " account."},
 }
 var Html2FAOTP = HTML{
-	OTPBaseHTML, "{{otp}}", []string{"{{content}}", "Two-factor authorization code", "{{sub-content}}", "Use the Two-factor authorization code below to log into your Impstagram account."},
+	OTPBaseHTML, "{{otp}}", []string{"{{content}}", "Two-factor authorization code", "{{sub-content}}", "Use the Two-factor authorization code below to log into your " + config.ServiceName + " account."},
 }
+
+var HtmlResetPasswordOTP = HTML{
+	OTPBaseHTML, "{{otp}}", []string{"{{content}}", "Reset password", "{{sub-content}}", "Use this one time authorization code below to reset your password on your " + config.ServiceName + " account."},
+}
+
 var OTPBaseHTML = `
 <!DOCTYPE html>
 <html lang="en">

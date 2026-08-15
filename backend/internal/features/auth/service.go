@@ -99,22 +99,22 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 		return registerResult{}, errTooOld
 	}
 
-	// Figure out what identifier the user sent, that is if the user registered with a email or a phone,
-	// and check if the same identifier exists in our database already or not.
+	// Figure out what identifier the user sent, that is if the user registered with a email or a phone
 	var user *user
 	var channel authChannel // identifier, eg: email/phone
 	var target string       // the identifier literal, eg: jon@email.com/+1-234567890
 	if req.Email != "" {
-		user, err = s.Repo.FindUserByChannel(ctx, channelEmail, req.Email)
 		channel = channelEmail
 		target = req.Email
 	} else if req.Phone != "" {
-		user, err = s.Repo.FindUserByChannel(ctx, channelPhone, req.Phone)
 		channel = channelPhone
 		target = req.Phone
 	} else {
 		return registerResult{}, errMissingIdentifier // if user sent neither a email or a phone then we reject the registration request
 	}
+
+	// Finding in database
+	user, err = s.Repo.FindUserByChannel(ctx, channel, target)
 
 	if err != nil {
 		return registerResult{}, err // ignoring database level errors as of now.
@@ -312,6 +312,8 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 			emailSendRequest = email.NewSendRequest(target, email.SubjectTwoFa, email.Html2FAOTP.Format(otp))
 		case purposeRegistration:
 			emailSendRequest = email.NewSendRequest(target, email.SubjectVerifyEmail, email.HtmlRegistrationVerificationOTP.Format(otp))
+		case purposeResetPass:
+			emailSendRequest = email.NewSendRequest(target, email.SubjectResetPassword, email.HtmlResetPasswordOTP.Format(otp))
 		}
 		err = s.Email.Send(emailSendRequest)
 	case channelPhone:
@@ -475,13 +477,43 @@ func (s *Service) logout(ctx context.Context, accessTokenJwt jwt.AccessToken) er
 	}
 	AccessTokenBlockList.Add(accessTokenJwt.JwtID, accessTokenJwt.ExpiresAt)
 	if AccessTokenBlockListCleaner == TimerCleanerType {
-		TimerCleaner(accessTokenJwt.JwtID, accessTokenJwt.ExpiresAt)
+		TimerCleaner(accessTokenJwt.JwtID, accessTokenJwt.ExpiresAt) // starts a new goroutine which cleans this up after the expiry time from the map
 	}
 	return nil
 }
 
 // ? ----+-----+-----Forgot password-----+-----+-----
 
-func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest) {
+type forgotPasswordResult struct {
+	channel     authChannel
+	referenceID string
+}
 
+func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest) (forgotPasswordResult, error) {
+	var channel authChannel
+	var target string
+	if req.Email != "" {
+		channel = channelEmail
+		target = req.Email
+	} else if req.Phone != "" {
+		channel = channelPhone
+		target = req.Phone
+	} else {
+		return forgotPasswordResult{}, errMissingIdentifier
+	}
+	user, err := s.Repo.FindUserByChannel(ctx, channel, target)
+	if err != nil {
+		return forgotPasswordResult{}, err // db error
+	}
+	if user == nil {
+		return forgotPasswordResult{}, errUserNotFound
+	}
+
+	otp, err := s.sendOTP(channel, purposeResetPass, target)
+	refID := token.GenerateReferenceID()
+	s.addOTPSession(refID, channel, purposeResetPass, user.ID, otp)
+	return forgotPasswordResult{
+		channel:     channel,
+		referenceID: refID,
+	}, nil
 }

@@ -43,6 +43,7 @@ const (
 
 // the success codes returned in the json
 const (
+	Ok              Code = "OK"
 	LoginSuccess    Code = "LOGIN_SUCCESS"
 	TwoFARequired   Code = "TWO_FACTOR_REQUIRED"
 	RegisterSuccess Code = "REGISTER_SUCCESS"

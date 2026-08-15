@@ -151,18 +151,31 @@ func (h Handler) Logout(c *mo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// ? POST - models.forgotPasswordRequest
 func (h Handler) ForgotPassword(c *mo.Context) error {
 	var req forgotPasswordRequest
-	err:=c.DecodeAndValidateBody(&req)
-	if err!=nil{
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
 		return err
 	}
-	h.Service.forgotPassword(c.Request().Context(), req)
-	
+	result, err := h.Service.forgotPassword(c.Request().Context(), req)
+	if err != nil {
+		return h.handleError(c, err)
+	}
+	return c.JSON(
+		http.StatusOK,
+		responses.Success(
+			codes.Ok,
+			"An OTP has been sent to your "+string(result.channel),
+			struct {
+				ReferenceID string `json:"reference_id"`
+			}{result.referenceID},
+		),
+	)
 }
 
 func (h Handler) ResetPassword(c *mo.Context) error {
-	
+
 }
 
 func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one
