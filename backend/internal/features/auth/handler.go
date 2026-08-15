@@ -175,7 +175,12 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 }
 
 func (h Handler) ResetPassword(c *mo.Context) error {
-
+	var req resetPasswordRequest
+	err:=c.DecodeAndValidateBody(&req)
+	if err!=nil{
+		return err
+	}
+	result,err:=h.Service.resetPassword(c.Request().Context(), req)
 }
 
 func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one

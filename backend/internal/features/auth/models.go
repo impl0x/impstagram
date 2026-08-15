@@ -67,3 +67,8 @@ type forgotPasswordRequest struct {
 	Email string `json:"email" validate:"optional,email"`
 	Phone string `json:"phone" validate:"optional,e.164"`
 }
+
+type resetPasswordRequest struct {
+	ReferenceID string `json:"reference_id" validate:"required,startswith=ref_"`
+	OTP         string `json:"otp" validate:"required,numeric,len=6"`
+}

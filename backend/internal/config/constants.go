@@ -14,4 +14,6 @@ const (
 
 	AccessTokenExpiryTime  = 30 * time.Minute
 	RefreshTokenExpiryTime = 7 // Days, use this with time.AddDate method only
+
+	TTLCacheCleanInterval = 10 * time.Minute // applies to whatever cleaning solution is being used, that is global/per, defined in pkg/ttlcache/config.go 
 )

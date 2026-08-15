@@ -340,7 +340,7 @@ var (
 	errIncorrectOTP  = errors.New("incorrect otp")
 )
 
-// Verifies the two factor / verification OTP and generates a token for the user.
+// Verifies the two factor / verification / reset password OTP and generates a token / reset pass id for the user.
 func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd requestMetadata) (verifyResult, error) { // token, error
 	// retrieve the session from the reference id in the request
 	session, ok := s.getOTPSession(req.ReferenceID)
@@ -516,4 +516,10 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 		channel:     channel,
 		referenceID: refID,
 	}, nil
+}
+
+// ? ----+-----+-----Reset password-----+-----+-----
+
+type resetPasswordResult struct{
+
 }
