@@ -108,6 +108,14 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 	if err != nil {
 		return h.handleError(c, err)
 	}
+	if result.isResetRequest {
+		return c.JSON(
+			http.StatusAccepted,
+			struct {
+				ReferenceID string `json:"reference_id"`
+			}{result.referenceID},
+		)
+	}
 	return c.JSON(
 		http.StatusOK,
 		struct {
@@ -176,11 +184,11 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 
 func (h Handler) ResetPassword(c *mo.Context) error {
 	var req resetPasswordRequest
-	err:=c.DecodeAndValidateBody(&req)
-	if err!=nil{
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
 		return err
 	}
-	result,err:=h.Service.resetPassword(c.Request().Context(), req)
+	result, err := h.Service.reset(c.Request().Context(), req)
 }
 
 func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one

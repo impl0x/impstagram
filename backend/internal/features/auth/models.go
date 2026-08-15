@@ -1,5 +1,7 @@
 package auth
 
+// ? ----+-----+-----enums-----+-----+-----
+
 // used to describe account status
 type accountStatus int
 
@@ -31,11 +33,18 @@ const (
 	purposeResetPass    authPurpose = "reset_password"
 )
 
+// ? ----+-----+-----Common-----+-----+-----
+
 // Some service functions require this metadata for session storage
 type requestMetadata struct {
 	IP        string
 	userAgent string
 }
+
+// ? ----+-----+-----Request Body JSON-----+-----+-----
+
+// ! important:
+// make sure the startswith value is always correct to the config prefix value
 
 type registerRequest struct {
 	Username string `json:"username" validate:"required,min=3,max=15"`
@@ -55,7 +64,7 @@ type loginRequest struct {
 }
 
 type verifyOTPRequest struct {
-	ReferenceID string `json:"reference_id" validate:"required,startswith=ref_"`
+	ReferenceID string `json:"reference_id" validate:"required,startswith=otp_"` // make sure the startswith value is always correct to the config prefix value
 	OTP         string `json:"otp" validate:"required,numeric,len=6"`
 }
 
@@ -69,6 +78,6 @@ type forgotPasswordRequest struct {
 }
 
 type resetPasswordRequest struct {
-	ReferenceID string `json:"reference_id" validate:"required,startswith=ref_"`
-	OTP         string `json:"otp" validate:"required,numeric,len=6"`
+	ReferenceID string `json:"reference_id" validate:"required,startswith=pwd_"`
+	NewPassword string `json:"new_password" validate:"required,min=8,max=20"`
 }

@@ -6,7 +6,8 @@ import (
 	"backend/internal/pkg/email"
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/password"
-	"backend/internal/pkg/token"
+	"backend/internal/pkg/token" // used to generate cryptographically random IDs and OTPs
+	"backend/internal/pkg/ttlcache"
 	"context"
 	"errors"
 	"sync"
@@ -15,55 +16,31 @@ import (
 	"github.com/google/uuid"
 )
 
+// some naming clarifications if it is confusing
+// - Reset always means reset password
+
 type Service struct {
 	Email email.Client
 	Repo  Repository
 
-	mu          sync.RWMutex          // mutex for the OTPSessions
-	OTPSessions map[string]otpSession // string is the reference id
+	mu            sync.RWMutex                          // mutex for the OTPSessions
+	OTPSessions   *ttlcache.Cache[string, otpSession]   // string is the reference id
+	ResetSessions *ttlcache.Cache[string, resetSession] // string is reference id
 }
 
-// ? [HELPER] ----+-----+-----OTP-----+-----+-----
+// ? ----+-----+-----Sessions-----+-----+-----
 
 // Used to store the pending otp sessions
 type otpSession struct {
-	userID    uuid.UUID
-	channel   authChannel // e.g., channelEmail
-	purpose   authPurpose
-	secretOTP string
-	expiresAt time.Time
+	userID  uuid.UUID
+	channel authChannel // e.g., channelEmail
+	purpose authPurpose
+	otp     string
 }
 
-// The reason these are all separate functions is to ensure mutexes are used and its separated from the business logic,
-// it is a bit redundant to do this but I feel its better than putting mutexes in the business logic every time
-
-// Adds a new OTP session to the map with the reference id passed, with mutex.
-func (s *Service) addOTPSession(refID string, channel authChannel, purpose authPurpose, userID uuid.UUID, otp string) {
-	session := otpSession{
-		userID,
-		channel,
-		purpose,
-		otp,
-		time.Now().Add(config.OTPExpiryTime), // calculating expires at by adding OTP expiry time defined in config + current time
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.OTPSessions[refID] = session
-}
-
-// Gets a OTP session from the map
-func (s *Service) getOTPSession(refID string) (session otpSession, ok bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	session, ok = s.OTPSessions[refID]
-	return
-}
-
-// Removes a OTP session from the map, with mutex.
-func (s *Service) removeOTPSession(refID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.OTPSessions, refID)
+// Used to store the pending reset password sessions
+type resetSession struct {
+	userID uuid.UUID
 }
 
 // ? ----+-----+-----Register-----+-----+-----
@@ -146,9 +123,19 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	if err != nil {
 		return registerResult{}, err
 	}
-	// generate a new reference id for a otp session and add it to our otp sessions map
-	refID := token.GenerateReferenceID()
-	s.addOTPSession(refID, channel, purposeRegistration, user.ID, otp)
+	// generate a new reference id for a otp session
+	refID := token.GenerateOTPSessionID()
+	// add a new otp session to our timed cache
+	s.OTPSessions.Add(
+		refID,
+		otpSession{
+			userID:  user.ID,
+			channel: channel,
+			purpose: purposeRegistration,
+			otp:     otp,
+		},
+		time.Now().Add(config.ExpiryTimeOTP),
+	)
 
 	return registerResult{
 		referenceID: refID,
@@ -228,15 +215,26 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 
 	// If user has 2Fa enabled ask for otp.
 	if user.TwoFAs != nil {
-		referenceID := token.GenerateReferenceID()
+		refID := token.GenerateOTPSessionID()
 		primaryTwoFAChannel := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
 		// if it is TOTP
 		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
-			s.addOTPSession(referenceID, channelTOTP, purpose2FA, user.ID, user.TotpSecretKey) // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
+
+			s.OTPSessions.Add( // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
+				refID,
+				otpSession{
+					userID:  user.ID,
+					channel: channelTOTP,
+					purpose: purpose2FA,
+					otp:     user.TotpSecretKey,
+				},
+				time.Now().Add(config.ExpiryTimeOTP),
+			)
+
 			return loginResult{
 				requires2FA: true,
 				channel:     channelTOTP,
-				referenceID: referenceID,
+				referenceID: refID,
 			}, nil
 		}
 		// else if its email or phone
@@ -253,11 +251,21 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		if err != nil {
 			return loginResult{}, err
 		}
-		s.addOTPSession(referenceID, primaryTwoFAChannel, purpose2FA, user.ID, otp)
+		// Adding new otp session to our cache
+		s.OTPSessions.Add(
+			refID,
+			otpSession{
+				userID:  user.ID,
+				channel: primaryTwoFAChannel,
+				purpose: purpose2FA,
+				otp:     otp,
+			},
+			time.Now().Add(config.ExpiryTimeOTP),
+		)
 		return loginResult{
 			requires2FA: true,
 			channel:     primaryTwoFAChannel,
-			referenceID: referenceID,
+			referenceID: refID,
 		}, nil
 	}
 	// else
@@ -330,8 +338,10 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 // ? ----+-----+-----Verify otp-----+-----+-----
 
 type verifyResult struct {
-	accessToken  string
-	refreshToken string
+	accessToken    string
+	refreshToken   string
+	isResetRequest bool   // if this is true the above two values are zero'd out
+	referenceID    string // if this verify request was for a reset password we return a referenceID instead
 }
 
 var (
@@ -343,26 +353,25 @@ var (
 // Verifies the two factor / verification / reset password OTP and generates a token / reset pass id for the user.
 func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd requestMetadata) (verifyResult, error) { // token, error
 	// retrieve the session from the reference id in the request
-	session, ok := s.getOTPSession(req.ReferenceID)
+	session, expiresAt, ok := s.OTPSessions.Get(req.ReferenceID)
 	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
 		return verifyResult{}, errRefIDNotFound
 	}
-	if session.expiresAt.Before(time.Now()) { // if the otp has expired we remove it from our map and return a error
-		s.removeOTPSession(req.ReferenceID)
+	if expiresAt.Before(time.Now()) { // if the otp has expired we return a error, the ttl cache automatically removes any values which are expired on a Get call if Cache.Config.LazyDelete is set to true, which is default.
 		return verifyResult{}, errOTPExpired
 	}
 	var err error
 	if session.channel == channelTOTP { // if its a authenticator time based 2 factor code
-		session.secretOTP, err = token.GenerateTOTP(session.secretOTP) // in this case secretOTP is actually the secretKey for the TOTP which is used to compute the otp.
+		session.otp, err = token.GenerateTOTP(session.otp) // in this case secretOTP is actually the secretKey for the TOTP which is used to compute the otp.
 		if err != nil {
 			return verifyResult{}, err
 		}
 	}
-	if session.secretOTP != req.OTP { // we check the otp if it does not match we return early with a incorrect otp error
+	if session.otp != req.OTP { // we check the otp if it does not match we return early with a incorrect otp error
 		return verifyResult{}, errIncorrectOTP
 	}
 	// if the otp matches then we remove the reference id from our map immediately
-	s.removeOTPSession(req.ReferenceID)
+	s.OTPSessions.Delete(req.ReferenceID)
 	// find the user
 	user, err := s.Repo.FindUserByID(ctx, session.userID)
 	if err != nil {
@@ -372,13 +381,27 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		return verifyResult{}, errUserNotFound
 	}
 
-	// If the verification purpose was registration we also need to set the user status to verified in the database
-	if session.purpose == purposeRegistration {
+	// Switch on the purpose to do purpose related tasks
+	switch session.purpose {
+	case purposeRegistration: // if registration we need to set user status to verified in the database
 		user.Status = statusVerified
 		err = s.Repo.UpdateUser(ctx, user.ID, user)
 		if err != nil {
 			return verifyResult{}, err
 		}
+	case purposeResetPass:
+		refID := token.GenerateResetSessionID()
+		s.ResetSessions.Add(
+			refID,
+			resetSession{
+				userID: user.ID,
+			},
+			time.Now().Add(config.ExpiryTimeResetPassword),
+		)
+		return verifyResult{
+			isResetRequest: true,
+			referenceID: refID,
+		}, nil
 	}
 
 	// generate new tokens and return them to the user for future usage
@@ -455,7 +478,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 		ctx,
 		userSesh.ID,
 		token.GenerateMD5Hash(refreshToken), // we store a hash of the token
-		time.Now().AddDate(0, 0, config.RefreshTokenExpiryTime),
+		time.Now().AddDate(0, 0, config.ExpiryTimeRefreshToken),
 	)
 	if err != nil {
 		return refreshResult{}, err // db err
@@ -510,8 +533,17 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	}
 
 	otp, err := s.sendOTP(channel, purposeResetPass, target)
-	refID := token.GenerateReferenceID()
-	s.addOTPSession(refID, channel, purposeResetPass, user.ID, otp)
+	refID := token.GenerateOTPSessionID()
+	s.OTPSessions.Add(
+		refID,
+		otpSession{
+			userID:  user.ID,
+			channel: channel,
+			purpose: purposeResetPass,
+			otp:     otp,
+		},
+		time.Now().Add(config.ExpiryTimeOTP),
+	)
 	return forgotPasswordResult{
 		channel:     channel,
 		referenceID: refID,
@@ -520,6 +552,9 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 
 // ? ----+-----+-----Reset password-----+-----+-----
 
-type resetPasswordResult struct{
+type resetPasswordResult struct {
+}
 
+func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest)(resetPasswordResult,error){
+	
 }

@@ -16,9 +16,10 @@ const (
 
 // expiry times
 const (
-	ExpiryTimeOTP          = 10 * time.Minute
-	ExpiryTimeAccessToken  = 30 * time.Minute
-	ExpiryTimeRefreshToken = 7 // Days, use this with time.AddDate method only
+	ExpiryTimeOTP           = 10 * time.Minute
+	ExpiryTimeAccessToken   = 30 * time.Minute
+	ExpiryTimeRefreshToken  = 7 // Days, use this with time.AddDate method only
+	ExpiryTimeResetPassword = 30 * time.Minute
 )
 
 // byte sizes
