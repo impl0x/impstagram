@@ -54,9 +54,18 @@ var AccessTokenBlockList = accessTokenBlockList{
 // ? ----+-----+-----Cleaning solutions for token block list-----+-----+-----
 // ? only one of the two solutions below should be used at a time
 
-var AccessTokenBlockListCleaner = TimerCleaner // The active solution used to clean the map of the block list to prevent it from filling up, Do not mutate at runtime
+type cleanerType int
+
+const (
+	TickerCleanerType cleanerType = iota // corresponds to [TickerCleaner]
+	TimerCleanerType                     // corresponds to [TimerCleaner]
+)
+
+var AccessTokenBlockListCleaner = TimerCleanerType // The active solution used to clean the map of the block list to prevent it from filling up, Do not mutate at runtime
 
 // MUST BE ONLY LAUNCHED ONCE PER RUNTIME!
+//
+// # This has one goroutine launched at the start of the runtime and it cleans up expired tokens on interval, good for active server with active users, else if inactive there is a goroutine running at a fixed interval doing nothing
 //
 // starts one global goroutine: ticks on each interval and clears all expired jwt ids
 func TickerCleaner() {
@@ -65,7 +74,7 @@ func TickerCleaner() {
 	for range ticker.C {
 		AccessTokenBlockList.mu.Lock()
 		for k, v := range AccessTokenBlockList.blockRequestList {
-			if v.After(time.Now()) {
+			if v.Before(time.Now()) {
 				AccessTokenBlockList.Delete(k, false)
 			}
 		}
@@ -74,6 +83,8 @@ func TickerCleaner() {
 }
 
 // Launch on every new jwt id addition to the block list
+//
+// # This launches a new goroutine for every new jwt id block, which is resource intensive if the server has a ton of users logging out and is extremely active
 //
 // starts a goroutine per jwt id: runs after expiration time and clears the particular jwt id
 func TimerCleaner(jwtID uuid.UUID, expiresAt time.Time) {

@@ -479,6 +479,8 @@ func (s *Service) logout(ctx context.Context, accessTokenData jwt.AccessTokenPay
 		return err // db error
 	}
 	AccessTokenBlockList.Add(jwtID, time.Unix(int64(accessTokenData.ExpiresAt), 0))
-	// todo figure out a way to dynamically run a timerCleaner if the cleaning func is set to that otherwise let the global goroutine clean it up for you
+	if AccessTokenBlockListCleaner == TimerCleanerType {
+		TimerCleaner(jwtID, time.Unix(int64(accessTokenData.ExpiresAt), 0))
+	}
 	return nil
 }
