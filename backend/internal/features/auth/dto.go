@@ -59,7 +59,7 @@ func newUserSession(jwtID uuid.UUID, tokenHash, userIP, userAgent string, userID
 		OSName:      ua.OS,
 		BrowserName: ua.Name,
 		DeviceType:  ua.Device,
-		ExpiresAt:   now.AddDate(0, 0, config.RefreshTokenExpiryTime),
+		ExpiresAt:   now.AddDate(0, 0, config.ExpiryTimeRefreshToken),
 		CreatedAt:   now,
 	}
 }

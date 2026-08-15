@@ -69,7 +69,7 @@ var AccessTokenBlockListCleaner = TimerCleanerType // The active solution used t
 //
 // starts one global goroutine: ticks on each interval and clears all expired jwt ids
 func TickerCleaner() {
-	ticker := time.NewTicker(config.AccessTokenExpiryTime) // default interval is the expiry time for a access token
+	ticker := time.NewTicker(config.ExpiryTimeAccessToken) // default interval is the expiry time for a access token
 	defer ticker.Stop()
 	for range ticker.C {
 		AccessTokenBlockList.mu.Lock()

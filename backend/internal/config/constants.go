@@ -2,6 +2,7 @@ package config
 
 import "time"
 
+// common
 const (
 	ServiceName = "Impstagram"
 
@@ -10,10 +11,25 @@ const (
 
 	EmailID string = Env + "@impstagram.ripgod.xyz"
 
-	OTPExpiryTime = 10 * time.Minute
+	TTLCacheCleanInterval = 10 * time.Minute // applies to whatever cleaning solution is being used, that is global/per, defined in pkg/ttlcache/config.go
+)
 
-	AccessTokenExpiryTime  = 30 * time.Minute
-	RefreshTokenExpiryTime = 7 // Days, use this with time.AddDate method only
+// expiry times
+const (
+	ExpiryTimeOTP          = 10 * time.Minute
+	ExpiryTimeAccessToken  = 30 * time.Minute
+	ExpiryTimeRefreshToken = 7 // Days, use this with time.AddDate method only
+)
 
-	TTLCacheCleanInterval = 10 * time.Minute // applies to whatever cleaning solution is being used, that is global/per, defined in pkg/ttlcache/config.go 
+// byte sizes
+const (
+	SizeSessionID    = 24 // used for otp sessions, reset password sessions, basically every ttl cache session key
+	SizeRefreshToken = 32 //
+)
+
+// opaque string / id prefixes
+const (
+	PrefixRefreshToken = ""
+	PrefixOTPSession   = "otp_"
+	PrefixResetSession = "pwd_"
 )

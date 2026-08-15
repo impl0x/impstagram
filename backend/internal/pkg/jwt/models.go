@@ -29,7 +29,7 @@ func NewAccessTokenPayload(userID uuid.UUID, jwtID uuid.UUID) AccessTokenPayload
 	return AccessTokenPayload{
 		UserID:    userID.String(),
 		IssuedAt:  uint(now.Unix()),
-		ExpiresAt: uint(now.Add(config.AccessTokenExpiryTime).Unix()),
+		ExpiresAt: uint(now.Add(config.ExpiryTimeAccessToken).Unix()),
 		JwtID:     jwtID.String(),
 	}
 }
