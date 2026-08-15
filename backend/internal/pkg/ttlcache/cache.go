@@ -1,17 +1,9 @@
-package ttlcache
+package ttlcache // time to live cache
 
 import (
-	"backend/internal/config"
 	"sync"
 	"time"
 )
-
-// Starts the global cleaner if global cleaning is selected
-func init(){
-	if CleaningMethod==GlobalCleaner{
-		go globalCleaner(config.TTLCacheCleanInterval)
-	}
-}
 
 // item wraps the value with its specific expiration time
 type item[V any] struct {
@@ -29,16 +21,13 @@ type Cache[K comparable, V any] struct {
 	}
 }
 
-// Returns a new empty Cache
-func New[K comparable, V any]() *Cache[K, V] {
-	c:=&Cache[K, V]{
-		items: make(map[K]item[V]),
+// Returns a new empty Cache and starts a cleaner goroutine which cleans the expired items in each interval
+func New[K comparable, V any](interval time.Duration) *Cache[K, V] {
+	c := &Cache[K, V]{
+		items:  make(map[K]item[V]),
+		Config: struct{ LazyDelete bool }{true},
 	}
-	if CleaningMethod==PerCleaner{
-		go perCleaner(c, config.TTLCacheCleanInterval)
-	} else if CleaningMethod==GlobalCleaner{
-		globalCacheList = append(globalCacheList, c) // todo: fix the generic issue
-	}
+	go c.Cleaner(interval)
 	return c
 }
 
@@ -52,8 +41,12 @@ func (c *Cache[K, V]) Add(key K, value V, expiresAt time.Time) {
 // Gets a value from the cache
 func (c *Cache[K, V]) Get(key K) (V, time.Time, bool) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	i, ok := c.items[key]
+	c.mu.RUnlock()
+	// Passive delete
+	if c.Config.LazyDelete && i.expiresAt.Before(time.Now()) {
+		c.Delete(key)
+	}
 	return i.value, i.expiresAt, ok
 }
 
@@ -64,8 +57,8 @@ func (c *Cache[K, V]) Delete(key K) {
 	delete(c.items, key)
 }
 
-// perCleaner goroutine which runs on the given interval and cleans up the expired items in the map
-func perCleaner[K comparable, V any](c *Cache[K, V], interval time.Duration) {
+// Cleaner goroutine which runs on the given interval and cleans up the expired items in the map
+func (c *Cache[K, V]) Cleaner(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
@@ -77,29 +70,5 @@ func perCleaner[K comparable, V any](c *Cache[K, V], interval time.Duration) {
 			}
 		}
 		c.mu.Unlock()
-	}
-}
-
-// an idea for the cleaner:
-// instead of each cache launching their own cleaner,
-// we could have one global cleaning goroutine which checks on a global interval
-// and cleans all the cache objects in the global list
-// some sort of implementation:
-
-var globalCacheList = []*Cache[any, any]{}
-
-func globalCleaner(interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	for range ticker.C {
-		for _, c := range globalCacheList {
-			c.mu.Lock()
-			now := time.Now()
-			for k, v := range c.items {
-				if v.expiresAt.Before(now) {
-					delete(c.items, k)
-				}
-			}
-			c.mu.Unlock()
-		}
 	}
 }
