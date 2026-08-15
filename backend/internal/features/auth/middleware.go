@@ -125,43 +125,48 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 		}
 
 		// Decode the token into a jwt payload struct
-		var accessTokenData jwt.AccessTokenPayload
-		err := jwt.VerifyToken(authHeader, &accessTokenData)
+		var accessTokenPayload jwt.AccessTokenPayload
+		err := jwt.VerifyToken(authHeader, &accessTokenPayload)
 
 		// Check if jwt decode fails or if the signature is incorrect
 		if err != nil {
 			switch err {
 			case jwt.ErrInvalidJWTToken:
 				errorMessage = "Invalid authorization token"
-			case jwt.ErrIncorrectJWTToken: 
+			case jwt.ErrIncorrectJWTToken:
 				errorMessage = "Authorization token has been tampered with, signature mismatch"
 			}
 			return
 		}
 
 		// validating the jwt payload (optional)
-		errs := validator.Validate(accessTokenData) //! we do not technically need to validate a access token if the server is correctly issuing tokens, comment this part out if everything is tested and working
+		errs := validator.Validate(accessTokenPayload) //! we do not technically need to validate a access token if the server is correctly issuing tokens, comment this part out if everything is tested and working
 		if errs != nil {
-			errorMessage = "Invalid authorization token issued by the server! Validation error for the json payload"
-			panic("authorization mw: invalid jwt token issued by the server!, validation error for the json payload")
+			errorMessage = "Invalid authorization token issued by the server! Validation error for the JSON payload"
+			return
 		}
 
+		// Converting the json struct into a usable data type for our app
+		accessTokenJwt, err := accessTokenPayload.Convert()
+		if err != nil {
+			errorMessage="Invalid data in the JSON payload for authorization token"
+			return
+		}
 		// Checking if the jwt has expired
-		expiresAt := time.Unix(int64(accessTokenData.ExpiresAt), 0)
-		if expiresAt.Before(time.Now()) {
+		if accessTokenJwt.ExpiresAt.Before(time.Now()) {
 			errorMessage = "Token has expired, please refresh it using the refresh token"
 			return
 		}
 
 		// Checking if the jwt is in access token block list
-		ok := AccessTokenBlockList.Find(uuid.MustParse(accessTokenData.JwtID))
+		ok := AccessTokenBlockList.Find(accessTokenJwt.JwtID)
 		if ok {
 			errorMessage = "Unauthorized" // try not to give the client much info about *why* it is unauthorized, even though we know that this jwt is blacklisted
 			return
 		}
 
 		// We store the access token data struct in the context's store map
-		c.Store["jwt"] = accessTokenData
+		c.Store["jwt"] = accessTokenJwt
 		return next(c)
 	}
 }

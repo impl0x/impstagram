@@ -143,7 +143,7 @@ func (h Handler) Refresh(c *mo.Context) error {
 
 // ? [AUTH PROTECTED] POST - empty
 func (h Handler) Logout(c *mo.Context) error {
-	accessTokenJwt := c.Store["jwt"].(jwt.AccessTokenPayload) // type conversion and reading the map assumes that this path has the authorization [Middleware] wrapped beforehand and it is working
+	accessTokenJwt := c.Store["jwt"].(jwt.AccessToken) // type conversion and reading the map assumes that this path has the authorization [Middleware] wrapped beforehand and it is working
 	err := h.Service.logout(c.Request().Context(), accessTokenJwt)
 	if err != nil {
 		return h.handleError(c, err)

@@ -23,7 +23,6 @@ type Service struct {
 	OTPSessions map[string]otpSession // string is the reference id
 }
 
-
 // ? [HELPER] ----+-----+-----OTP-----+-----+-----
 
 // Used to store the pending otp sessions
@@ -66,7 +65,6 @@ func (s *Service) removeOTPSession(refID string) {
 	defer s.mu.Unlock()
 	delete(s.OTPSessions, refID)
 }
-
 
 // ? ----+-----+-----Register-----+-----+-----
 
@@ -166,7 +164,6 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 // which then will prompt the user to login and if they login they will be prompted to verify their email which is a secure workflow,
 // although more work for the user but this is considering that this is the worst case scenario.
 // better than a dangling otp with no registered user.
-
 
 // ? ----+-----+-----Login-----+-----+-----
 
@@ -294,7 +291,6 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	}, nil
 }
 
-
 // ? [HELPER] ----+-----+-----Send otp-----+-----+-----
 
 // SendOTP sends a one-time password challenge to a user destination.
@@ -328,7 +324,6 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 	}
 	return otp, nil
 }
-
 
 // ? ----+-----+-----Verify otp-----+-----+-----
 
@@ -414,7 +409,6 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	}, nil
 }
 
-
 // ? ----+-----+-----Refresh-----+-----+-----
 
 type refreshResult struct {
@@ -472,20 +466,22 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	}, nil
 }
 
-
 // ? ----+-----+-----Logout-----+-----+-----
 
-func (s *Service) logout(ctx context.Context, accessTokenData jwt.AccessTokenPayload) error {
-	jwtID := uuid.MustParse(accessTokenData.JwtID)
-	err := s.Repo.DeleteSessionByJwtID(ctx, jwtID)
+func (s *Service) logout(ctx context.Context, accessTokenJwt jwt.AccessToken) error {
+	err := s.Repo.DeleteSessionByJwtID(ctx, accessTokenJwt.JwtID)
 	if err != nil {
 		return err // db error
 	}
-	AccessTokenBlockList.Add(jwtID, time.Unix(int64(accessTokenData.ExpiresAt), 0))
+	AccessTokenBlockList.Add(accessTokenJwt.JwtID, accessTokenJwt.ExpiresAt)
 	if AccessTokenBlockListCleaner == TimerCleanerType {
-		TimerCleaner(jwtID, time.Unix(int64(accessTokenData.ExpiresAt), 0))
+		TimerCleaner(accessTokenJwt.JwtID, accessTokenJwt.ExpiresAt)
 	}
 	return nil
 }
 
 // ? ----+-----+-----Forgot password-----+-----+-----
+
+func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest) {
+
+}
