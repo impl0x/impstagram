@@ -102,12 +102,13 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 	return func(c *mo.Context) (handlerErr error) {
 		// We defer a function which returns a unauthorized error with a errorMessage message variable if the variable has been set.
 		// this is done to reduce redundancy of the same type of code
+		var statusCode int = http.StatusUnauthorized
 		var errorMessage string
 
 		defer func() {
 			if errorMessage != "" {
 				handlerErr = c.JSON(
-					http.StatusUnauthorized,
+					statusCode,
 					responses.Error(
 						codes.Unauthorized,
 						errorMessage,
@@ -132,7 +133,7 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 			switch err {
 			case jwt.ErrInvalidJWTToken:
 				errorMessage = "Invalid authorization token"
-			case jwt.ErrIncorrectJWTToken:
+			case jwt.ErrIncorrectJWTToken: 
 				errorMessage = "Authorization token has been tampered with, signature mismatch"
 			}
 			return

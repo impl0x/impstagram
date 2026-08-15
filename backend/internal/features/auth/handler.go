@@ -61,7 +61,6 @@ func (h Handler) Login(c *mo.Context) error {
 			utils.GetIpFromRequest(c.Request()), // assumes the function has the correct implementation of ip retrieval depending upon environment and reverse proxy configurations
 			c.Request().UserAgent(),
 		},
-	
 	)
 	if err != nil {
 		return h.handleError(c, err)
@@ -94,7 +93,7 @@ func (h Handler) Login(c *mo.Context) error {
 // ? POST - models.verifyOTPRequest
 func (h Handler) VerifyOTP(c *mo.Context) error {
 	var req verifyOTPRequest
-	err := c.DecodeAndValidateBody(req)
+	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
 	}
@@ -121,7 +120,7 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 // ? POST - models.RefreshRequest
 func (h Handler) Refresh(c *mo.Context) error {
 	var req refreshRequest
-	err := c.DecodeAndValidateBody(req)
+	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
 	}
@@ -143,20 +142,27 @@ func (h Handler) Refresh(c *mo.Context) error {
 }
 
 // ? [AUTH PROTECTED] POST - empty
-func (h Handler) Logout(c *mo.Context) error{
-	accessTokenMaybe ,ok := c.Store["jwt"]
-	if !ok{
-		panic("auth.Logout: authorization middleware not applied")
-	}
-	accessToken,ok:=accessTokenMaybe.(jwt.AccessTokenPayload)
-	if !ok{
-		panic("auth.Logout: not valid jwt access token payload instance in context store")
-	}
-	err:= h.Service.logout(c.Request().Context(), accessToken)
-	if err!=nil{
+func (h Handler) Logout(c *mo.Context) error {
+	accessTokenJwt := c.Store["jwt"].(jwt.AccessTokenPayload) // type conversion and reading the map assumes that this path has the authorization [Middleware] wrapped beforehand and it is working
+	err := h.Service.logout(c.Request().Context(), accessTokenJwt)
+	if err != nil {
 		return h.handleError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+func (h Handler) ForgotPassword(c *mo.Context) error {
+	var req forgotPasswordRequest
+	err:=c.DecodeAndValidateBody(&req)
+	if err!=nil{
+		return err
+	}
+	h.Service.forgotPassword(c.Request().Context(), req)
+	
+}
+
+func (h Handler) ResetPassword(c *mo.Context) error {
+	
 }
 
 func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one

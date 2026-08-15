@@ -32,8 +32,8 @@ const (
 )
 
 // Some service functions require this metadata for session storage
-type requestMetadata struct{
-	IP string
+type requestMetadata struct {
+	IP        string
 	userAgent string
 }
 
@@ -59,6 +59,11 @@ type verifyOTPRequest struct {
 	OTP         string `json:"otp" validate:"required,numeric,len=6"`
 }
 
-type refreshRequest struct{
+type refreshRequest struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
+type forgotPasswordRequest struct {
+	Email string `json:"email" validate:"optional,email"`
+	Phone string `json:"phone" validate:"optional,e.164"`
 }

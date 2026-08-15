@@ -23,6 +23,9 @@ type Service struct {
 	OTPSessions map[string]otpSession // string is the reference id
 }
 
+
+// ? [HELPER] ----+-----+-----OTP-----+-----+-----
+
 // Used to store the pending otp sessions
 type otpSession struct {
 	userID    uuid.UUID
@@ -31,12 +34,6 @@ type otpSession struct {
 	secretOTP string
 	expiresAt time.Time
 }
-
-// the reason we choose to keep 2fa type when verification types are also used is because
-// [twoFactorType] is a superset of [verificationIdentifier], so this is more appropriate and
-// we manually store the appropriate 2fa type when using for verification purposes
-
-// ? [HELPER] ----+-----+-----2FA-----+-----+-----
 
 // The reason these are all separate functions is to ensure mutexes are used and its separated from the business logic,
 // it is a bit redundant to do this but I feel its better than putting mutexes in the business logic every time
@@ -69,6 +66,7 @@ func (s *Service) removeOTPSession(refID string) {
 	defer s.mu.Unlock()
 	delete(s.OTPSessions, refID)
 }
+
 
 // ? ----+-----+-----Register-----+-----+-----
 
@@ -168,6 +166,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 // which then will prompt the user to login and if they login they will be prompted to verify their email which is a secure workflow,
 // although more work for the user but this is considering that this is the worst case scenario.
 // better than a dangling otp with no registered user.
+
 
 // ? ----+-----+-----Login-----+-----+-----
 
@@ -295,6 +294,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	}, nil
 }
 
+
 // ? [HELPER] ----+-----+-----Send otp-----+-----+-----
 
 // SendOTP sends a one-time password challenge to a user destination.
@@ -328,6 +328,7 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 	}
 	return otp, nil
 }
+
 
 // ? ----+-----+-----Verify otp-----+-----+-----
 
@@ -413,6 +414,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	}, nil
 }
 
+
 // ? ----+-----+-----Refresh-----+-----+-----
 
 type refreshResult struct {
@@ -470,6 +472,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	}, nil
 }
 
+
 // ? ----+-----+-----Logout-----+-----+-----
 
 func (s *Service) logout(ctx context.Context, accessTokenData jwt.AccessTokenPayload) error {
@@ -484,3 +487,5 @@ func (s *Service) logout(ctx context.Context, accessTokenData jwt.AccessTokenPay
 	}
 	return nil
 }
+
+// ? ----+-----+-----Forgot password-----+-----+-----
