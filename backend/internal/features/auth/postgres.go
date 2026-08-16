@@ -12,8 +12,8 @@ type PostgresRepository struct {
 	Db *pgxpool.Pool
 }
 
-func NewPostgresRepository(Db *pgxpool.Pool) PostgresRepository {
-	return PostgresRepository{Db: Db}
+func NewPostgresRepository() PostgresRepository {
+	return PostgresRepository{}
 }
 
 var demoUser = &user{

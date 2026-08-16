@@ -17,7 +17,7 @@ type Handler struct {
 	Service *Service
 }
 
-func NewHandler(s *Service)Handler {
+func NewHandler(s *Service) Handler {
 	return Handler{s}
 }
 
@@ -194,7 +194,7 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 		return err
 	}
 	err = h.Service.resetPassword(c.Request().Context(), req)
-	if err!=nil{
+	if err != nil {
 		return h.handleError(c, err)
 	}
 	return c.JSON(
@@ -209,52 +209,13 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 
 func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one
 	switch err {
+	//? register errors
 	case errMissingIdentifier:
 		return c.JSON(
 			http.StatusBadRequest,
 			responses.Error(
 				codes.IdentifierMissing,
 				"Need at least one of the following: email, phone or username",
-			),
-		)
-	case errUserNotFoundLogin, errIncorrectPassword:
-		return c.JSON(
-			http.StatusUnauthorized,
-			responses.Error(
-				codes.CredentialsInvalid,
-				"Invalid identifier or password",
-			),
-		)
-	case errUserNotFound:
-		return c.JSON(
-			http.StatusNotFound,
-			responses.Error(
-				codes.UserNotFound,
-				"User not found",
-			),
-		)
-	case errUserBanned:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.UserBanned,
-				"User is permanently banned from accessing this service",
-			),
-		)
-	case errUserUnverified:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.UserUnverified,
-				"User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to sign up",
-			),
-		)
-	case dob.ErrImpossibleDob, dob.ErrInvalidDobString:
-		return c.JSON(
-			http.StatusBadRequest,
-			responses.Error(
-				codes.ValidationError,
-				err.Error(),
 			),
 		)
 	case errAlreadyExistingUser:
@@ -281,6 +242,7 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 				"User too old, cannot create account",
 			),
 		)
+
 	case errUsernameAlreadyExists:
 		return c.JSON(
 			http.StatusForbidden,
@@ -289,6 +251,41 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 				"This username is already registered, please try a different username",
 			),
 		)
+		//? dob errors
+	case dob.ErrImpossibleDob, dob.ErrInvalidDobString:
+		return c.JSON(
+			http.StatusBadRequest,
+			responses.Error(
+				codes.ValidationError,
+				err.Error(),
+			),
+		)
+	//? login errors
+	case errUserNotFoundLogin, errIncorrectPassword:
+		return c.JSON(
+			http.StatusUnauthorized,
+			responses.Error(
+				codes.CredentialsInvalid,
+				"Invalid identifier or password",
+			),
+		)
+	case errUserBanned:
+		return c.JSON(
+			http.StatusForbidden,
+			responses.Error(
+				codes.UserBanned,
+				"User is permanently banned from accessing this service",
+			),
+		)
+	case errUserUnverified:
+		return c.JSON(
+			http.StatusForbidden,
+			responses.Error(
+				codes.UserUnverified,
+				"User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to sign up",
+			),
+		)
+		//? verify otp errors
 	case errRefIDNotFound:
 		return c.JSON(
 			http.StatusNotFound,
@@ -313,6 +310,15 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 				"The OTP provided is incorrect",
 			),
 		)
+	case errUserNotFound:
+		return c.JSON(
+			http.StatusNotFound,
+			responses.Error(
+				codes.UserNotFound,
+				"User not found",
+			),
+		)
+	//? refresh errors
 	case errInvalidRefreshToken:
 		return c.JSON(
 			http.StatusBadRequest,
@@ -329,6 +335,7 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 				"Refresh token has expired, please login again",
 			),
 		)
+	//? reset errors
 	case errResetSessionNotFound:
 		return c.JSON(
 			http.StatusNotFound,
@@ -345,6 +352,7 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 				"Reset session has expired, please try to raise a reset password request again",
 			),
 		)
+	//? --x--x--x--
 	default:
 		println("Internal server error: " + err.Error())
 		return c.JSON(
