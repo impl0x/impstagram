@@ -24,6 +24,7 @@ const (
 	IdentifierMissing  Code = "IDENTIFIER_MISSING"
 	CredentialsInvalid Code = "CREDENTIALS_INVALID"
 
+	UserNotFound     Code = "USER_NOT_FOUND"
 	UserBanned       Code = "USER_BANNED"
 	UserUnverified   Code = "USER_UNVERIFIED"
 	UserExists       Code = "USER_ALREADY_EXISTS"
@@ -39,6 +40,8 @@ const (
 	AccessTokenExpired  Code = "ACCESS_TOKEN_EXPIRED"
 	RefreshTokenInvalid Code = "REFRESH_TOKEN_INVALID"
 	RefreshTokenExpired Code = "REFRESH_TOKEN_EXPIRED"
+
+	ResetSessionExpired Code = "RESET_SESSION_EXPIRED"
 )
 
 // the success codes returned in the json

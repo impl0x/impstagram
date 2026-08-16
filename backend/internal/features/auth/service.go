@@ -108,12 +108,8 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 
 	// Now we hash the user's password and create a new user in the database
-	passwordHash, err := password.Hash(req.Password)
-	if err != nil {
-		return registerResult{}, err
-	}
-	user = NewUser(req, passwordHash)  // returns a unverified user by default
-	err = s.Repo.CreateUser(ctx, user) // we create a user before sending otp
+	user = NewUser(req, password.Hash(req.Password)) // returns a unverified user by default
+	err = s.Repo.CreateUser(ctx, user)               // we create a user before sending otp
 	if err != nil {
 		return registerResult{}, err
 	}
@@ -165,7 +161,7 @@ type loginResult struct {
 
 // Login sentinel errors
 var (
-	errUserNotFound      = errors.New("user not found")
+	errUserNotFoundLogin = errors.New("user not found")
 	errIncorrectPassword = errors.New("incorrect password")
 	errUserBanned        = errors.New("user banned")
 	errUserUnverified    = errors.New("user unverified")
@@ -348,6 +344,7 @@ var (
 	errRefIDNotFound = errors.New("reference ID not found")
 	errOTPExpired    = errors.New("otp expired")
 	errIncorrectOTP  = errors.New("incorrect otp")
+	errUserNotFound  = errors.New("user not found")
 )
 
 // Verifies the two factor / verification / reset password OTP and generates a token / reset pass id for the user.
@@ -400,7 +397,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		)
 		return verifyResult{
 			isResetRequest: true,
-			referenceID: refID,
+			referenceID:    refID,
 		}, nil
 	}
 
@@ -552,9 +549,24 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 
 // ? ----+-----+-----Reset password-----+-----+-----
 
-type resetPasswordResult struct {
-}
+var (
+	errResetSessionNotFound = errors.New("reset session not found")
+	errResetSessionExpired  = errors.New("reset session expired")
+)
 
-func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest)(resetPasswordResult,error){
-	
+func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) error {
+	session, expiresAt, ok := s.ResetSessions.Get(req.ReferenceID)
+	if !ok {
+		return errResetSessionNotFound
+	}
+	if expiresAt.Before(time.Now()) {
+		return errResetSessionExpired
+	}
+
+	err := s.Repo.UpdateUser(ctx, session.userID, &user{PasswordHash: password.Hash(req.NewPassword)})
+	if err != nil {
+		return err // db error
+	}
+	s.ResetSessions.Delete(req.ReferenceID)
+	return nil
 }

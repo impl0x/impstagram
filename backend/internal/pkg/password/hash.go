@@ -7,6 +7,8 @@ import (
 )
 
 // Tuned for ~20-30ms on modern CPUs.
+//
+// Not to change during runtime
 var DefaultArgon2HashSettings = argon2id.Params{
 	Memory:      64 * 1024, // 64 MB
 	Iterations:  1,         // Time
@@ -18,13 +20,10 @@ var DefaultArgon2HashSettings = argon2id.Params{
 // Hash generates a random salt and returns the hashed password and the salt.
 //
 // errors returned are only read errors
-func Hash(password string) (string, error) {
-	salt, err := generateRandomBytes(DefaultArgon2HashSettings.SaltLength)
-	if err != nil {
-		return "", err
-	}
+func Hash(password string) string {
+	salt := generateRandomBytes(DefaultArgon2HashSettings.SaltLength)
 	hash := argon2id.CreateHash(password, salt, DefaultArgon2HashSettings)
-	return hash, nil
+	return hash
 }
 
 // Compares the two passwords, i.e. the request password and the password hash stored in the database
@@ -41,11 +40,8 @@ func Compare(reqPassword string, dbPasswordHash string) (bool, error) {
 	return subtle.ConstantTimeCompare(rawReqPasswordHash, rawDbPasswordHash) == 0, nil
 }
 
-func generateRandomBytes(n uint32) ([]byte, error) {
+func generateRandomBytes(n uint32) []byte {
 	b := make([]byte, n)
-	_, err := rand.Read(b)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
+	rand.Read(b)
+	return b
 }

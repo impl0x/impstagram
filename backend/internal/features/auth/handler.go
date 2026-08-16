@@ -182,13 +182,25 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 	)
 }
 
+// ? POST - models.resetPasswordRequest
 func (h Handler) ResetPassword(c *mo.Context) error {
 	var req resetPasswordRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.reset(c.Request().Context(), req)
+	err = h.Service.resetPassword(c.Request().Context(), req)
+	if err!=nil{
+		return h.handleError(c, err)
+	}
+	return c.JSON(
+		http.StatusOK,
+		responses.Success(
+			codes.Ok,
+			"Password reset successfully",
+			nil,
+		),
+	)
 }
 
 func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one
@@ -201,12 +213,20 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 				"Need at least one of the following: email, phone or username",
 			),
 		)
-	case errUserNotFound, errIncorrectPassword:
+	case errUserNotFoundLogin, errIncorrectPassword:
 		return c.JSON(
 			http.StatusUnauthorized,
 			responses.Error(
 				codes.CredentialsInvalid,
 				"Invalid identifier or password",
+			),
+		)
+	case errUserNotFound:
+		return c.JSON(
+			http.StatusNotFound,
+			responses.Error(
+				codes.UserNotFound,
+				"User not found",
 			),
 		)
 	case errUserBanned:
@@ -303,6 +323,22 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 			responses.Error(
 				codes.RefreshTokenExpired,
 				"Refresh token has expired, please login again",
+			),
+		)
+	case errResetSessionNotFound:
+		return c.JSON(
+			http.StatusNotFound,
+			responses.Error(
+				codes.NotFound,
+				"Reset session not found, please try to raise a reset password request again",
+			),
+		)
+	case errResetSessionExpired:
+		return c.JSON(
+			http.StatusForbidden,
+			responses.Error(
+				codes.ResetSessionExpired,
+				"Reset session has expired, please try to raise a reset password request again",
 			),
 		)
 	default:
