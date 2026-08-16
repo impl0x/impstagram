@@ -21,7 +21,7 @@ type user struct { // not complete, will do after i setup database properly
 	TwoFAs []authChannel // slice of 2FA identifiers, if nil means twoFa not enabled, else its enabled on whichever identifiers are in the slice
 }
 
-func NewUser(req registerRequest, passwordHash string) *user {
+func newUser(req registerRequest, passwordHash string) *user {
 	return &user{
 		Username:     req.Username,
 		Email:        req.Email,

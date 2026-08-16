@@ -17,6 +17,10 @@ type Handler struct {
 	Service *Service
 }
 
+func NewHandler(s *Service)Handler {
+	return Handler{s}
+}
+
 // some info:
 // - we are handling all the service level errors via the [Handler.handleError] function,
 // 	 we return the function result in the handler purely due to idiom it is never actually gonna return an actual error

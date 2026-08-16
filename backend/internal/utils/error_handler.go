@@ -2,7 +2,6 @@ package utils
 
 // this file is mostly copied from the default error handler present in mo.
 import (
-	"backend/internal/pkg/errs"
 	"backend/internal/pkg/responses"
 	"backend/internal/utils/codes"
 	"encoding/json"
@@ -78,7 +77,7 @@ func CustomErrorHandler(c *mo.Context, err error) {
 			http.StatusInternalServerError,
 			responses.Error(
 				codes.InternalServerError,
-				errs.InternalServerError.Error(),
+				"Internal server error",
 			),
 		)
 	}

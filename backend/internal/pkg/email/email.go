@@ -9,14 +9,12 @@ import (
 )
 
 type Client struct {
-	apiKey     string
 	httpClient *http.Client
 }
 
-func NewClient(apiKey string) Client {
+func NewClient(httpClient *http.Client) Client {
 	return Client{
-		apiKey:     apiKey,
-		httpClient: &http.Client{},
+		httpClient: httpClient,
 	}
 }
 
@@ -50,7 +48,7 @@ func (c *Client) Send(req SendRequest) error {
 		return fmt.Errorf("create request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	httpReq.Header.Set("Authorization", "Bearer "+config.ResendApiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)

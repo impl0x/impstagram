@@ -10,8 +10,13 @@ const (
 	MaxAge uint8 = 120
 
 	EmailID string = Env + "@impstagram.ripgod.xyz"
+)
 
-	TTLCacheCleanInterval = 10 * time.Minute // applies to whatever cleaning solution is being used, that is global/per, defined in pkg/ttlcache/config.go
+// /ttlcache
+const (
+	TTLCacheCleanInterval      = 10 * time.Minute
+	TTLCacheCleanIntervalOTP   = TTLCacheCleanInterval
+	TTLCacheCleanIntervalReset = TTLCacheCleanInterval
 )
 
 // expiry times

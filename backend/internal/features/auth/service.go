@@ -20,12 +20,21 @@ import (
 // - Reset always means reset password
 
 type Service struct {
-	Email email.Client
 	Repo  Repository
+	Email email.Client
 
 	mu            sync.RWMutex                          // mutex for the OTPSessions
 	OTPSessions   *ttlcache.Cache[string, otpSession]   // string is the reference id
 	ResetSessions *ttlcache.Cache[string, resetSession] // string is reference id
+}
+
+func NewService(repo Repository, emailClient email.Client) *Service {
+	return &Service{
+		Email:         emailClient,
+		Repo:          repo,
+		OTPSessions:   ttlcache.New[string, otpSession](config.TTLCacheCleanIntervalOTP),
+		ResetSessions: ttlcache.New[string, resetSession](config.TTLCacheCleanIntervalReset),
+	}
 }
 
 // ? ----+-----+-----Sessions-----+-----+-----
@@ -108,7 +117,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 
 	// Now we hash the user's password and create a new user in the database
-	user = NewUser(req, password.Hash(req.Password)) // returns a unverified user by default
+	user = newUser(req, password.Hash(req.Password)) // returns a unverified user by default
 	err = s.Repo.CreateUser(ctx, user)               // we create a user before sending otp
 	if err != nil {
 		return registerResult{}, err
