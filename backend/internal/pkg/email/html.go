@@ -25,6 +25,7 @@ func (h HTML) Format(mainReplacement string) string {
 var HtmlWelcome = HTML{`
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -46,20 +47,11 @@ var HtmlWelcome = HTML{`
             <td align="center" style="padding:42px 30px 25px;">
 
               <!-- Logo -->
-              <div style="
-                display:inline-block;
-                width:64px;
-                height:64px;
-                border-radius:18px;
-                background:linear-gradient(135deg,#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5);
-                line-height:64px;
-                font-size:30px;
-                font-weight:bold;
-                color:#ffffff;
-                margin-bottom:18px;
-              ">
-                I
-              </div>
+              <a href="https://ibb.co/0yq5Vf8C" target="_blank" style="display: inline-block; text-decoration: none;">
+                <img src="https://i.ibb.co/b51tRrqs/impstagramlogo.jpg" alt="Logo" width="100"
+                  style="display: block; width: 100px; height: auto; border: 0; border-radius: 20px; -webkit-border-radius: 12px; -moz-border-radius: 12px;">
+              </a>
+
 
               <div style="
                 font-size:30px;
@@ -108,13 +100,13 @@ var HtmlWelcome = HTML{`
               </p>
 
               <!-- Button -->
-				<table cellpadding="0" cellspacing="0" border="0" align="center">
-				<tr>
-					<td style="
+              <table cellpadding="0" cellspacing="0" border="0" align="center">
+                <tr>
+                  <td style="
 					border-radius:8px;
-					background:linear-gradient(90deg,#d62976,#962fbf);
+					background:linear-gradient(90deg,#d629c2,#2fb3bf);
 					">
-					<a style="
+                    <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" target="_blank" style="
 						display:inline-block;
 						padding:13px 26px;
 						font-size:15px;
@@ -122,13 +114,13 @@ var HtmlWelcome = HTML{`
 						color:#ffffff;
 						text-decoration:none;
 					">
-						Useless button
-					</a>
-					</td>
-				</tr>
-				</table>
-				
-          <!-- Divider -->
+                      Get started
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
           <tr>
             <td style="padding:0 45px;">
               <div style="height:1px; background-color:#2a2a2a;"></div>
@@ -166,6 +158,7 @@ var HtmlWelcome = HTML{`
   </table>
 
 </body>
+
 </html>
 `, "{{username}}", nil}
 
@@ -208,20 +201,10 @@ var OTPBaseHTML = `
           <tr>
             <td align="center" style="padding:42px 30px 25px;">
 
-              <div style="
-                display:inline-block;
-                width:64px;
-                height:64px;
-                border-radius:18px;
-                background:linear-gradient(135deg,#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5);
-                line-height:64px;
-                font-size:30px;
-                font-weight:bold;
-                color:#ffffff;
-                margin-bottom:18px;
-              ">
-                I
-              </div>
+              <a href="https://ibb.co/0yq5Vf8C" target="_blank" style="display: inline-block; text-decoration: none;">
+                <img src="https://i.ibb.co/b51tRrqs/impstagramlogo.jpg" alt="Logo" width="100"
+                  style="display: block; width: 100px; height: auto; border: 0; border-radius: 20px; -webkit-border-radius: 12px; -moz-border-radius: 12px;">
+              </a>
 
               <div style="
                 font-size:30px;
