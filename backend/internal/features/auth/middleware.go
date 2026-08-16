@@ -4,9 +4,9 @@ import (
 	"backend/internal/config"
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/responses"
+	"backend/internal/pkg/ttlcache"
 	"backend/internal/utils/codes"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,82 +14,12 @@ import (
 	"github.com/impl0x/mo/validator"
 )
 
-// ? ----+-----+-----Token block list-----+-----+-----
-
-type accessTokenBlockList struct {
-	blockRequestList map[uuid.UUID]time.Time // jwtID : ExpiresAt
-	mu               sync.RWMutex
-}
-
-func (bl *accessTokenBlockList) Add(jwtID uuid.UUID, expiresAt time.Time) {
-	bl.mu.Lock()
-	defer bl.mu.Unlock()
-	bl.blockRequestList[jwtID] = expiresAt
-}
-
-func (bl *accessTokenBlockList) Find(jwtID uuid.UUID) bool {
-	bl.mu.RLock()
-	defer bl.mu.RUnlock()
-	_, ok := bl.blockRequestList[jwtID]
-	return ok
-}
-
-func (bl *accessTokenBlockList) Delete(jwtID uuid.UUID, useMutex bool) {
-	if useMutex {
-		bl.mu.Lock()
-		defer bl.mu.Unlock()
-	}
-	delete(bl.blockRequestList, jwtID)
-}
-
-// This variable is a singleton constant and must not be changed at runtime
+// Do not mutate this variable at runtime.
 //
-// this is used to block JWT access tokens before they expire, used especially if a user logs out and then we put the jwt id in this list
+// # Only add or get values from this cache, those methods are thread safe in nature
 //
-// Any jwt id in this block list will be blocked and be sent a 401 unauthorized
-var AccessTokenBlockList = accessTokenBlockList{
-	blockRequestList: make(map[uuid.UUID]time.Time),
-}
-
-// ? ----+-----+-----Cleaning solutions for token block list-----+-----+-----
-// ? only one of the two solutions below should be used at a time
-
-type cleanerType int
-
-const (
-	TickerCleanerType cleanerType = iota // corresponds to [TickerCleaner]
-	TimerCleanerType                     // corresponds to [TimerCleaner]
-)
-
-var AccessTokenBlockListCleaner = TimerCleanerType // The active solution used to clean the map of the block list to prevent it from filling up, Do not mutate at runtime
-
-// MUST BE ONLY LAUNCHED ONCE PER RUNTIME!
-//
-// # This has one goroutine launched at the start of the runtime and it cleans up expired tokens on interval, good for active server with active users, else if inactive there is a goroutine running at a fixed interval doing nothing
-//
-// starts one global goroutine: ticks on each interval and clears all expired jwt ids
-func TickerCleaner() {
-	ticker := time.NewTicker(config.ExpiryTimeAccessToken) // default interval is the expiry time for a access token
-	defer ticker.Stop()
-	for range ticker.C {
-		AccessTokenBlockList.mu.Lock()
-		for k, v := range AccessTokenBlockList.blockRequestList {
-			if v.Before(time.Now()) {
-				AccessTokenBlockList.Delete(k, false)
-			}
-		}
-		AccessTokenBlockList.mu.Unlock()
-	}
-}
-
-// Launch on every new jwt id addition to the block list
-//
-// # This launches a new goroutine for every new jwt id block, which is resource intensive if the server has a ton of users logging out and is extremely active
-//
-// starts a goroutine per jwt id: runs after expiration time and clears the particular jwt id
-func TimerCleaner(jwtID uuid.UUID, expiresAt time.Time) {
-	time.AfterFunc(time.Until(expiresAt), func() { AccessTokenBlockList.Delete(jwtID, true) })
-}
+// This is used to store jwt ids which are blacklisted before they expire on their own.
+var jwtTokenBlockList = ttlcache.New[uuid.UUID, struct{}](config.TTLCacheCleanIntervalJWTBlockList)
 
 // ? ----+-----+-----Auth Middleware-----+-----+-----
 
@@ -149,7 +79,7 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 		// Converting the json struct into a usable data type for our app
 		accessTokenJwt, err := accessTokenPayload.Convert()
 		if err != nil {
-			errorMessage="Invalid data in the JSON payload for authorization token"
+			errorMessage = "Invalid data in the JSON payload for authorization token"
 			return
 		}
 		// Checking if the jwt has expired
@@ -158,8 +88,8 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 			return
 		}
 
-		// Checking if the jwt is in access token block list
-		ok := AccessTokenBlockList.Find(accessTokenJwt.JwtID)
+		// Checking if the jwt is in jwt token block list
+		_, _, ok := jwtTokenBlockList.Get(accessTokenJwt.JwtID)
 		if ok {
 			errorMessage = "Unauthorized" // try not to give the client much info about *why* it is unauthorized, even though we know that this jwt is blacklisted
 			return

@@ -14,9 +14,10 @@ const (
 
 // /ttlcache
 const (
-	TTLCacheCleanInterval      = 10 * time.Minute
-	TTLCacheCleanIntervalOTP   = TTLCacheCleanInterval
-	TTLCacheCleanIntervalReset = TTLCacheCleanInterval
+	TTLCacheCleanInterval             = 10 * time.Minute
+	TTLCacheCleanIntervalOTP          = TTLCacheCleanInterval
+	TTLCacheCleanIntervalReset        = TTLCacheCleanInterval
+	TTLCacheCleanIntervalJWTBlockList = ExpiryTimeAccessToken / 2
 )
 
 // expiry times

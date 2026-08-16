@@ -500,14 +500,13 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 // ? ----+-----+-----Logout-----+-----+-----
 
 func (s *Service) logout(ctx context.Context, accessTokenJwt jwt.AccessToken) error {
+	// Remove user session from database
 	err := s.Repo.DeleteSessionByJwtID(ctx, accessTokenJwt.JwtID)
 	if err != nil {
 		return err // db error
 	}
-	AccessTokenBlockList.Add(accessTokenJwt.JwtID, accessTokenJwt.ExpiresAt)
-	if AccessTokenBlockListCleaner == TimerCleanerType {
-		TimerCleaner(accessTokenJwt.JwtID, accessTokenJwt.ExpiresAt) // starts a new goroutine which cleans this up after the expiry time from the map
-	}
+	// Add the jwt token id to the block list so this gets rejected by the auth middleware
+	jwtTokenBlockList.Add(accessTokenJwt.JwtID, struct{}{}, accessTokenJwt.ExpiresAt)
 	return nil
 }
 
@@ -519,6 +518,7 @@ type forgotPasswordResult struct {
 }
 
 func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest) (forgotPasswordResult, error) {
+	// Figure out what identifier/channel the user sent us and store those into variables
 	var channel authChannel
 	var target string
 	if req.Email != "" {
@@ -530,6 +530,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	} else {
 		return forgotPasswordResult{}, errMissingIdentifier
 	}
+	// Find the user in the database
 	user, err := s.Repo.FindUserByChannel(ctx, channel, target)
 	if err != nil {
 		return forgotPasswordResult{}, err // db error
@@ -538,7 +539,9 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 		return forgotPasswordResult{}, errUserNotFound
 	}
 
+	// Send an otp to the channel and target our user sent us
 	otp, err := s.sendOTP(channel, purposeResetPass, target)
+	// Generate a otp session id and add it to our ttlcache
 	refID := token.GenerateOTPSessionID()
 	s.OTPSessions.Add(
 		refID,
@@ -550,6 +553,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 		},
 		time.Now().Add(config.ExpiryTimeOTP),
 	)
+	// send the session id as reference to the user
 	return forgotPasswordResult{
 		channel:     channel,
 		referenceID: refID,
