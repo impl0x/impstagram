@@ -27,24 +27,29 @@ func NewHandler(s *Service) Handler {
 // 	 except if json encode error occurs which is not probable because its our function with valid syntax and logic.
 //
 // - we use anonymous structs to return the json response because using a map is more expensive as it allocates to the heap
+// - Not all functions need to be explained individually as they all share the same pattern, only the first register function is explained in detail below
 
 // ? POST - models.RegisterRequest
 func (h Handler) Register(c *mo.Context) error {
+	// Binding the request json to the struct model and validating it at the same time
 	var req registerRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
-		return err
+		return err // returns validation error / json error, the mo error handler defined knows how to handle these, at least assuming so.
 	}
+	// Call the register method in service, with request context and request data
 	result, err := h.Service.register(c.Request().Context(), req)
 	if err != nil {
+		// we handle all errors in this function, every error is sentinel error
 		return h.handleError(c, err) // always returns nil
 	}
+	// if everything is good we return a json response with the response struct returned from Success method in responses package. take a look there to see how the struct is defined.
 	return c.JSON(
 		http.StatusCreated,
 		responses.Success(
 			codes.RegisterSuccess,
 			"Registration successful, please check your "+string(result.channel)+" for the OTP to verify your account",
-			struct {
+			struct { // using anon structs instead of maps to reduce allocation
 				ReferenceID string `json:"reference_id"`
 			}{result.referenceID},
 		),
@@ -53,6 +58,10 @@ func (h Handler) Register(c *mo.Context) error {
 
 // ? POST - models.loginRequest
 func (h Handler) Login(c *mo.Context) error {
+	if h.Service==nil{
+		println(h.Service)
+		return c.NoContent(204)
+	}
 	var req loginRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
@@ -215,7 +224,7 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 			http.StatusBadRequest,
 			responses.Error(
 				codes.IdentifierMissing,
-				"Need at least one of the following: email, phone or username",
+				"Need at least email or phone to register",
 			),
 		)
 	case errAlreadyExistingUser:
@@ -261,6 +270,14 @@ func (h Handler) handleError(c *mo.Context, err error) error { // returning erro
 			),
 		)
 	//? login errors
+	case errMissingIdentifierLogin:
+		return c.JSON(
+			http.StatusBadRequest,
+			responses.Error(
+				codes.IdentifierMissing,
+				"Need at least email, phone or username to log in",
+			),
+		)
 	case errUserNotFoundLogin, errIncorrectPassword:
 		return c.JSON(
 			http.StatusUnauthorized,

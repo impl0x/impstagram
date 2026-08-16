@@ -48,14 +48,13 @@ func NewDobFromString(dobString string) (Dob, error) {
 }
 
 // Calculates age from dob instance
-func (d Dob) Age() uint8 {
+func (d Dob) Age() uint16 {
 	now := time.Now()
 	year := uint16(now.Year())
 	day := uint8(now.Day())
 	month := uint8(now.Month())
 
-	age := uint8(year - d.Year)
-
+	age := uint16(year - d.Year)
 	if month < d.Month ||
 		(month == d.Month && day < d.Day) {
 		age--

@@ -22,6 +22,14 @@ Other than that we also store the the access token jwt's jwt id in the user sess
 this makes it easier for the user to be logged in through different devices.  
 when a user hits the log out endpoint the first thing we do is retrieve the authorization jwt access token's id and search it in our user sessions table, if found we remove that user session row and add the jwt id to a in memory blacklist till the jwt expires, this ensures that if the user logs out then tries to access something using the same jwt token which just was successfully logged out then it cant access stuff and gets blocked by the in memory cache. This successfully eliminates a edge case where even after logging out the jwt will be valid till it expires as it is stateless. 
 
+## Request flows for the frontend  
+
+### Registration:  
+1. /register with the required details, sends otp to the identifier and returns a reference id
+2. /verify with the otp and the reference id, returns access and refresh tokens  
+### Login:
+1. /login with details, and returns access and refresh tokens if 2fa not present, else sends a otp to the primary 2fa channel and returns a reference id
+2. if 2fa /verify with otp and reference id, returns tokens now.  
 
 ## todos
 

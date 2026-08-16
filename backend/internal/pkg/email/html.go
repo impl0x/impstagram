@@ -16,7 +16,7 @@ type HTML struct {
 }
 
 func (h HTML) Format(mainReplacement string) string {
-	finalSlice := make([]string, len(h.Placeholders)+1)
+	finalSlice := make([]string, len(h.Placeholders)+2)
 	finalSlice = append(finalSlice, h.Placeholders...)
 	finalSlice = append(finalSlice, h.MainPlaceholder, mainReplacement)
 	return strings.NewReplacer(finalSlice...).Replace(h.Html)
@@ -169,7 +169,9 @@ var HtmlWelcome = HTML{`
 // content: Two-factor authorization code
 // sub-content: Use the Two-factor authorization code below to log into your Impstagram account.
 var HtmlRegistrationVerificationOTP = HTML{
-	OTPBaseHTML, "{{otp}}", []string{"{{content}}", "Verify your account", "{{sub-content}}", "Use the verification code below to continue with your " + config.ServiceName + " account."},
+	OTPBaseHTML, "{{otp}}", []string{
+		"{{content}}", "Verify your account",
+		"{{sub-content}}", "Use the verification code below to continue with your " + config.ServiceName + " account."},
 }
 var Html2FAOTP = HTML{
 	OTPBaseHTML, "{{otp}}", []string{"{{content}}", "Two-factor authorization code", "{{sub-content}}", "Use the Two-factor authorization code below to log into your " + config.ServiceName + " account."},

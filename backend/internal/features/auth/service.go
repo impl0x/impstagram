@@ -102,9 +102,9 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	// Finding in database
 	user, err = s.Repo.FindUserByChannel(ctx, channel, target)
 
-	if err != nil {
-		return registerResult{}, err // ignoring database level errors as of now.
-	}
+	// if err != nil {
+	// 	return registerResult{}, err // ignoring database level errors as of now.
+	// }
 
 	if user != nil { // if db returned a user
 		return registerResult{}, errAlreadyExistingUser // yes i acknowledge that user has chances of being banned/unverified, but this is intended. We want user to login and then hit those errors if they exist.
@@ -170,6 +170,7 @@ type loginResult struct {
 
 // Login sentinel errors
 var (
+	errMissingIdentifierLogin = errors.New("missing identifier for login")
 	errUserNotFoundLogin = errors.New("user not found")
 	errIncorrectPassword = errors.New("incorrect password")
 	errUserBanned        = errors.New("user banned")
@@ -191,15 +192,15 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	case req.Phone != "":
 		user, err = s.Repo.FindUserByChannel(ctx, channelPhone, req.Phone)
 	default:
-		return loginResult{}, errMissingIdentifier
+		return loginResult{}, errMissingIdentifierLogin
 	}
 
-	if err != nil { // database error
-		return loginResult{}, err
-	}
+	// if err != nil { // database error
+	// 	return loginResult{}, err
+	// }
 	// todo : fix db error and user not found error
 	if user == nil {
-		return loginResult{}, errUserNotFound
+		return loginResult{}, errUserNotFoundLogin
 	}
 
 	// if user is found in database we compare the passwords and the password hash in the database to see if the user has the correct password
@@ -568,18 +569,22 @@ var (
 )
 
 func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) error {
+	// Retrieve the reset session from the cache using the reference id from the request data
 	session, expiresAt, ok := s.ResetSessions.Get(req.ReferenceID)
 	if !ok {
 		return errResetSessionNotFound
 	}
+	// if the reset request expired we return error
 	if expiresAt.Before(time.Now()) {
 		return errResetSessionExpired
 	}
 
+	// else we proceed and update the user's password, we of course hash it.
 	err := s.Repo.UpdateUser(ctx, session.userID, &user{PasswordHash: password.Hash(req.NewPassword)})
 	if err != nil {
 		return err // db error
 	}
+	// delete the session to make sure this reference id cannot be reused
 	s.ResetSessions.Delete(req.ReferenceID)
 	return nil
 }
