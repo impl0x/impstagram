@@ -20,7 +20,7 @@ func NewDemoRepository() *DemoRepository {
 	}
 }
 
-// todos
+
 func (dr *DemoRepository) FindUserByID(ctx context.Context, userID uuid.UUID) (*user, error) {
 	for _, u := range dr.users {
 		if u==nil{

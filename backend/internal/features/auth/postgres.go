@@ -16,17 +16,6 @@ func NewPostgresRepository() PostgresRepository {
 	return PostgresRepository{}
 }
 
-var demoUser = &user{
-	uuid.New(),
-	"test",
-	"email@email.com",
-	"1234567890",
-	"abcedxyz",
-	"passwhash",
-	"dob",
-	statusVerified,
-	nil,
-}
 
 // todos
 func (pg PostgresRepository) FindUserByID(ctx context.Context, userID uuid.UUID) (*user, error) {
@@ -40,12 +29,6 @@ func (pg PostgresRepository) CreateUser(ctx context.Context, user *user) error {
 }
 func (pg PostgresRepository) UpdateUser(ctx context.Context, userID uuid.UUID, updatedUser *user) error {
 	return nil
-}
-
-var demoUserSession = &userSession{
-	uuid.New(),
-	uuid.New(),
-	"", uuid.New(), "", "", "", "", time.Now().Add(time.Hour), time.Now(),
 }
 
 // user_sessions table{}

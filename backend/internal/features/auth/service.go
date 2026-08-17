@@ -331,7 +331,9 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 		}
 		err = s.Email.Send(emailSendRequest)
 	case channelPhone:
-		// todo: send otp on phone
+		// update: we can never send otp to phone numbers as its not possible as of now to afford sms service or telegram's gateway service.
+		// will not change the code but anyone signing up on the backend with a phone will simply not receive an otp and will not be able to continue.
+		// not returning an error or anything, its intentional, due to future compatibility. the frontend should not have phone supported.
 	default:
 		panic("invalid otp channel")
 	}

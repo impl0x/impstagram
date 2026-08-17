@@ -27,7 +27,7 @@ const (
 	UserNotFound     Code = "USER_NOT_FOUND"
 	UserBanned       Code = "USER_BANNED"
 	UserUnverified   Code = "USER_UNVERIFIED"
-	UserExists       Code = "USER_ALREADY_EXISTS"
+	UserAlreadyExists       Code = "USER_ALREADY_EXISTS"
 	UserNotOldEnough Code = "USER_NOT_OLD_ENOUGH"
 	UserTooOld       Code = "USER_TOO_OLD"
 

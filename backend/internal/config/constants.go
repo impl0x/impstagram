@@ -9,7 +9,7 @@ const (
 	MinAge uint16 = 18
 	MaxAge uint16 = 120
 
-	EmailID string = Env + "@impstagram.ripgod.xyz"
+	EmailID string = "Impstagram@impstagram.ripgod.xyz"
 )
 
 // /ttlcache
