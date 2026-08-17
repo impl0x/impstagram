@@ -4,7 +4,9 @@ package utils
 import (
 	"backend/internal/pkg/responses"
 	"backend/internal/utils/codes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -29,7 +31,15 @@ func CustomErrorHandler(c *mo.Context, err error) {
 		return
 	}
 	// if response was not written then we need to see if error exists and return appropriate messages
+
+	if errors.Is(err, context.Canceled) {
+		return
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		c.JSON(http.StatusGatewayTimeout, responses.Error(codes.Timeout, "Request timed out"))
+		return
+	}
 	switch e := err.(type) {
+
 	case nil: // if no error was returned it means handlers probably returned a nil without writing a response
 		c.NoContent(http.StatusNoContent)
 	case mo.HTTPError: // the framework returned a http error, this happens only on routing errors and therefore only not_found and method_not_allowed

@@ -15,6 +15,7 @@ const (
 	MethodNotAllowed    Code = "METHOD_NOT_ALLOWED"
 	InternalServerError Code = "INTERNAL_SERVER_ERROR"
 	Unauthorized        Code = "UNAUTHORIZED"
+	Timeout Code = "TIMEOUT"
 
 	JSONInvalid Code = "JSON_INVALID"
 	EOF         Code = "EOF"

@@ -7,6 +7,7 @@ import (
 	"backend/internal/pkg/responses"
 	"backend/internal/utils"
 	"backend/internal/utils/codes"
+	"context"
 	"net/http"
 	"strconv"
 
@@ -232,6 +233,9 @@ func (h Handler) handleError(c *mo.Context, err error) (cJsonError error) { // r
 		)
 	}()
 	switch err {
+	//? context errors
+	case context.DeadlineExceeded, context.Canceled: // assuming these errors aren't wrapped
+		return err
 	//? register errors
 	case errMissingIdentifier:
 		sc, rc, em = http.StatusBadRequest, codes.IdentifierMissing, "Need at least email or phone to register"
@@ -276,7 +280,7 @@ func (h Handler) handleError(c *mo.Context, err error) (cJsonError error) { // r
 		sc, rc, em = http.StatusForbidden, codes.ResetSessionExpired, "Reset session has expired, please try to raise a reset password request again"
 	//? --x--x--x--
 	default:
-		println("Internal server error: " + err.Error())
+		println("auth: Internal server error: " + err.Error())
 		sc, rc, em = http.StatusInternalServerError, codes.InternalServerError, "An unexpected error occurred"
 	}
 	return
