@@ -58,7 +58,7 @@ func (h Handler) Register(c *mo.Context) error {
 
 // ? POST - models.loginRequest
 func (h Handler) Login(c *mo.Context) error {
-	if h.Service==nil{
+	if h.Service == nil {
 		println(h.Service)
 		return c.NoContent(204)
 	}
@@ -216,169 +216,68 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 	)
 }
 
-func (h Handler) handleError(c *mo.Context, err error) error { // returning error only for the idiom of mo, else it will always be mo if json doesn't throw one
+func (h Handler) handleError(c *mo.Context, err error) (cJsonError error) { // returning error only for the idiom of mo, else it will always be nil if json doesn't throw one
+	// switch over error and set these variables according to the error, then write a json body in the response and the variables using defer
+	// this method reduces readability a little bit but it greatly reduces the redundancy
+	var sc int        // statusCode
+	var rc codes.Code // respCode
+	var em string     // errorMessage
+	defer func() {
+		cJsonError = c.JSON(
+			sc,
+			responses.Error(
+				rc,
+				em,
+			),
+		)
+	}()
 	switch err {
 	//? register errors
 	case errMissingIdentifier:
-		return c.JSON(
-			http.StatusBadRequest,
-			responses.Error(
-				codes.IdentifierMissing,
-				"Need at least email or phone to register",
-			),
-		)
+		sc, rc, em = http.StatusBadRequest, codes.IdentifierMissing, "Need at least email or phone to register"
 	case errAlreadyExistingUser:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.UserExists,
-				"This user already exists, please try to log in",
-			),
-		)
+		sc, rc, em = http.StatusForbidden, codes.UserAlreadyExists, "This user already exists, please try to log in"
 	case errNotOldEnough:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.UserNotOldEnough,
-				"User not old enough, must be minimum of "+strconv.Itoa(int(config.MinAge))+" years old to use this service",
-			),
-		)
+		sc, rc, em = http.StatusForbidden, codes.UserNotOldEnough, "User not old enough, must be minimum of "+strconv.Itoa(int(config.MinAge))+" years old to use this service"
 	case errTooOld:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.UserTooOld,
-				"User too old, cannot create account",
-			),
-		)
-
+		sc, rc, em = http.StatusForbidden, codes.UserTooOld, "User too old, cannot create account"
 	case errUsernameAlreadyExists:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.UsernameAlreadyExists,
-				"This username is already registered, please try a different username",
-			),
-		)
-		//? dob errors
+		sc, rc, em = http.StatusForbidden, codes.UsernameAlreadyExists, "This username is already registered, please try a different username"
+	//? dob errors
 	case dob.ErrImpossibleDob, dob.ErrInvalidDobString:
-		return c.JSON(
-			http.StatusBadRequest,
-			responses.Error(
-				codes.ValidationError,
-				err.Error(),
-			),
-		)
+		sc, rc, em = http.StatusBadRequest, codes.ValidationError, err.Error()
 	//? login errors
 	case errMissingIdentifierLogin:
-		return c.JSON(
-			http.StatusBadRequest,
-			responses.Error(
-				codes.IdentifierMissing,
-				"Need at least email, phone or username to log in",
-			),
-		)
+		sc, rc, em = http.StatusBadRequest, codes.IdentifierMissing, "Need at least email, phone or username to log in"
 	case errUserNotFoundLogin, errIncorrectPassword:
-		return c.JSON(
-			http.StatusUnauthorized,
-			responses.Error(
-				codes.CredentialsInvalid,
-				"Invalid identifier or password",
-			),
-		)
+		sc, rc, em = http.StatusUnauthorized, codes.CredentialsInvalid, "Invalid identifier or password"
 	case errUserBanned:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.UserBanned,
-				"User is permanently banned from accessing this service",
-			),
-		)
+		sc, rc, em = http.StatusForbidden, codes.UserBanned, "User is permanently banned from accessing this service"
 	case errUserUnverified:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.UserUnverified,
-				"User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to sign up",
-			),
-		)
+		sc, rc, em = http.StatusForbidden, codes.UserUnverified, "User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to register"
 		//? verify otp errors
 	case errRefIDNotFound:
-		return c.JSON(
-			http.StatusNotFound,
-			responses.Error(
-				codes.NotFound,
-				"Reference ID for this verify request not found, please request a new otp again",
-			),
-		)
+		sc, rc, em = http.StatusNotFound, codes.NotFound, "Reference ID for this verify request not found, please request a new otp again"
 	case errOTPExpired:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.OTPExpired,
-				"The OTP provided is expired",
-			),
-		)
+		sc, rc, em = http.StatusForbidden, codes.OTPExpired, "The OTP provided is expired"
 	case errIncorrectOTP:
-		return c.JSON(
-			http.StatusBadRequest,
-			responses.Error(
-				codes.OTPIncorrect,
-				"The OTP provided is incorrect",
-			),
-		)
+		sc, rc, em = http.StatusBadRequest, codes.OTPExpired, "The OTP provided is incorrect"
 	case errUserNotFound:
-		return c.JSON(
-			http.StatusNotFound,
-			responses.Error(
-				codes.UserNotFound,
-				"User not found",
-			),
-		)
+		sc, rc, em = http.StatusNotFound, codes.UserNotFound, "User not found"
 	//? refresh errors
 	case errInvalidRefreshToken:
-		return c.JSON(
-			http.StatusBadRequest,
-			responses.Error(
-				codes.RefreshTokenInvalid,
-				"Invalid refresh token, please login again",
-			),
-		)
+		sc, rc, em = http.StatusBadRequest, codes.RefreshTokenInvalid, "Invalid refresh toke, please login again"
 	case errExpiredRefreshToken:
-		return c.JSON(
-			http.StatusNotAcceptable,
-			responses.Error(
-				codes.RefreshTokenExpired,
-				"Refresh token has expired, please login again",
-			),
-		)
+		sc, rc, em = http.StatusNotAcceptable, codes.RefreshTokenExpired, "Refresh token has expired, please login again"
 	//? reset errors
 	case errResetSessionNotFound:
-		return c.JSON(
-			http.StatusNotFound,
-			responses.Error(
-				codes.NotFound,
-				"Reset session not found, please try to raise a reset password request again",
-			),
-		)
+		sc, rc, em = http.StatusNotFound, codes.NotFound, "Reset session not found, please try to raise a reset password request again"
 	case errResetSessionExpired:
-		return c.JSON(
-			http.StatusForbidden,
-			responses.Error(
-				codes.ResetSessionExpired,
-				"Reset session has expired, please try to raise a reset password request again",
-			),
-		)
+		sc, rc, em = http.StatusForbidden, codes.ResetSessionExpired, "Reset session has expired, please try to raise a reset password request again"
 	//? --x--x--x--
 	default:
 		println("Internal server error: " + err.Error())
-		return c.JSON(
-			http.StatusInternalServerError,
-			responses.Error(
-				codes.InternalServerError,
-				"An unexpected error occurred",
-			),
-		)
-
+		sc, rc, em = http.StatusInternalServerError, codes.InternalServerError, "An unexpected error occurred"
 	}
+	return
 }
