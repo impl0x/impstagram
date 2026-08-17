@@ -1,28 +1,39 @@
 package auth
 
 // ? ----+-----+-----enums-----+-----+-----
+// enums are made to be equal to the database level enums for compatibility and maintainability
 
 // used to describe account status
-type accountStatus int
+type accountStatus string
 
 const (
-	statusUnverified accountStatus = iota
-	statusVerified
-	statusBanned
+	statusUnverified accountStatus = "unverified"
+	statusVerified   accountStatus = "verified"
+	statusBanned     accountStatus = "banned"
 )
 
 // authChannel defines WHAT medium is being used.
 //
-// disclaimer: this literal constant value is used for the responses sent to the user in the handler,
-// it is directly type casted, so the values must be accurate!
+// use the .String() method to get the string equivalent which can be sent to the user response
 type authChannel string
 
 const (
 	channelEmail    authChannel = "email"
-	channelPhone    authChannel = "telegram"      // [UPDATE]: when switched to sms update this value
-	channelUsername authChannel = "username"      // Used for DB lookup only/ login
-	channelTOTP     authChannel = "authenticator" // Used for 2FA validation only
+	channelPhone    authChannel = "phone"    // [UPDATE]: when switched to sms update this value
+	channelUsername authChannel = "username" // Used for DB lookup only/ login
+	channelTOTP     authChannel = "totp"     // Used for 2FA validation only
 )
+
+func (ac authChannel) String() string {
+	switch ac {
+	case channelPhone:
+		return "telegram"
+	case channelTOTP:
+		return "authenticator"
+	default:
+		return string(ac)
+	}
+}
 
 // authPurpose defines WHY the OTP or action is happening.
 type authPurpose string

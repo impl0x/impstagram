@@ -48,7 +48,7 @@ func (h Handler) Register(c *mo.Context) error {
 		http.StatusCreated,
 		responses.Success(
 			codes.RegisterSuccess,
-			"Registration successful, please check your "+string(result.channel)+" for the OTP to verify your account",
+			"Registration successful, please check your "+result.channel.String()+" for the OTP to verify your account",
 			struct { // using anon structs instead of maps to reduce allocation
 				ReferenceID string `json:"reference_id"`
 			}{result.referenceID},
@@ -83,7 +83,7 @@ func (h Handler) Login(c *mo.Context) error {
 			http.StatusAccepted,
 			responses.Success(
 				codes.TwoFARequired,
-				"Two-factor authentication is required, please check your "+string(result.channel),
+				"Two-factor authentication is required, please check your "+result.channel.String(),
 				struct {
 					ReferenceID string `json:"reference_id"`
 				}{result.referenceID},
@@ -187,7 +187,7 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 		http.StatusOK,
 		responses.Success(
 			codes.Ok,
-			"An OTP has been sent to your "+string(result.channel),
+			"An OTP has been sent to your "+result.channel.String(),
 			struct {
 				ReferenceID string `json:"reference_id"`
 			}{result.referenceID},

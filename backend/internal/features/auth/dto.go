@@ -19,6 +19,9 @@ type user struct { // not complete, will do after i setup database properly
 
 	Status accountStatus // account status which can either be unverified, verified or banned.
 	TwoFAs []authChannel // slice of 2FA identifiers, if nil means twoFa not enabled, else its enabled on whichever identifiers are in the slice
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func newUser(req registerRequest, passwordHash string) *user {
@@ -48,7 +51,6 @@ type userSession struct {
 func newUserSession(jwtID uuid.UUID, tokenHash, userIP, userAgent string, userID uuid.UUID) *userSession {
 	// parsing the user agent and storing the current time
 	ua := useragent.Parse(userAgent)
-	now := time.Now()
 
 	// creating and returning the userSession struct
 	return &userSession{
@@ -59,7 +61,6 @@ func newUserSession(jwtID uuid.UUID, tokenHash, userIP, userAgent string, userID
 		OSName:      ua.OS,
 		BrowserName: ua.Name,
 		DeviceType:  ua.Device,
-		ExpiresAt:   now.AddDate(0, 0, config.ExpiryTimeRefreshToken),
-		CreatedAt:   now,
+		ExpiresAt:   time.Now().AddDate(0, 0, config.ExpiryTimeRefreshToken),
 	}
 }
