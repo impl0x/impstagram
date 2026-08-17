@@ -19,7 +19,7 @@ type authChannel string
 
 const (
 	channelEmail    authChannel = "email"
-	channelPhone    authChannel = "phone"    // [UPDATE]: when switched to sms update this value
+	channelPhone    authChannel = "phone"    
 	channelUsername authChannel = "username" // Used for DB lookup only/ login
 	channelTOTP     authChannel = "totp"     // Used for 2FA validation only
 )
