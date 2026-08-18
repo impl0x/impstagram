@@ -270,7 +270,7 @@ func (h Handler) handleError(c *mo.Context, err error) (cJsonError error) { // r
 		sc, rc, em = http.StatusNotFound, codes.UserNotFound, "User not found"
 	//? refresh errors
 	case errInvalidRefreshToken:
-		sc, rc, em = http.StatusBadRequest, codes.RefreshTokenInvalid, "Invalid refresh toke, please login again"
+		sc, rc, em = http.StatusBadRequest, codes.RefreshTokenInvalid, "Invalid refresh token, please login again"
 	case errExpiredRefreshToken:
 		sc, rc, em = http.StatusNotAcceptable, codes.RefreshTokenExpired, "Refresh token has expired, please login again"
 	//? reset errors
