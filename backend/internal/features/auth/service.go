@@ -20,20 +20,20 @@ import (
 // - Reset always means reset password
 
 type Service struct {
-	Repo  Repository
-	Email email.Client
+	repo  Repository
+	email email.Client
 
 	mu            sync.RWMutex                          // mutex for the OTPSessions
-	OTPSessions   *ttlcache.Cache[string, otpSession]   // string is the reference id
-	ResetSessions *ttlcache.Cache[string, resetSession] // string is reference id
+	otpSessions   *ttlcache.Cache[string, otpSession]   // string is the reference id
+	resetSessions *ttlcache.Cache[string, resetSession] // string is reference id
 }
 
 func NewService(repo Repository, emailClient email.Client) *Service {
 	return &Service{
-		Email:         emailClient,
-		Repo:          repo,
-		OTPSessions:   ttlcache.New[string, otpSession](config.TTLCacheCleanIntervalOTP),
-		ResetSessions: ttlcache.New[string, resetSession](config.TTLCacheCleanIntervalReset),
+		email:         emailClient,
+		repo:          repo,
+		otpSessions:   ttlcache.New[string, otpSession](config.TTLCacheCleanIntervalOTP),
+		resetSessions: ttlcache.New[string, resetSession](config.TTLCacheCleanIntervalReset),
 	}
 }
 
@@ -100,7 +100,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 
 	// Finding in database
-	user, err = s.Repo.FindUserByChannel(ctx, channel, target)
+	user, err = s.repo.FindUserByChannel(ctx, channel, target)
 
 	// if err != nil {
 	// 	return registerResult{}, err // ignoring database level errors as of now.
@@ -111,14 +111,14 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 
 	// checks if the username already exists because usernames are unique
-	sameUsernameUser, err := s.Repo.FindUserByChannel(ctx, channelUsername, req.Username) // assuming req.Username is validated in validator
+	sameUsernameUser, err := s.repo.FindUserByChannel(ctx, channelUsername, req.Username) // assuming req.Username is validated in validator
 	if sameUsernameUser != nil || err == nil {                                            // todo: handle db level errors
 		return registerResult{}, errUsernameAlreadyExists
 	}
 
 	// Now we hash the user's password and create a new user in the database
 	user = newUser(req, password.Hash(req.Password)) // returns a unverified user by default
-	err = s.Repo.CreateUser(ctx, user)               // we create a user before sending otp
+	err = s.repo.CreateUser(ctx, user)               // we create a user before sending otp
 	if err != nil {
 		return registerResult{}, err
 	}
@@ -131,7 +131,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	// generate a new reference id for a otp session
 	refID := token.GenerateOTPSessionID()
 	// add a new otp session to our timed cache
-	s.OTPSessions.Add(
+	s.otpSessions.Add(
 		refID,
 		otpSession{
 			userID:  user.ID,
@@ -186,11 +186,11 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	var err error
 	switch {
 	case req.Username != "":
-		user, err = s.Repo.FindUserByChannel(ctx, channelUsername, req.Username)
+		user, err = s.repo.FindUserByChannel(ctx, channelUsername, req.Username)
 	case req.Email != "":
-		user, err = s.Repo.FindUserByChannel(ctx, channelEmail, req.Email)
+		user, err = s.repo.FindUserByChannel(ctx, channelEmail, req.Email)
 	case req.Phone != "":
-		user, err = s.Repo.FindUserByChannel(ctx, channelPhone, req.Phone)
+		user, err = s.repo.FindUserByChannel(ctx, channelPhone, req.Phone)
 	default:
 		return loginResult{}, errMissingIdentifierLogin
 	}
@@ -226,7 +226,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		// if it is TOTP
 		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
 
-			s.OTPSessions.Add( // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
+			s.otpSessions.Add( // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
 				refID,
 				otpSession{
 					userID:  user.ID,
@@ -258,7 +258,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 			return loginResult{}, err
 		}
 		// Adding new otp session to our cache
-		s.OTPSessions.Add(
+		s.otpSessions.Add(
 			refID,
 			otpSession{
 				userID:  user.ID,
@@ -285,7 +285,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	refreshToken := token.GenerateRefreshToken()
 
 	// Add a new user session to the database
-	err = s.Repo.CreateSession(
+	err = s.repo.CreateSession(
 		ctx,
 		newUserSession(
 			jwtID,                               // jwtID
@@ -329,7 +329,7 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 		case purposeResetPass:
 			emailSendRequest = email.NewSendRequest(target, email.SubjectResetPassword, email.HtmlResetPasswordOTP.Format(otp))
 		}
-		err = s.Email.Send(emailSendRequest)
+		err = s.email.Send(emailSendRequest)
 	case channelPhone:
 		// update: we can never send otp to phone numbers as its not possible as of now to afford sms service or telegram's gateway service.
 		// will not change the code but anyone signing up on the backend with a phone will simply not receive an otp and will not be able to continue.
@@ -362,7 +362,7 @@ var (
 // Verifies the two factor / verification / reset password OTP and generates a token / reset pass id for the user.
 func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd requestMetadata) (verifyResult, error) { // token, error
 	// retrieve the session from the reference id in the request
-	session, expiresAt, ok := s.OTPSessions.Get(req.ReferenceID)
+	session, expiresAt, ok := s.otpSessions.Get(req.ReferenceID)
 	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
 		return verifyResult{}, errRefIDNotFound
 	}
@@ -380,9 +380,9 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		return verifyResult{}, errIncorrectOTP
 	}
 	// if the otp matches then we remove the reference id from our map immediately
-	s.OTPSessions.Delete(req.ReferenceID)
+	s.otpSessions.Delete(req.ReferenceID)
 	// find the user
-	user, err := s.Repo.FindUserByID(ctx, session.userID)
+	user, err := s.repo.FindUserByID(ctx, session.userID)
 	if err != nil {
 		return verifyResult{}, err
 	}
@@ -394,13 +394,13 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	switch session.purpose {
 	case purposeRegistration: // if registration we need to set user status to verified in the database
 		user.Status = statusVerified
-		err = s.Repo.UpdateUser(ctx, user.ID, user)
+		err = s.repo.UpdateUser(ctx, user.ID, user)
 		if err != nil {
 			return verifyResult{}, err
 		}
 	case purposeResetPass:
 		refID := token.GenerateResetSessionID()
-		s.ResetSessions.Add(
+		s.resetSessions.Add(
 			refID,
 			resetSession{
 				userID: user.ID,
@@ -422,7 +422,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	refreshToken := token.GenerateRefreshToken()
 
 	// Add a new user session to the database
-	err = s.Repo.CreateSession(
+	err = s.repo.CreateSession(
 		ctx,
 		newUserSession(
 			jwtID,                               // jwtID
@@ -457,7 +457,7 @@ var (
 
 func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResult, error) {
 	// Do a db lookup with the refresh token's hash
-	userSesh, err := s.Repo.FindSessionByToken(ctx, token.GenerateMD5Hash(req.RefreshToken))
+	userSesh, err := s.repo.FindSessionByToken(ctx, token.GenerateMD5Hash(req.RefreshToken))
 	if err != nil {
 		return refreshResult{}, err // db error
 	}
@@ -468,7 +468,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	// Check if the session has expired
 	if userSesh.ExpiresAt.Before(time.Now()) {
 		// Deleting the user session if it is expired, the user will have to create a new session again by logging in.
-		err = s.Repo.DeleteSession(ctx, userSesh.ID)
+		err = s.repo.DeleteSession(ctx, userSesh.ID)
 		if err != nil {
 			return refreshResult{}, err // db error
 		}
@@ -483,7 +483,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	refreshToken := token.GenerateRefreshToken()
 
 	// update the session with the new refresh token and also update the expires at field to the max capacity again.
-	err = s.Repo.UpdateSessionToken(
+	err = s.repo.UpdateSessionToken(
 		ctx,
 		userSesh.ID,
 		token.GenerateMD5Hash(refreshToken), // we store a hash of the token
@@ -504,7 +504,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 
 func (s *Service) logout(ctx context.Context, accessTokenJwt jwt.AccessToken) error {
 	// Remove user session from database
-	err := s.Repo.DeleteSessionByJwtID(ctx, accessTokenJwt.JwtID)
+	err := s.repo.DeleteSessionByJwtID(ctx, accessTokenJwt.JwtID)
 	if err != nil {
 		return err // db error
 	}
@@ -534,7 +534,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 		return forgotPasswordResult{}, errMissingIdentifier
 	}
 	// Find the user in the database
-	user, err := s.Repo.FindUserByChannel(ctx, channel, target)
+	user, err := s.repo.FindUserByChannel(ctx, channel, target)
 	if err != nil {
 		return forgotPasswordResult{}, err // db error
 	}
@@ -546,7 +546,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	otp, err := s.sendOTP(channel, purposeResetPass, target)
 	// Generate a otp session id and add it to our ttlcache
 	refID := token.GenerateOTPSessionID()
-	s.OTPSessions.Add(
+	s.otpSessions.Add(
 		refID,
 		otpSession{
 			userID:  user.ID,
@@ -572,7 +572,7 @@ var (
 
 func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) error {
 	// Retrieve the reset session from the cache using the reference id from the request data
-	session, expiresAt, ok := s.ResetSessions.Get(req.ReferenceID)
+	session, expiresAt, ok := s.resetSessions.Get(req.ReferenceID)
 	if !ok {
 		return errResetSessionNotFound
 	}
@@ -582,11 +582,11 @@ func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) e
 	}
 
 	// else we proceed and update the user's password, we of course hash it.
-	err := s.Repo.UpdateUser(ctx, session.userID, &user{PasswordHash: password.Hash(req.NewPassword)})
+	err := s.repo.UpdateUser(ctx, session.userID, &user{PasswordHash: password.Hash(req.NewPassword)})
 	if err != nil {
 		return err // db error
 	}
 	// delete the session to make sure this reference id cannot be reused
-	s.ResetSessions.Delete(req.ReferenceID)
+	s.resetSessions.Delete(req.ReferenceID)
 	return nil
 }
