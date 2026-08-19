@@ -20,6 +20,7 @@ func NewPostgresRepository() PostgresRepository {
 	return PostgresRepository{}
 }
 
+// users table
 func (pg PostgresRepository) findUser(ctx context.Context, one string, two any) (*user, error){
 	rows, err:=pg.Db.Query(ctx, `SELECT * FROM users WHERE $1 = $2`,one,two)
 	if err!=nil{
@@ -47,6 +48,7 @@ func (pg PostgresRepository) UpdateUser(ctx context.Context, userID uuid.UUID, u
 }
 
 // user_sessions table{}
+
 func (pg PostgresRepository) FindSessionByToken(ctx context.Context, tokenHash string) (*userSession, error) {
 	return nil, nil
 }

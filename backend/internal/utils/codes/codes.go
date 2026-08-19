@@ -15,7 +15,7 @@ const (
 	MethodNotAllowed    Code = "METHOD_NOT_ALLOWED"
 	InternalServerError Code = "INTERNAL_SERVER_ERROR"
 	Unauthorized        Code = "UNAUTHORIZED"
-	Timeout Code = "TIMEOUT"
+	Timeout             Code = "TIMEOUT"
 
 	JSONInvalid Code = "JSON_INVALID"
 	EOF         Code = "EOF"
@@ -25,12 +25,12 @@ const (
 	IdentifierMissing  Code = "IDENTIFIER_MISSING"
 	CredentialsInvalid Code = "CREDENTIALS_INVALID"
 
-	UserNotFound     Code = "USER_NOT_FOUND"
-	UserBanned       Code = "USER_BANNED"
-	UserUnverified   Code = "USER_UNVERIFIED"
-	UserAlreadyExists       Code = "USER_ALREADY_EXISTS"
-	UserNotOldEnough Code = "USER_NOT_OLD_ENOUGH"
-	UserTooOld       Code = "USER_TOO_OLD"
+	UserNotFound      Code = "USER_NOT_FOUND"
+	UserBanned        Code = "USER_BANNED"
+	UserUnverified    Code = "USER_UNVERIFIED"
+	UserAlreadyExists Code = "USER_ALREADY_EXISTS"
+	UserNotOldEnough  Code = "USER_NOT_OLD_ENOUGH"
+	UserTooOld        Code = "USER_TOO_OLD"
 
 	UsernameAlreadyExists Code = "USERNAME_ALREADY_EXISTS"
 
