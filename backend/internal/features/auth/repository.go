@@ -2,22 +2,31 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-type Repository interface {
+type repository interface {
 	// users table
-	FindUserByID(ctx context.Context, userID uuid.UUID) (*user, error)
-	FindUserByChannel(ctx context.Context, channel authChannel, target string) (*user, error)
-	CreateUser(ctx context.Context, user *user) error
-	UpdateUser(ctx context.Context, userID uuid.UUID, updatedUser *user) error
+	findUserByID(ctx context.Context, userID uuid.UUID) (*user, error)
+	findUserByChannel(ctx context.Context, channel authChannel, target string) (*user, error)
+	createUser(ctx context.Context, user *user) (uuid.UUID, error)
+	updateUserPassword(ctx context.Context, userID uuid.UUID, passwordHash string) error
+	updateUserStatus(ctx context.Context, userID uuid.UUID, status accountStatus) error
+	updateUser2FA(ctx context.Context, userID uuid.UUID, twoFAs twoFAs) error
+
 
 	// user_sessions table
-	FindSessionByToken(ctx context.Context, tokenHash string) (*userSession, error)
-	CreateSession(ctx context.Context, session *userSession) error
-	UpdateSessionToken(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error
-	DeleteSession(ctx context.Context, id uuid.UUID) error
-	DeleteSessionByJwtID(ctx context.Context, jwtID uuid.UUID) error
+	findSessionByToken(ctx context.Context, tokenHash string) (*userSession, error)
+	createSession(ctx context.Context, session *userSession) error
+	updateSessionToken(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error
+	deleteSessionByID(ctx context.Context, id uuid.UUID) error
+	deleteSessionByJwtID(ctx context.Context, jwtID uuid.UUID) error
 }
+
+var (
+	errNoResults      = errors.New("no results found")
+	errTooManyResults = errors.New("too many results")
+)

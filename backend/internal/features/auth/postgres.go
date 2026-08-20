@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,54 +22,117 @@ func NewPostgresRepository() PostgresRepository {
 }
 
 // users table
-func (pg PostgresRepository) findUser(ctx context.Context, one string, two any) (*user, error){
-	rows, err:=pg.Db.Query(ctx, `SELECT * FROM users WHERE $1 = $2`,one,two)
-	if err!=nil{
+func (pg PostgresRepository) findUser(ctx context.Context, one string, two any) (*user, error) {
+	rows, err := pg.Db.Query(ctx, `SELECT * FROM users WHERE $1 = $2`, one, two)
+	if err != nil {
 		return nil, pg.handleError(err)
 	}
-	user, err:=pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[user])
-	if err!=nil{
+	defer rows.Close()
+	user, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[user])
+	if err != nil {
 		return nil, pg.handleError(err)
 	}
 	return &user, nil
 }
 
-func (pg PostgresRepository) FindUserByID(ctx context.Context, userID uuid.UUID) (*user, error) {
+func (pg PostgresRepository) findUserByID(ctx context.Context, userID uuid.UUID) (*user, error) {
 	return pg.findUser(ctx, "id", userID)
 }
-func (pg PostgresRepository) FindUserByChannel(ctx context.Context, channel authChannel, target string) (*user, error) {
+func (pg PostgresRepository) findUserByChannel(ctx context.Context, channel authChannel, target string) (*user, error) {
 	return pg.findUser(ctx, string(channel), target)
 }
-// todo
-func (pg PostgresRepository) CreateUser(ctx context.Context, user *user) error {
+
+func (pg PostgresRepository) createUser(ctx context.Context, user *user) (uuid.UUID, error) {
+	query := `INSERT INTO users (username, email, phone, totp_secret_key, password_hash, dob, status, two_fas, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`
+	var pgID pgtype.UUID
+	err := pg.Db.QueryRow(ctx, query, user.Username, user.Email, user.Phone, user.TotpSecretKey, user.PasswordHash, user.Dob, user.Status, user.TwoFAs, user.CreatedAt, user.UpdatedAt).Scan(&pgID)
+	if err != nil {
+		return uuid.UUID{}, pg.handleError(err)
+	}
+	return uuid.UUID(pgID.Bytes), nil
+}
+
+func (pg PostgresRepository) updateUser(ctx context.Context, id uuid.UUID, one string, two any) error {
+	query := `UPDATE users SET $1 = $2 WHERE id = $3`
+	cmdTag, err := pg.Db.Exec(ctx, query, one, two, id)
+	if err != nil {
+		return pg.handleError(err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errNoResults
+	}
 	return nil
 }
-func (pg PostgresRepository) UpdateUser(ctx context.Context, userID uuid.UUID, updatedUser *user) error {
-	return nil
+func (pg PostgresRepository) updateUserPassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+	return pg.updateUser(ctx, userID, "password_hash", passwordHash)
+}
+func (pg PostgresRepository) updateUserStatus(ctx context.Context, userID uuid.UUID, status accountStatus) error {
+	return pg.updateUser(ctx, userID, "status", status)
+}
+func (pg PostgresRepository) updateUser2FA(ctx context.Context, userID uuid.UUID, twoFAs twoFAs) error {
+	return pg.updateUser(ctx, userID, "two_fas", twoFAs)
 }
 
 // user_sessions table{}
 
-func (pg PostgresRepository) FindSessionByToken(ctx context.Context, tokenHash string) (*userSession, error) {
-	return nil, nil
+func (pg PostgresRepository) findSession(ctx context.Context, one string, two any) (*userSession, error) {
+	rows, err := pg.Db.Query(ctx, `SELECT * FROM user_sessions WHERE $1 = $2`, one, two)
+	if err != nil {
+		return nil, pg.handleError(err)
+	}
+	defer rows.Close()
+	userSesh, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[userSession])
+	if err != nil {
+		return nil, pg.handleError(err)
+	}
+	return &userSesh, nil
 }
-func (pg PostgresRepository) CreateSession(ctx context.Context, session *userSession) error {
-	return nil
+
+func (pg PostgresRepository) findSessionByToken(ctx context.Context, tokenHash string) (*userSession, error) {
+	return pg.findSession(ctx, "token_hash", tokenHash)
 }
-func (pg PostgresRepository) UpdateSessionToken(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error {
-	return nil
-}
-func (pg PostgresRepository) DeleteSession(ctx context.Context, id uuid.UUID) error {
-	return nil
-}
-func (pg PostgresRepository) DeleteSessionByJwtID(ctx context.Context, jwtID uuid.UUID) error {
+
+func (pg PostgresRepository) createSession(ctx context.Context, session *userSession) error {
+	query := `INSERT INTO user_sessions (jwt_id, token_hash, user_id, ip_address, os_name, browser_name, device_type, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+	_, err := pg.Db.Exec(ctx, query, session.JwtID, session.TokenHash, session.UserID, session.IPAddress, session.OSName, session.BrowserName, session.DeviceType, session.ExpiresAt, session.DeviceType)
+	if err != nil {
+		return pg.handleError(err)
+	}
 	return nil
 }
 
-var (
-	errNoResults      = errors.New("no results found")
-	errTooManyResults = errors.New("too many results")
-)
+func (pg PostgresRepository) updateSession(ctx context.Context, id uuid.UUID, one string, two any) error {
+	query := `UPDATE user_sessions SET $1 = $2 WHERE id = $3`
+	cmdTag, err := pg.Db.Exec(ctx, query, one, two, id)
+	if err != nil {
+		return pg.handleError(err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errNoResults
+	}
+	return nil
+}
+
+func (pg PostgresRepository) updateSessionToken(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error {
+	return pg.updateSession(ctx, id, "token_hash", tokenHash)
+}
+func (pg PostgresRepository) deleteSession(ctx context.Context, one string, two any) error {
+	query := `DELETE FROM user_sessions WHERE $1 = $2`
+	cmdTag, err := pg.Db.Exec(ctx, query, one, two)
+	if err != nil {
+		return pg.handleError(err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errNoResults
+	}
+	return nil
+}
+func (pg PostgresRepository) deleteSessionByID(ctx context.Context, id uuid.UUID) error {
+	return pg.deleteSession(ctx, "id", id)
+}
+func (pg PostgresRepository) deleteSessionByJwtID(ctx context.Context, jwtID uuid.UUID) error {
+	return pg.deleteSession(ctx, "id", jwtID)
+}
 
 func (pg PostgresRepository) handleError(err error) error {
 	var pgErr *pgconn.PgError
@@ -81,9 +145,9 @@ func (pg PostgresRepository) handleError(err error) error {
 		return context.DeadlineExceeded // unwrap, we need to only return unwrapped errors if the handler is not going to raise a internal server error with them
 	case errors.Is(err, context.Canceled):
 		return context.Canceled // unwrap
-	case errors.Is(err, pgErr):
-		return fmt.Errorf("repository: sql error, %w", err) // we let the error bubble to the handler where it will eventually be turned into a internal error
+	case errors.As(err, &pgErr):
+		return fmt.Errorf("repository: sql error, %w, Code: %s", err, pgErr.Code) // we let the error bubble to the handler where it will eventually be turned into a internal error
 	default:
-		return fmt.Errorf("repository: unknown error, %w", err) 
+		return fmt.Errorf("repository: unknown error, %w", err)
 	}
 }
