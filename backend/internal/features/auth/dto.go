@@ -18,7 +18,7 @@ type user struct { // not complete, will do after i setup database properly
 	Dob           string    `db:"dob"`
 
 	Status accountStatus `db:"status"`  // account status which can either be unverified, verified or banned.
-	TwoFAs []authChannel `db:"two_fas"` // slice of 2FA identifiers, if nil means twoFa not enabled, else its enabled on whichever identifiers are in the slice
+	TwoFAs twoFAs        `db:"two_fas"` // slice of auth channels, if nil means twoFa not enabled, else its enabled on whichever identifiers are in the slice
 
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`

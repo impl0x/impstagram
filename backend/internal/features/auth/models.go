@@ -44,6 +44,8 @@ const (
 	purposeResetPass    authPurpose = "reset_password"
 )
 
+type twoFAs []authChannel
+
 // ? ----+-----+-----Common-----+-----+-----
 
 // Some service functions require this metadata for session storage
