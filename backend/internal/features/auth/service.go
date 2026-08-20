@@ -20,7 +20,7 @@ import (
 // - Reset always means reset password
 
 type Service struct {
-	repo  Repository
+	repo  repository
 	email email.Client
 
 	mu            sync.RWMutex                          // mutex for the OTPSessions
@@ -28,7 +28,7 @@ type Service struct {
 	resetSessions *ttlcache.Cache[string, resetSession] // string is reference id
 }
 
-func NewService(repo Repository, emailClient email.Client) *Service {
+func NewService(repo repository, emailClient email.Client) *Service {
 	return &Service{
 		email:         emailClient,
 		repo:          repo,
@@ -100,7 +100,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 
 	// Finding in database
-	user, err = s.repo.FindUserByChannel(ctx, channel, target)
+	user, err = s.repo.findUserByChannel(ctx, channel, target)
 
 	// if err != nil {
 	// 	return registerResult{}, err // ignoring database level errors as of now.
@@ -111,14 +111,14 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 
 	// checks if the username already exists because usernames are unique
-	sameUsernameUser, err := s.repo.FindUserByChannel(ctx, channelUsername, req.Username) // assuming req.Username is validated in validator
+	sameUsernameUser, err := s.repo.findUserByChannel(ctx, channelUsername, req.Username) // assuming req.Username is validated in validator
 	if sameUsernameUser != nil || err == nil {                                            // todo: handle db level errors
 		return registerResult{}, errUsernameAlreadyExists
 	}
 
 	// Now we hash the user's password and create a new user in the database
 	user = newUser(req, password.Hash(req.Password)) // returns a unverified user by default
-	err = s.repo.CreateUser(ctx, user)               // we create a user before sending otp
+	user.ID, err = s.repo.createUser(ctx, user)      // we create a user before sending otp
 	if err != nil {
 		return registerResult{}, err
 	}
@@ -171,10 +171,10 @@ type loginResult struct {
 // Login sentinel errors
 var (
 	errMissingIdentifierLogin = errors.New("missing identifier for login")
-	errUserNotFoundLogin = errors.New("user not found")
-	errIncorrectPassword = errors.New("incorrect password")
-	errUserBanned        = errors.New("user banned")
-	errUserUnverified    = errors.New("user unverified")
+	errUserNotFoundLogin      = errors.New("user not found")
+	errIncorrectPassword      = errors.New("incorrect password")
+	errUserBanned             = errors.New("user banned")
+	errUserUnverified         = errors.New("user unverified")
 )
 
 // Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint.
@@ -186,11 +186,11 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	var err error
 	switch {
 	case req.Username != "":
-		user, err = s.repo.FindUserByChannel(ctx, channelUsername, req.Username)
+		user, err = s.repo.findUserByChannel(ctx, channelUsername, req.Username)
 	case req.Email != "":
-		user, err = s.repo.FindUserByChannel(ctx, channelEmail, req.Email)
+		user, err = s.repo.findUserByChannel(ctx, channelEmail, req.Email)
 	case req.Phone != "":
-		user, err = s.repo.FindUserByChannel(ctx, channelPhone, req.Phone)
+		user, err = s.repo.findUserByChannel(ctx, channelPhone, req.Phone)
 	default:
 		return loginResult{}, errMissingIdentifierLogin
 	}
@@ -285,7 +285,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	refreshToken := token.GenerateRefreshToken()
 
 	// Add a new user session to the database
-	err = s.repo.CreateSession(
+	err = s.repo.createSession(
 		ctx,
 		newUserSession(
 			jwtID,                               // jwtID
@@ -382,7 +382,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	// if the otp matches then we remove the reference id from our map immediately
 	s.otpSessions.Delete(req.ReferenceID)
 	// find the user
-	user, err := s.repo.FindUserByID(ctx, session.userID)
+	user, err := s.repo.findUserByID(ctx, session.userID)
 	if err != nil {
 		return verifyResult{}, err
 	}
@@ -393,8 +393,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	// Switch on the purpose to do purpose related tasks
 	switch session.purpose {
 	case purposeRegistration: // if registration we need to set user status to verified in the database
-		user.Status = statusVerified
-		err = s.repo.UpdateUser(ctx, user.ID, user)
+		err = s.repo.updateUserStatus(ctx, user.ID, statusVerified)
 		if err != nil {
 			return verifyResult{}, err
 		}
@@ -422,7 +421,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	refreshToken := token.GenerateRefreshToken()
 
 	// Add a new user session to the database
-	err = s.repo.CreateSession(
+	err = s.repo.createSession(
 		ctx,
 		newUserSession(
 			jwtID,                               // jwtID
@@ -457,7 +456,7 @@ var (
 
 func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResult, error) {
 	// Do a db lookup with the refresh token's hash
-	userSesh, err := s.repo.FindSessionByToken(ctx, token.GenerateMD5Hash(req.RefreshToken))
+	userSesh, err := s.repo.findSessionByToken(ctx, token.GenerateMD5Hash(req.RefreshToken))
 	if err != nil {
 		return refreshResult{}, err // db error
 	}
@@ -468,7 +467,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	// Check if the session has expired
 	if userSesh.ExpiresAt.Before(time.Now()) {
 		// Deleting the user session if it is expired, the user will have to create a new session again by logging in.
-		err = s.repo.DeleteSession(ctx, userSesh.ID)
+		err = s.repo.deleteSessionByID(ctx, userSesh.ID)
 		if err != nil {
 			return refreshResult{}, err // db error
 		}
@@ -483,7 +482,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	refreshToken := token.GenerateRefreshToken()
 
 	// update the session with the new refresh token and also update the expires at field to the max capacity again.
-	err = s.repo.UpdateSessionToken(
+	err = s.repo.updateSessionToken(
 		ctx,
 		userSesh.ID,
 		token.GenerateMD5Hash(refreshToken), // we store a hash of the token
@@ -504,7 +503,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 
 func (s *Service) logout(ctx context.Context, accessTokenJwt jwt.AccessToken) error {
 	// Remove user session from database
-	err := s.repo.DeleteSessionByJwtID(ctx, accessTokenJwt.JwtID)
+	err := s.repo.deleteSessionByJwtID(ctx, accessTokenJwt.JwtID)
 	if err != nil {
 		return err // db error
 	}
@@ -534,7 +533,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 		return forgotPasswordResult{}, errMissingIdentifier
 	}
 	// Find the user in the database
-	user, err := s.repo.FindUserByChannel(ctx, channel, target)
+	user, err := s.repo.findUserByChannel(ctx, channel, target)
 	if err != nil {
 		return forgotPasswordResult{}, err // db error
 	}
@@ -582,7 +581,7 @@ func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) e
 	}
 
 	// else we proceed and update the user's password, we of course hash it.
-	err := s.repo.UpdateUser(ctx, session.userID, &user{PasswordHash: password.Hash(req.NewPassword)})
+	err := s.repo.updateUserPassword(ctx, session.userID, password.Hash(req.NewPassword))
 	if err != nil {
 		return err // db error
 	}

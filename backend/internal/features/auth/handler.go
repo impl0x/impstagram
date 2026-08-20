@@ -249,7 +249,7 @@ func (h Handler) handleError(c *mo.Context, err error) (cJsonError error) { // r
 		sc, rc, em = http.StatusForbidden, codes.UsernameAlreadyExists, "This username is already registered, please try a different username"
 	//? dob errors
 	case dob.ErrImpossibleDob, dob.ErrInvalidDobString:
-		sc, rc, em = http.StatusBadRequest, codes.ValidationError, err.Error()
+		sc, rc, em = http.StatusBadRequest, codes.ValidationError, "Invalid date of birth"
 	//? login errors
 	case errMissingIdentifierLogin:
 		sc, rc, em = http.StatusBadRequest, codes.IdentifierMissing, "Need at least email, phone or username to log in"
