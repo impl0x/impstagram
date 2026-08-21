@@ -8,7 +8,6 @@ import (
 	"backend/internal/pkg/token" // used to generate cryptographically random IDs and OTPs
 	"backend/internal/pkg/ttlcache"
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -52,7 +51,7 @@ type resetSession struct {
 	userID uuid.UUID
 }
 
-// ? ----+-----+-----Helper Functions for token generation-----+-----+-----
+// ? ----+-----+-----Helper Wrapper Functions for token generation-----+-----+-----
 
 // generates a new random string with the prefix [rulePrefixRefreshToken] and size [ruleSizeRefreshToken]
 func generateRefreshToken() string {
@@ -76,15 +75,6 @@ type registerResult struct {
 	referenceID string      // Used to link the upcoming OTP request
 	channel     authChannel // the identifier/channel used to register, eg: email/phone
 }
-
-// Registration sentinel errors
-var (
-	errMissingIdentifier     = errors.New("missing identifier")
-	errAlreadyExistingUser   = errors.New("user already exists")
-	errNotOldEnough          = errors.New("user not old enough")
-	errTooOld                = errors.New("user too old")
-	errUsernameAlreadyExists = errors.New("username already exists")
-)
 
 // Registers a new user
 func (s *Service) register(ctx context.Context, req registerRequest) (registerResult, error) {
@@ -185,15 +175,6 @@ type loginResult struct {
 	referenceID  string // Used to link the upcoming OTP request
 }
 
-// Login sentinel errors
-var (
-	errMissingIdentifierLogin = errors.New("missing identifier for login")
-	errUserNotFoundLogin      = errors.New("user not found")
-	errIncorrectPassword      = errors.New("incorrect password")
-	errUserBanned             = errors.New("user banned")
-	errUserUnverified         = errors.New("user unverified")
-)
-
 // Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint.
 //
 // rmd requestMetadata is required for userSession storage on successful login
@@ -217,7 +198,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	// }
 	// todo : fix db error and user not found error
 	if user == nil {
-		return loginResult{}, errUserNotFoundLogin
+		return loginResult{}, errCredentialsInvalid
 	}
 
 	// if user is found in database we compare the passwords and the password hash in the database to see if the user has the correct password
@@ -226,7 +207,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		return loginResult{}, err
 	}
 	if !ok {
-		return loginResult{}, errIncorrectPassword
+		return loginResult{}, errCredentialsInvalid
 	}
 	// check if user is banned then we return immediately not allowing a login, else if unverified, in which case we trigger a resend otp request
 	switch user.Status {
@@ -322,6 +303,79 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	}, nil
 }
 
+// ? ----+-----+-----Forgot password-----+-----+-----
+
+type forgotPasswordResult struct {
+	channel     authChannel
+	referenceID string
+}
+
+func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest) (forgotPasswordResult, error) {
+	// Figure out what identifier/channel the user sent us and store those into variables
+	var channel authChannel
+	var target string
+	if req.Email != "" {
+		channel = channelEmail
+		target = req.Email
+	} else if req.Phone != "" {
+		channel = channelPhone
+		target = req.Phone
+	} else {
+		return forgotPasswordResult{}, errMissingIdentifier
+	}
+	// Find the user in the database
+	user, err := s.repo.findUserByChannel(ctx, channel, target)
+	if err != nil {
+		return forgotPasswordResult{}, err // db error
+	}
+	if user == nil {
+		return forgotPasswordResult{}, errUserNotFound
+	}
+
+	// Send an otp to the channel and target our user sent us
+	otp, err := s.sendOTP(channel, purposeResetPass, target)
+	// generate a otp session id and add it to our ttlcache
+	refID := generateOTPSessionID()
+	s.otpSessions.Add(
+		refID,
+		otpSession{
+			userID:  user.ID,
+			channel: channel,
+			purpose: purposeResetPass,
+			otp:     otp,
+		},
+		time.Now().Add(ruleExpiryTimeOTP),
+	)
+	// send the session id as reference to the user
+	return forgotPasswordResult{
+		channel:     channel,
+		referenceID: refID,
+	}, nil
+}
+
+// ? ----+-----+-----Reset password-----+-----+-----
+
+func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) error {
+	// Retrieve the reset session from the cache using the reference id from the request data
+	session, expiresAt, ok := s.resetSessions.Get(req.ReferenceID)
+	if !ok {
+		return errResetSessionNotFound
+	}
+	// if the reset request expired we return error
+	if expiresAt.Before(time.Now()) {
+		return errResetSessionExpired
+	}
+
+	// else we proceed and update the user's password, we of course hash it.
+	err := s.repo.updateUserPassword(ctx, session.userID, password.Hash(req.NewPassword))
+	if err != nil {
+		return err // db error
+	}
+	// delete the session to make sure this reference id cannot be reused
+	s.resetSessions.Delete(req.ReferenceID)
+	return nil
+}
+
 // ? [HELPER] ----+-----+-----Send otp-----+-----+-----
 
 // SendOTP sends a one-time password challenge to a user destination.
@@ -369,13 +423,6 @@ type verifyResult struct {
 	referenceID    string // if this verify request was for a reset password we return a referenceID instead
 }
 
-var (
-	errRefIDNotFound = errors.New("reference ID not found")
-	errOTPExpired    = errors.New("otp expired")
-	errIncorrectOTP  = errors.New("incorrect otp")
-	errUserNotFound  = errors.New("user not found")
-)
-
 // Verifies the two factor / verification / reset password OTP and generates a token / reset pass id for the user.
 func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd requestMetadata) (verifyResult, error) { // token, error
 	// retrieve the session from the reference id in the request
@@ -401,7 +448,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	// find the user
 	user, err := s.repo.findUserByID(ctx, session.userID)
 	if err != nil {
-		if err == errNoResults {
+		if err == errRepoNoResults {
 			return verifyResult{}, errUserNotFound
 		}
 		return verifyResult{}, err
@@ -469,11 +516,6 @@ type refreshResult struct {
 	refreshToken string
 }
 
-var (
-	errInvalidRefreshToken = errors.New("invalid refresh token")
-	errExpiredRefreshToken = errors.New("expired refresh token")
-)
-
 func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResult, error) {
 	// Do a db lookup with the refresh token's hash
 	userSesh, err := s.repo.findSessionByToken(ctx, token.GenerateMD5Hash(req.RefreshToken))
@@ -529,83 +571,5 @@ func (s *Service) logout(ctx context.Context, accessTokenJwt jwt.AccessToken) er
 	}
 	// Add the jwt token id to the block list so this gets rejected by the auth middleware
 	jwtTokenBlockList.Add(accessTokenJwt.JwtID, struct{}{}, accessTokenJwt.ExpiresAt)
-	return nil
-}
-
-// ? ----+-----+-----Forgot password-----+-----+-----
-
-type forgotPasswordResult struct {
-	channel     authChannel
-	referenceID string
-}
-
-func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest) (forgotPasswordResult, error) {
-	// Figure out what identifier/channel the user sent us and store those into variables
-	var channel authChannel
-	var target string
-	if req.Email != "" {
-		channel = channelEmail
-		target = req.Email
-	} else if req.Phone != "" {
-		channel = channelPhone
-		target = req.Phone
-	} else {
-		return forgotPasswordResult{}, errMissingIdentifier
-	}
-	// Find the user in the database
-	user, err := s.repo.findUserByChannel(ctx, channel, target)
-	if err != nil {
-		return forgotPasswordResult{}, err // db error
-	}
-	if user == nil {
-		return forgotPasswordResult{}, errUserNotFound
-	}
-
-	// Send an otp to the channel and target our user sent us
-	otp, err := s.sendOTP(channel, purposeResetPass, target)
-	// generate a otp session id and add it to our ttlcache
-	refID := generateOTPSessionID()
-	s.otpSessions.Add(
-		refID,
-		otpSession{
-			userID:  user.ID,
-			channel: channel,
-			purpose: purposeResetPass,
-			otp:     otp,
-		},
-		time.Now().Add(ruleExpiryTimeOTP),
-	)
-	// send the session id as reference to the user
-	return forgotPasswordResult{
-		channel:     channel,
-		referenceID: refID,
-	}, nil
-}
-
-// ? ----+-----+-----Reset password-----+-----+-----
-
-var (
-	errResetSessionNotFound = errors.New("reset session not found")
-	errResetSessionExpired  = errors.New("reset session expired")
-)
-
-func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) error {
-	// Retrieve the reset session from the cache using the reference id from the request data
-	session, expiresAt, ok := s.resetSessions.Get(req.ReferenceID)
-	if !ok {
-		return errResetSessionNotFound
-	}
-	// if the reset request expired we return error
-	if expiresAt.Before(time.Now()) {
-		return errResetSessionExpired
-	}
-
-	// else we proceed and update the user's password, we of course hash it.
-	err := s.repo.updateUserPassword(ctx, session.userID, password.Hash(req.NewPassword))
-	if err != nil {
-		return err // db error
-	}
-	// delete the session to make sure this reference id cannot be reused
-	s.resetSessions.Delete(req.ReferenceID)
 	return nil
 }
