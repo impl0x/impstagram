@@ -49,6 +49,8 @@ var (
 // target must be a valid json compatible struct, we decode and unmarshal the jwt payload into that struct
 //
 // validation is not done here, so validate it yourself
+//
+// only errors returned are ErrInvalidJWTToken, ErrIncorrectJWTToken
 func VerifyToken(token string, target any) error {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {

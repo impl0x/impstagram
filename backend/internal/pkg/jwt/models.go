@@ -33,6 +33,7 @@ func NewAccessTokenPayload(userID uuid.UUID, jwtID uuid.UUID, expiryTime time.Du
 	}
 }
 
+// Converts a AccessTokenPayload to a more usable AccessToken type with the values being converted to usable uuid.UUID and time.Time
 func (atp AccessTokenPayload) Convert() (AccessToken, error) {
 	userID, err := uuid.Parse(atp.UserID)
 	if err != nil {
