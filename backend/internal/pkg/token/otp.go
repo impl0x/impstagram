@@ -3,13 +3,22 @@ package token
 import (
 	"crypto/rand"
 	"fmt"
+	"math"
 	"math/big"
 )
 
-var otpLimit = big.NewInt(1000000) // declaring once to avoid heap allocation on every call
+type OtpGenerator struct{
+	otpLimit *big.Int
+}
 
-func GenerateOTP() (string, error) {
-	num, err := rand.Int(rand.Reader, otpLimit)
+func NewOtpGenerator(otpLength int) OtpGenerator {
+	return OtpGenerator{
+		big.NewInt(int64(math.Pow(10,float64(otpLength)))),
+	}
+}
+
+func (og OtpGenerator) GenerateOTP() (string, error) {
+	num, err := rand.Int(rand.Reader, og.otpLimit)
 	if err != nil {
 		return "", err
 	}
