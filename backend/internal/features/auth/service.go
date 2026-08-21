@@ -281,7 +281,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 
 	// generate tokens
 	jwtID := uuid.New()
-	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID))
+	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID, ruleExpiryTimeAccessToken))
 	if err != nil {
 		panic(err)
 	}
@@ -331,7 +331,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	// Find the user in the database
 	user, err := s.repo.findUserByChannel(ctx, channel, target)
 	if err != nil {
-		if err==errRepoNoResults{
+		if err == errRepoNoResults {
 			return forgotPasswordResult{}, errUserNotFound
 		}
 		return forgotPasswordResult{}, err // db error
@@ -374,10 +374,10 @@ func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) e
 	// else we proceed and update the user's password, we of course hash it.
 	err := s.repo.updateUserPassword(ctx, session.userID, password.Hash(req.NewPassword))
 	if err != nil {
-		if err==errRepoNoResults{
+		if err == errRepoNoResults {
 			return errUserNotFound
 		}
-		return err 
+		return err
 	}
 	// delete the session to make sure this reference id cannot be reused
 	s.resetSessions.Delete(req.ReferenceID)
@@ -486,7 +486,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 
 	// generate new tokens and return them to the user for future usage
 	jwtID := uuid.New()
-	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID))
+	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID, ruleExpiryTimeAccessToken))
 	if err != nil {
 		panic(err)
 	}
@@ -542,7 +542,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	}
 
 	// if everything is good we generate both new tokens, we do not have to regenerate and re update the jwt id as its unnecessary. it is a fixed value which is linked with the user session in database
-	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(userSesh.UserID, userSesh.JwtID))
+	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(userSesh.UserID, userSesh.JwtID, ruleExpiryTimeAccessToken))
 	if err != nil {
 		panic(err)
 	}

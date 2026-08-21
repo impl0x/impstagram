@@ -1,7 +1,6 @@
 package jwt
 
 import (
-	"backend/internal/config"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,17 +23,17 @@ type AccessToken struct {
 }
 
 // Generates a new payload with the Access Token expiry time in it using the [BasicPayload]
-func NewAccessTokenPayload(userID uuid.UUID, jwtID uuid.UUID) AccessTokenPayload {
+func NewAccessTokenPayload(userID uuid.UUID, jwtID uuid.UUID, expiryTime time.Duration) AccessTokenPayload {
 	now := time.Now()
 	return AccessTokenPayload{
 		UserID:    userID.String(),
 		IssuedAt:  uint(now.Unix()),
-		ExpiresAt: uint(now.Add(config.ExpiryTimeAccessToken).Unix()),
+		ExpiresAt: uint(now.Add(expiryTime).Unix()),
 		JwtID:     jwtID.String(),
 	}
 }
 
-func (atp *AccessTokenPayload) Convert() (AccessToken, error) {
+func (atp AccessTokenPayload) Convert() (AccessToken, error) {
 	userID, err := uuid.Parse(atp.UserID)
 	if err != nil {
 		return AccessToken{}, ErrInvalidJsonPayload
