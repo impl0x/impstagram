@@ -8,14 +8,14 @@ import (
 	"net/http"
 )
 
-type Sender interface{ // sender interface to mock http email client for testing
+type Sender interface { // sender interface to mock http email client for testing
 	Send(req SendRequest) error
 }
 
 type MockClient struct{}
 
 func (mc MockClient) Send(req SendRequest) error {
-	println("Mocking email send to "+req.To[0]+" from "+req.From)
+	println("Mocking email send to " + req.To[0] + " from " + req.From)
 	return nil
 }
 

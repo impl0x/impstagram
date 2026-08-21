@@ -7,13 +7,13 @@ import (
 	"math/big"
 )
 
-type OtpGenerator struct{
+type OtpGenerator struct {
 	otpLimit *big.Int
 }
 
 func NewOtpGenerator(otpLength int) OtpGenerator {
 	return OtpGenerator{
-		big.NewInt(int64(math.Pow(10,float64(otpLength)))),
+		big.NewInt(int64(math.Pow(10, float64(otpLength)))),
 	}
 }
 
@@ -27,5 +27,5 @@ func (og OtpGenerator) Generate() (string, error) {
 
 func GenerateTOTP(secretKey string) (string, error) {
 	// todo
-	return "",nil
+	return "", nil
 }

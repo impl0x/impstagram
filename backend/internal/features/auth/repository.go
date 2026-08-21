@@ -17,7 +17,6 @@ type repository interface {
 	updateUserStatus(ctx context.Context, userID uuid.UUID, status accountStatus) error
 	updateUser2FA(ctx context.Context, userID uuid.UUID, twoFAs twoFAs) error
 
-
 	// user_sessions table
 	findSessionByToken(ctx context.Context, tokenHash string) (*userSession, error)
 	createSession(ctx context.Context, session *userSession) error
