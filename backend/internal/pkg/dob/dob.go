@@ -11,9 +11,9 @@ var ErrInvalidDobString = errors.New("dob: Invalid date of birth string")
 var ErrImpossibleDob = errors.New("dob: Impossible date of birth")
 
 type Dob struct {
-	Year  uint16
-	Month uint8
-	Day   uint8
+	Year  int
+	Month int
+	Day   int
 }
 
 // year-month-date
@@ -26,11 +26,13 @@ func NewDobFromString(dobString string) (Dob, error) {
 		return Dob{}, ErrInvalidDobString
 	}
 
-	year, err := strconv.Atoi(dobSpl[0])
-	month, err := strconv.Atoi(dobSpl[1])
-	day, err := strconv.Atoi(dobSpl[2])
+	errs := make([]error, 0, 3)
+	var year, month, day int
+	year, errs[0] = strconv.Atoi(dobSpl[0])
+	month, errs[1] = strconv.Atoi(dobSpl[1])
+	day, errs[2] = strconv.Atoi(dobSpl[2])
 
-	if err != nil {
+	if len(errs) > 0 {
 		return Dob{}, ErrInvalidDobString
 	}
 
@@ -39,22 +41,22 @@ func NewDobFromString(dobString string) (Dob, error) {
 	}
 
 	dob := Dob{
-		Year:  uint16(year),
-		Month: uint8(month),
-		Day:   uint8(day),
+		Year:  year,
+		Month: month,
+		Day:   day,
 	}
 
 	return dob, nil
 }
 
 // Calculates age from dob instance
-func (d Dob) Age() uint16 {
+func (d Dob) Age() int {
 	now := time.Now()
-	year := uint16(now.Year())
-	day := uint8(now.Day())
-	month := uint8(now.Month())
+	year := now.Year()
+	day := now.Day()
+	month := int(now.Month())
 
-	age := uint16(year - d.Year)
+	age := year - d.Year
 	if month < d.Month ||
 		(month == d.Month && day < d.Day) {
 		age--
