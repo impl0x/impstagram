@@ -2,12 +2,13 @@ package utils
 
 // this file is mostly copied from the default error handler present in mo.
 import (
-	"backend/internal/pkg/responses"
-	"backend/internal/utils/codes"
+	"backend/internal/pkg/apperr"
+	"backend/internal/pkg/response"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/impl0x/mo"
@@ -16,8 +17,12 @@ import (
 )
 
 type validationErrorJson struct {
-	responses.Response
+	response.Response
 	Errors []validator.ValidationErrorJson `json:"errors,omitempty"`
+}
+
+func NewValidationErrorJson(response response.Response, err validator.GroupedValidationError) validationErrorJson {
+	return validationErrorJson{response, err.ToJsonStructList()}
 }
 
 // This function is given to the Mo framework which then bubbles all the errors here and we handle it here.
@@ -31,62 +36,64 @@ func CustomErrorHandler(c *mo.Context, err error) {
 		return
 	}
 	// if response was not written then we need to see if error exists and return appropriate messages
-
-	if errors.Is(err, context.Canceled) {
-		return
-	} else if errors.Is(err, context.DeadlineExceeded) {
-		c.JSON(http.StatusGatewayTimeout, responses.Error(codes.Timeout, "Request timed out"))
-		return
-	}
-	switch e := err.(type) {
-
-	case nil: // if no error was returned it means handlers probably returned a nil without writing a response
+	// declaring some types we will need for errors.As
+	var moHttpErr mo.HTTPError
+	var validationErr validator.GroupedValidationError
+	var jsonSyntaxErr *json.SyntaxError
+	var jsonUnmarshalErr *json.UnmarshalTypeError
+	var appErr apperr.AppErr
+	switch {
+	case errors.As(err, &appErr):
+		c.JSON(appErr.Kind.ToStatusCode(), response.Error(appErr.Code, appErr.Message))
+	case err == nil: // if no error was returned it means handlers probably returned a nil without writing a response
 		c.NoContent(http.StatusNoContent)
-	case mo.HTTPError: // the framework returned a http error, this happens only on routing errors and therefore only not_found and method_not_allowed
+	case errors.Is(err, context.Canceled):
+	case errors.Is(err, context.DeadlineExceeded):
+		c.JSON(http.StatusGatewayTimeout, response.Error(response.CodeTimeout, "Request timed out"))
+	case errors.As(err, &moHttpErr): // the framework returned a http error, this happens only on routing errors and therefore only not_found and method_not_allowed
 		// the error struct here is actually json compatible but we want to return errors in our schema so we will format it
-		var codeName codes.Code
-		switch e.StatusCode() {
+		var codeName response.Code
+		switch moHttpErr.StatusCode() {
 		case http.StatusNotFound:
-			codeName = codes.NotFound
+			codeName = response.CodeNotFound
 		case http.StatusMethodNotAllowed:
-			codeName = codes.MethodNotAllowed
+			codeName = response.CodeMethodNotAllowed
 		default:
-			codeName = codes.Unknown // impossible logical case unless framework changes and somehow returns a different [mo.HTTPError]
+			println("error handler: Unknown mo.HTTPError arrived, " + moHttpErr.Error())
+			codeName = response.CodeUnknown // impossible logical case unless framework changes and somehow returns a different [mo.HTTPError] or we use mo.NewHTTPError in our own code. which we won't
 		}
-		c.JSON(e.StatusCode(), responses.Error(codeName, http.StatusText(e.StatusCode()))) // e.Error returns the statusText of the statusCode if its a [HttpError]
-	case validator.GroupedValidationError:
+		c.JSON(moHttpErr.StatusCode(), response.Error(codeName, http.StatusText(moHttpErr.StatusCode()))) // e.Error returns the statusText of the statusCode if its a [HttpError]
+	case errors.As(err, &validationErr): // returned by validator package in mo
 		c.JSON(
 			http.StatusBadRequest,
 			validationErrorJson{
-				responses.Error(codes.ValidationError, "Validation error, missing data or incorrect data"),
-				e.ToJsonStructList(),
+				response.Error(response.CodeValidationError, "Validation error, missing data or incorrect data"),
+				validationErr.ToJsonStructList(),
 			},
 		)
-	case *json.SyntaxError:
-		c.JSON(http.StatusUnprocessableEntity, responses.Error(
-			codes.JSONInvalid,
-			fmt.Sprintf("JSON syntax error at offset %d", e.Offset),
+	case errors.As(err, &jsonSyntaxErr):
+		c.JSON(http.StatusUnprocessableEntity, response.Error(
+			response.CodeJSONInvalid,
+			fmt.Sprintf("JSON syntax error at offset %d", jsonSyntaxErr.Offset),
 		))
-	case *json.UnmarshalTypeError:
-		c.JSON(http.StatusExpectationFailed, responses.Error(
-			codes.ValidationError,
-			fmt.Sprintf("Wrong type used for field %s", e.Field),
+	case errors.As(err, &jsonUnmarshalErr):
+		c.JSON(http.StatusExpectationFailed, response.Error(
+			response.CodeValidationError,
+			fmt.Sprintf("Wrong type used for field %s", jsonUnmarshalErr.Field),
 		))
+	case errors.Is(err, io.EOF):
+		c.JSON(http.StatusUnprocessableEntity, response.Error(
+			response.CodeEOF,
+			"End of file",
+		))
+		return
 	default:
-		if e.Error() == "EOF" { // rare case because json parsing returns a errorString of EOF when a body is empty.
-			c.JSON(http.StatusUnprocessableEntity, responses.Error(
-				codes.EOF,
-				"End of file",
-			))
-			return
-		}
 		// we log internal errors
-		logger.Error("Internal error: "+e.Error(), "errorType", fmt.Sprintf("%T", e))
-
+		logger.Error("Internal error: "+err.Error(), "errorType", fmt.Sprintf("%T", err))
 		c.JSON(
 			http.StatusInternalServerError,
-			responses.Error(
-				codes.InternalServerError,
+			response.Error(
+				response.CodeInternal,
 				"Internal server error",
 			),
 		)
