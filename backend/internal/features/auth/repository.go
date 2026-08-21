@@ -26,7 +26,8 @@ type repository interface {
 	deleteSessionByJwtID(ctx context.Context, jwtID uuid.UUID) error
 }
 
+// Repository errors
 var (
-	errNoResults      = errors.New("no results found")
-	errTooManyResults = errors.New("too many results")
+	errRepoNoResults      = errors.New("no results found")
+	errRepoTooManyResults = errors.New("too many results")
 )

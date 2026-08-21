@@ -59,7 +59,7 @@ func (pg postgresRepository) updateUser(ctx context.Context, id uuid.UUID, one s
 		return pg.handleError(err)
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return errNoResults
+		return errRepoNoResults
 	}
 	return nil
 }
@@ -108,7 +108,7 @@ func (pg postgresRepository) updateSession(ctx context.Context, id uuid.UUID, on
 		return pg.handleError(err)
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return errNoResults
+		return errRepoNoResults
 	}
 	return nil
 }
@@ -123,7 +123,7 @@ func (pg postgresRepository) deleteSession(ctx context.Context, one string, two 
 		return pg.handleError(err)
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return errNoResults
+		return errRepoNoResults
 	}
 	return nil
 }
@@ -138,9 +138,9 @@ func (pg postgresRepository) handleError(err error) error {
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return errNoResults
+		return errRepoNoResults
 	case errors.Is(err, pgx.ErrTooManyRows):
-		return errTooManyResults
+		return errRepoTooManyResults
 	case errors.Is(err, context.DeadlineExceeded):
 		return context.DeadlineExceeded // unwrap, we need to only return unwrapped errors if the handler is not going to raise a internal server error with them
 	case errors.Is(err, context.Canceled):
