@@ -1,0 +1,46 @@
+package auth
+
+import (
+	"time"
+)
+
+// contains business rule constant values
+// the prefix "rule" to all variables here does not sound or make sense sometimes.
+// But i wanted consistency and clear meaning about what these are
+
+const (
+	ruleMinAge = 18
+	ruleMaxAge = 120
+)
+
+// expiry times
+const (
+	ruleExpiryTimeOTP           = 10 * time.Minute
+	ruleExpiryTimeAccessToken   = 30 * time.Minute
+	ruleExpiryTimeRefreshToken  = 7 // Days, use this with time.AddDate method only
+	ruleExpiryTimeResetPassword = 30 * time.Minute
+)
+
+// ttlcache clean interval
+const (
+	ruleTTLCacheCleanIntervalOTP          = 10 * time.Minute
+	ruleTTLCacheCleanIntervalReset        = 10 * time.Minute
+	ruleTTLCacheCleanIntervalJWTBlockList = ruleExpiryTimeAccessToken / 2
+)
+
+const (
+	ruleOTPSize = 6
+)
+
+// byte sizes
+const (
+	ruleSizeSessionID    = 24 // used for otp sessions, reset password sessions, basically every ttl cache session key
+	ruleSizeRefreshToken = 32 //
+)
+
+// opaque string / id prefixes
+const (
+	rulePrefixRefreshToken = ""
+	rulePrefixOTPSession   = "otp_"
+	rulePrefixResetSession = "pwd_"
+)

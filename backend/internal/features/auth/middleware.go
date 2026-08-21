@@ -1,11 +1,9 @@
 package auth
 
 import (
-	"backend/internal/config"
 	"backend/internal/pkg/jwt"
-	"backend/internal/pkg/responses"
+	"backend/internal/pkg/response"
 	"backend/internal/pkg/ttlcache"
-	"backend/internal/utils/codes"
 	"net/http"
 	"time"
 
@@ -19,7 +17,7 @@ import (
 // # Only add or get values from this cache, those methods are thread safe in nature
 //
 // This is used to store jwt ids which are blacklisted before they expire on their own.
-var jwtTokenBlockList = ttlcache.New[uuid.UUID, struct{}](config.TTLCacheCleanIntervalJWTBlockList)
+var jwtTokenBlockList = ttlcache.New[uuid.UUID, struct{}](ruleTTLCacheCleanIntervalJWTBlockList)
 
 // ? ----+-----+-----Auth Middleware-----+-----+-----
 
@@ -39,8 +37,8 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 			if errorMessage != "" {
 				handlerErr = c.JSON(
 					statusCode,
-					responses.Error(
-						codes.Unauthorized,
+					response.Error(
+						response.CodeUnauthorized,
 						errorMessage,
 					),
 				)

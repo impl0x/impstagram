@@ -17,7 +17,7 @@ func NewOtpGenerator(otpLength int) OtpGenerator {
 	}
 }
 
-func (og OtpGenerator) GenerateOTP() (string, error) {
+func (og OtpGenerator) Generate() (string, error) {
 	num, err := rand.Int(rand.Reader, og.otpLimit)
 	if err != nil {
 		return "", err

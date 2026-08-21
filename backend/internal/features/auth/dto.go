@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"backend/internal/config"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,6 +60,6 @@ func newUserSession(jwtID uuid.UUID, tokenHash, userIP, userAgent string, userID
 		OSName:      ua.OS,
 		BrowserName: ua.Name,
 		DeviceType:  ua.Device,
-		ExpiresAt:   time.Now().AddDate(0, 0, config.ExpiryTimeRefreshToken),
+		ExpiresAt:   time.Now().AddDate(0, 0, ruleExpiryTimeRefreshToken),
 	}
 }
