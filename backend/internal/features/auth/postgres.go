@@ -13,16 +13,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type PostgresRepository struct {
+type postgresRepository struct {
 	Db *pgxpool.Pool
 }
 
-func NewPostgresRepository() PostgresRepository {
-	return PostgresRepository{}
+func NewPostgresRepository(db *pgxpool.Pool) postgresRepository {
+	return postgresRepository{db}
 }
 
 // users table
-func (pg PostgresRepository) findUser(ctx context.Context, one string, two any) (*user, error) {
+func (pg postgresRepository) findUser(ctx context.Context, one string, two any) (*user, error) {
 	rows, err := pg.Db.Query(ctx, `SELECT * FROM users WHERE $1 = $2`, one, two)
 	if err != nil {
 		return nil, pg.handleError(err)
@@ -35,14 +35,14 @@ func (pg PostgresRepository) findUser(ctx context.Context, one string, two any) 
 	return &user, nil
 }
 
-func (pg PostgresRepository) findUserByID(ctx context.Context, userID uuid.UUID) (*user, error) {
+func (pg postgresRepository) findUserByID(ctx context.Context, userID uuid.UUID) (*user, error) {
 	return pg.findUser(ctx, "id", userID)
 }
-func (pg PostgresRepository) findUserByChannel(ctx context.Context, channel authChannel, target string) (*user, error) {
+func (pg postgresRepository) findUserByChannel(ctx context.Context, channel authChannel, target string) (*user, error) {
 	return pg.findUser(ctx, string(channel), target)
 }
 
-func (pg PostgresRepository) createUser(ctx context.Context, user *user) (uuid.UUID, error) {
+func (pg postgresRepository) createUser(ctx context.Context, user *user) (uuid.UUID, error) {
 	query := `INSERT INTO users (username, email, phone, totp_secret_key, password_hash, dob, status, two_fas, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`
 	var pgID pgtype.UUID
 	err := pg.Db.QueryRow(ctx, query, user.Username, user.Email, user.Phone, user.TotpSecretKey, user.PasswordHash, user.Dob, user.Status, user.TwoFAs, user.CreatedAt, user.UpdatedAt).Scan(&pgID)
@@ -52,7 +52,7 @@ func (pg PostgresRepository) createUser(ctx context.Context, user *user) (uuid.U
 	return uuid.UUID(pgID.Bytes), nil
 }
 
-func (pg PostgresRepository) updateUser(ctx context.Context, id uuid.UUID, one string, two any) error {
+func (pg postgresRepository) updateUser(ctx context.Context, id uuid.UUID, one string, two any) error {
 	query := `UPDATE users SET $1 = $2 WHERE id = $3`
 	cmdTag, err := pg.Db.Exec(ctx, query, one, two, id)
 	if err != nil {
@@ -63,19 +63,19 @@ func (pg PostgresRepository) updateUser(ctx context.Context, id uuid.UUID, one s
 	}
 	return nil
 }
-func (pg PostgresRepository) updateUserPassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+func (pg postgresRepository) updateUserPassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
 	return pg.updateUser(ctx, userID, "password_hash", passwordHash)
 }
-func (pg PostgresRepository) updateUserStatus(ctx context.Context, userID uuid.UUID, status accountStatus) error {
+func (pg postgresRepository) updateUserStatus(ctx context.Context, userID uuid.UUID, status accountStatus) error {
 	return pg.updateUser(ctx, userID, "status", status)
 }
-func (pg PostgresRepository) updateUser2FA(ctx context.Context, userID uuid.UUID, twoFAs twoFAs) error {
+func (pg postgresRepository) updateUser2FA(ctx context.Context, userID uuid.UUID, twoFAs twoFAs) error {
 	return pg.updateUser(ctx, userID, "two_fas", twoFAs)
 }
 
 // user_sessions table{}
 
-func (pg PostgresRepository) findSession(ctx context.Context, one string, two any) (*userSession, error) {
+func (pg postgresRepository) findSession(ctx context.Context, one string, two any) (*userSession, error) {
 	rows, err := pg.Db.Query(ctx, `SELECT * FROM user_sessions WHERE $1 = $2`, one, two)
 	if err != nil {
 		return nil, pg.handleError(err)
@@ -88,11 +88,11 @@ func (pg PostgresRepository) findSession(ctx context.Context, one string, two an
 	return &userSesh, nil
 }
 
-func (pg PostgresRepository) findSessionByToken(ctx context.Context, tokenHash string) (*userSession, error) {
+func (pg postgresRepository) findSessionByToken(ctx context.Context, tokenHash string) (*userSession, error) {
 	return pg.findSession(ctx, "token_hash", tokenHash)
 }
 
-func (pg PostgresRepository) createSession(ctx context.Context, session *userSession) error {
+func (pg postgresRepository) createSession(ctx context.Context, session *userSession) error {
 	query := `INSERT INTO user_sessions (jwt_id, token_hash, user_id, ip_address, os_name, browser_name, device_type, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 	_, err := pg.Db.Exec(ctx, query, session.JwtID, session.TokenHash, session.UserID, session.IPAddress, session.OSName, session.BrowserName, session.DeviceType, session.ExpiresAt, session.DeviceType)
 	if err != nil {
@@ -101,7 +101,7 @@ func (pg PostgresRepository) createSession(ctx context.Context, session *userSes
 	return nil
 }
 
-func (pg PostgresRepository) updateSession(ctx context.Context, id uuid.UUID, one string, two any) error {
+func (pg postgresRepository) updateSession(ctx context.Context, id uuid.UUID, one string, two any) error {
 	query := `UPDATE user_sessions SET $1 = $2 WHERE id = $3`
 	cmdTag, err := pg.Db.Exec(ctx, query, one, two, id)
 	if err != nil {
@@ -113,10 +113,10 @@ func (pg PostgresRepository) updateSession(ctx context.Context, id uuid.UUID, on
 	return nil
 }
 
-func (pg PostgresRepository) updateSessionToken(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error {
+func (pg postgresRepository) updateSessionToken(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error {
 	return pg.updateSession(ctx, id, "token_hash", tokenHash)
 }
-func (pg PostgresRepository) deleteSession(ctx context.Context, one string, two any) error {
+func (pg postgresRepository) deleteSession(ctx context.Context, one string, two any) error {
 	query := `DELETE FROM user_sessions WHERE $1 = $2`
 	cmdTag, err := pg.Db.Exec(ctx, query, one, two)
 	if err != nil {
@@ -127,14 +127,14 @@ func (pg PostgresRepository) deleteSession(ctx context.Context, one string, two 
 	}
 	return nil
 }
-func (pg PostgresRepository) deleteSessionByID(ctx context.Context, id uuid.UUID) error {
+func (pg postgresRepository) deleteSessionByID(ctx context.Context, id uuid.UUID) error {
 	return pg.deleteSession(ctx, "id", id)
 }
-func (pg PostgresRepository) deleteSessionByJwtID(ctx context.Context, jwtID uuid.UUID) error {
+func (pg postgresRepository) deleteSessionByJwtID(ctx context.Context, jwtID uuid.UUID) error {
 	return pg.deleteSession(ctx, "id", jwtID)
 }
 
-func (pg PostgresRepository) handleError(err error) error {
+func (pg postgresRepository) handleError(err error) error {
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):

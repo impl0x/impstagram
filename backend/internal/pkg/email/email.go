@@ -8,6 +8,10 @@ import (
 	"net/http"
 )
 
+type Sender interface{
+	Send(req SendRequest) error
+}
+
 type Client struct {
 	httpClient *http.Client
 }
@@ -33,7 +37,7 @@ type SendResponse struct {
 	ID string `json:"id"`
 }
 
-func (c *Client) Send(req SendRequest) error {
+func (c Client) Send(req SendRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal email: %w", err)
