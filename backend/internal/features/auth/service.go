@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"backend/internal/config"
 	"backend/internal/pkg/dob"
 	"backend/internal/pkg/email"
 	"backend/internal/pkg/jwt"
@@ -21,19 +20,20 @@ import (
 
 type Service struct {
 	repo  repository
-	email email.Client
+	email email.Sender
+	otp   token.OtpGenerator
 
 	mu            sync.RWMutex                          // mutex for the OTPSessions
 	otpSessions   *ttlcache.Cache[string, otpSession]   // string is the reference id
 	resetSessions *ttlcache.Cache[string, resetSession] // string is reference id
 }
 
-func NewService(repo repository, emailClient email.Client) *Service {
+func NewService(repo repository, emailClient email.Sender) *Service {
 	return &Service{
 		email:         emailClient,
 		repo:          repo,
-		otpSessions:   ttlcache.New[string, otpSession](config.TTLCacheCleanIntervalOTP),
-		resetSessions: ttlcache.New[string, resetSession](config.TTLCacheCleanIntervalReset),
+		otpSessions:   ttlcache.New[string, otpSession](ruleTTLCacheCleanIntervalOTP),
+		resetSessions: ttlcache.New[string, resetSession](ruleTTLCacheCleanIntervalReset),
 	}
 }
 
@@ -50,6 +50,23 @@ type otpSession struct {
 // Used to store the pending reset password sessions
 type resetSession struct {
 	userID uuid.UUID
+}
+
+// ? ----+-----+-----Helper Functions for token generation-----+-----+-----
+
+// generates a new random string with the prefix [rulePrefixRefreshToken] and size [ruleSizeRefreshToken]
+func generateRefreshToken() string {
+	return token.GenerateToken(rulePrefixRefreshToken, ruleSizeRefreshToken)
+}
+
+// generates a new random string with the prefix [rulePrefixOTPSession] and size [ruleSizeSessionID]
+func generateOTPSessionID() string {
+	return token.GenerateToken(rulePrefixOTPSession, ruleSizeSessionID)
+}
+
+// generates a new random string with the prefix [rulePrefixResetSession] and size [ruleSizeSessionID]
+func generateResetSessionID() string {
+	return token.GenerateToken(rulePrefixResetSession, ruleSizeSessionID)
 }
 
 // ? ----+-----+-----Register-----+-----+-----
@@ -79,9 +96,9 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 
 	// validate the user's age against our business rules
 	userAge := userDob.Age()
-	if userAge < config.MinAge {
+	if userAge < ruleMinAge {
 		return registerResult{}, errNotOldEnough
-	} else if userAge > config.MaxAge {
+	} else if userAge > ruleMaxAge {
 		return registerResult{}, errTooOld
 	}
 
@@ -129,7 +146,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 		return registerResult{}, err
 	}
 	// generate a new reference id for a otp session
-	refID := token.GenerateOTPSessionID()
+	refID := generateOTPSessionID()
 	// add a new otp session to our timed cache
 	s.otpSessions.Add(
 		refID,
@@ -139,7 +156,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 			purpose: purposeRegistration,
 			otp:     otp,
 		},
-		time.Now().Add(config.ExpiryTimeOTP),
+		time.Now().Add(ruleExpiryTimeOTP),
 	)
 
 	return registerResult{
@@ -221,7 +238,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 
 	// If user has 2Fa enabled ask for otp.
 	if user.TwoFAs != nil {
-		refID := token.GenerateOTPSessionID()
+		refID := generateOTPSessionID()
 		primaryTwoFAChannel := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
 		// if it is TOTP
 		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
@@ -234,7 +251,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 					purpose: purpose2FA,
 					otp:     user.TotpSecretKey,
 				},
-				time.Now().Add(config.ExpiryTimeOTP),
+				time.Now().Add(ruleExpiryTimeOTP),
 			)
 
 			return loginResult{
@@ -266,7 +283,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 				purpose: purpose2FA,
 				otp:     otp,
 			},
-			time.Now().Add(config.ExpiryTimeOTP),
+			time.Now().Add(ruleExpiryTimeOTP),
 		)
 		return loginResult{
 			requires2FA: true,
@@ -276,13 +293,13 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	}
 	// else
 
-	// Generate tokens
+	// generate tokens
 	jwtID := uuid.New()
 	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID))
 	if err != nil {
 		panic(err)
 	}
-	refreshToken := token.GenerateRefreshToken()
+	refreshToken := generateRefreshToken()
 
 	// Add a new user session to the database
 	err = s.repo.createSession(
@@ -313,7 +330,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 //   - purpose: The system context (2FA, Reset password or Registration) used to select templates
 //   - target: The absolute address string (e.g., an email address or E.164 phone number)
 func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target string) (string, error) {
-	otp, err := token.GenerateOTP()
+	otp, err := s.otp.Generate()
 	if err != nil { // generate otp error
 		return "", err
 	}
@@ -384,6 +401,9 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	// find the user
 	user, err := s.repo.findUserByID(ctx, session.userID)
 	if err != nil {
+		if err == errNoResults {
+			return verifyResult{}, errUserNotFound
+		}
 		return verifyResult{}, err
 	}
 	if user == nil { // if the user mysteriously got deleted after just trying to log in or register...
@@ -398,13 +418,13 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 			return verifyResult{}, err
 		}
 	case purposeResetPass:
-		refID := token.GenerateResetSessionID()
+		refID := generateResetSessionID()
 		s.resetSessions.Add(
 			refID,
 			resetSession{
 				userID: user.ID,
 			},
-			time.Now().Add(config.ExpiryTimeResetPassword),
+			time.Now().Add(ruleExpiryTimeResetPassword),
 		)
 		return verifyResult{
 			isResetRequest: true,
@@ -418,7 +438,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	if err != nil {
 		panic(err)
 	}
-	refreshToken := token.GenerateRefreshToken()
+	refreshToken := generateRefreshToken()
 
 	// Add a new user session to the database
 	err = s.repo.createSession(
@@ -479,14 +499,14 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	if err != nil {
 		panic(err)
 	}
-	refreshToken := token.GenerateRefreshToken()
+	refreshToken := generateRefreshToken()
 
 	// update the session with the new refresh token and also update the expires at field to the max capacity again.
 	err = s.repo.updateSessionToken(
 		ctx,
 		userSesh.ID,
 		token.GenerateMD5Hash(refreshToken), // we store a hash of the token
-		time.Now().AddDate(0, 0, config.ExpiryTimeRefreshToken),
+		time.Now().AddDate(0, 0, ruleExpiryTimeRefreshToken),
 	)
 	if err != nil {
 		return refreshResult{}, err // db err
@@ -543,8 +563,8 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 
 	// Send an otp to the channel and target our user sent us
 	otp, err := s.sendOTP(channel, purposeResetPass, target)
-	// Generate a otp session id and add it to our ttlcache
-	refID := token.GenerateOTPSessionID()
+	// generate a otp session id and add it to our ttlcache
+	refID := generateOTPSessionID()
 	s.otpSessions.Add(
 		refID,
 		otpSession{
@@ -553,7 +573,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 			purpose: purposeResetPass,
 			otp:     otp,
 		},
-		time.Now().Add(config.ExpiryTimeOTP),
+		time.Now().Add(ruleExpiryTimeOTP),
 	)
 	// send the session id as reference to the user
 	return forgotPasswordResult{
