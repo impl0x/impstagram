@@ -1,15 +1,10 @@
 package auth
 
 import (
-	"backend/internal/config"
-	"backend/internal/pkg/dob"
 	"backend/internal/pkg/jwt"
-	"backend/internal/pkg/responses"
+	"backend/internal/pkg/response"
 	"backend/internal/utils"
-	"backend/internal/utils/codes"
-	"context"
 	"net/http"
-	"strconv"
 
 	"github.com/impl0x/mo"
 )
@@ -23,8 +18,8 @@ func NewHandler(s *Service) Handler {
 }
 
 // some info:
-// - we are handling all the service level errors via the [Handler.handleError] function,
-// 	 we return the function result in the handler purely due to idiom it is never actually gonna return an actual error
+// - we are handling all the Service level errors via the [Handler.handleError] function,
+// 	 we return the function result in the Handler purely due to idiom it is never actually gonna return an actual error
 // 	 except if json encode error occurs which is not probable because its our function with valid syntax and logic.
 //
 // - we use anonymous structs to return the json response because using a map is more expensive as it allocates to the heap
@@ -36,19 +31,19 @@ func (h Handler) Register(c *mo.Context) error {
 	var req registerRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
-		return err // returns validation error / json error, the mo error handler defined knows how to handle these, at least assuming so.
+		return err // returns validation error / json error, the mo error Handler defined knows how to handle these, at least assuming so.
 	}
-	// Call the register method in service, with request context and request data
+	// Call the register method in Service, with request context and request data
 	result, err := h.Service.register(c.Request().Context(), req)
 	if err != nil {
 		// we handle all errors in this function, every error is sentinel error
-		return h.handleError(c, err) // always returns nil
+		return err // always returns nil
 	}
-	// if everything is good we return a json response with the response struct returned from Success method in responses package. take a look there to see how the struct is defined.
+	// if everything is good we return a json response with the response struct returned from Success method in response package. take a look there to see how the struct is defined.
 	return c.JSON(
 		http.StatusCreated,
-		responses.Success(
-			codes.RegisterSuccess,
+		response.Success(
+			codeRegisterSuccess,
 			"Registration successful, please check your "+result.channel.String()+" for the OTP to verify your account",
 			struct { // using anon structs instead of maps to reduce allocation
 				ReferenceID string `json:"reference_id"`
@@ -77,13 +72,13 @@ func (h Handler) Login(c *mo.Context) error {
 		},
 	)
 	if err != nil {
-		return h.handleError(c, err)
+		return err
 	}
 	if result.requires2FA {
 		return c.JSON(
 			http.StatusAccepted,
-			responses.Success(
-				codes.TwoFARequired,
+			response.Success(
+				codeTwoFARequired,
 				"Two-factor authentication is required, please check your "+result.channel.String(),
 				struct {
 					ReferenceID string `json:"reference_id"`
@@ -93,8 +88,8 @@ func (h Handler) Login(c *mo.Context) error {
 	}
 	return c.JSON(
 		http.StatusOK,
-		responses.Success(
-			codes.LoginSuccess,
+		response.Success(
+			codeLoginSuccess,
 			"Login successful",
 			struct {
 				AccessToken  string `json:"access_token"`
@@ -120,7 +115,7 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 		},
 	)
 	if err != nil {
-		return h.handleError(c, err)
+		return err
 	}
 	if result.isResetRequest {
 		return c.JSON(
@@ -148,12 +143,12 @@ func (h Handler) Refresh(c *mo.Context) error {
 	}
 	result, err := h.Service.refresh(c.Request().Context(), req)
 	if err != nil {
-		return h.handleError(c, err)
+		return err
 	}
 	return c.JSON(
 		http.StatusOK,
-		responses.Success(
-			codes.RefreshSuccess,
+		response.Success(
+			codeRefreshSuccess,
 			"Token successfully refreshed",
 			struct {
 				AccessToken  string `json:"access_token"`
@@ -168,7 +163,7 @@ func (h Handler) Logout(c *mo.Context) error {
 	accessTokenJwt := c.Store["jwt"].(jwt.AccessToken) // type conversion and reading the map assumes that this path has the authorization [Middleware] wrapped beforehand and it is working
 	err := h.Service.logout(c.Request().Context(), accessTokenJwt)
 	if err != nil {
-		return h.handleError(c, err)
+		return err
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -182,12 +177,12 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 	}
 	result, err := h.Service.forgotPassword(c.Request().Context(), req)
 	if err != nil {
-		return h.handleError(c, err)
+		return err
 	}
 	return c.JSON(
 		http.StatusOK,
-		responses.Success(
-			codes.Ok,
+		response.Success(
+			response.CodeOk,
 			"An OTP has been sent to your "+result.channel.String(),
 			struct {
 				ReferenceID string `json:"reference_id"`
@@ -205,83 +200,14 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 	}
 	err = h.Service.resetPassword(c.Request().Context(), req)
 	if err != nil {
-		return h.handleError(c, err)
+		return err
 	}
 	return c.JSON(
 		http.StatusOK,
-		responses.Success(
-			codes.Ok,
+		response.Success(
+			response.CodeOk,
 			"Password reset successfully",
 			nil,
 		),
 	)
-}
-
-func (h Handler) handleError(c *mo.Context, err error) (cJsonError error) { // returning error only for the idiom of mo, else it will always be nil if json doesn't throw one
-	// switch over error and set these variables according to the error, then write a json body in the response and the variables using defer
-	// this method reduces readability a little bit but it greatly reduces the redundancy
-	var sc int        // statusCode
-	var rc codes.Code // respCode
-	var em string     // errorMessage
-	defer func() {
-		cJsonError = c.JSON(
-			sc,
-			responses.Error(
-				rc,
-				em,
-			),
-		)
-	}()
-	switch err {
-	//? context errors
-	case context.DeadlineExceeded, context.Canceled: // assuming these errors aren't wrapped
-		return err
-	//? register errors
-	case errMissingIdentifier:
-		sc, rc, em = http.StatusBadRequest, codes.IdentifierMissing, "Need at least email or phone to register"
-	case errAlreadyExistingUser:
-		sc, rc, em = http.StatusForbidden, codes.UserAlreadyExists, "This user already exists, please try to log in"
-	case errNotOldEnough:
-		sc, rc, em = http.StatusForbidden, codes.UserNotOldEnough, "User not old enough, must be minimum of "+strconv.Itoa(int(config.MinAge))+" years old to use this service"
-	case errTooOld:
-		sc, rc, em = http.StatusForbidden, codes.UserTooOld, "User too old, cannot create account"
-	case errUsernameAlreadyExists:
-		sc, rc, em = http.StatusForbidden, codes.UsernameAlreadyExists, "This username is already registered, please try a different username"
-	//? dob errors
-	case dob.ErrImpossibleDob, dob.ErrInvalidDobString:
-		sc, rc, em = http.StatusBadRequest, codes.ValidationError, "Invalid date of birth"
-	//? login errors
-	case errMissingIdentifierLogin:
-		sc, rc, em = http.StatusBadRequest, codes.IdentifierMissing, "Need at least email, phone or username to log in"
-	case errUserNotFoundLogin, errIncorrectPassword:
-		sc, rc, em = http.StatusUnauthorized, codes.CredentialsInvalid, "Invalid identifier or password"
-	case errUserBanned:
-		sc, rc, em = http.StatusForbidden, codes.UserBanned, "User is permanently banned from accessing this service"
-	case errUserUnverified:
-		sc, rc, em = http.StatusForbidden, codes.UserUnverified, "User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to register"
-		//? verify otp errors
-	case errRefIDNotFound:
-		sc, rc, em = http.StatusNotFound, codes.NotFound, "Reference ID for this verify request not found, please request a new otp again"
-	case errOTPExpired:
-		sc, rc, em = http.StatusForbidden, codes.OTPExpired, "The OTP provided is expired"
-	case errIncorrectOTP:
-		sc, rc, em = http.StatusBadRequest, codes.OTPExpired, "The OTP provided is incorrect"
-	case errUserNotFound:
-		sc, rc, em = http.StatusNotFound, codes.UserNotFound, "User not found"
-	//? refresh errors
-	case errInvalidRefreshToken:
-		sc, rc, em = http.StatusBadRequest, codes.RefreshTokenInvalid, "Invalid refresh token, please login again"
-	case errExpiredRefreshToken:
-		sc, rc, em = http.StatusNotAcceptable, codes.RefreshTokenExpired, "Refresh token has expired, please login again"
-	//? reset errors
-	case errResetSessionNotFound:
-		sc, rc, em = http.StatusNotFound, codes.NotFound, "Reset session not found, please try to raise a reset password request again"
-	case errResetSessionExpired:
-		sc, rc, em = http.StatusForbidden, codes.ResetSessionExpired, "Reset session has expired, please try to raise a reset password request again"
-	//? --x--x--x--
-	default:
-		println("auth: Internal server error: " + err.Error())
-		sc, rc, em = http.StatusInternalServerError, codes.InternalServerError, "An unexpected error occurred"
-	}
-	return
 }
