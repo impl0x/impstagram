@@ -7,27 +7,27 @@ import (
 type Kind int
 
 const (
-	KindValidation   Kind = iota // http: 400
-	KindNotFound                 // http: 404
-	KindConflict                 // http: 409
-	KindUnauthorized             // http: 401
-	KindForbidden                // http: 403
-	KindInternal                 // http: 500
+	kindValidation   Kind = iota // http: 400
+	kindNotFound                 // http: 404
+	kindConflict                 // http: 409
+	kindUnauthorized             // http: 401
+	kindForbidden                // http: 403
+	kindInternal                 // http: 500
 )
 
 func (k Kind) ToStatusCode() int {
 	switch k {
-	case KindValidation:
+	case kindValidation:
 		return http.StatusBadRequest
-	case KindNotFound:
+	case kindNotFound:
 		return http.StatusNotFound
-	case KindConflict:
+	case kindConflict:
 		return http.StatusConflict
-	case KindUnauthorized:
+	case kindUnauthorized:
 		return http.StatusUnauthorized
-	case KindForbidden:
+	case kindForbidden:
 		return http.StatusForbidden
-	case KindInternal:
+	case kindInternal:
 		return http.StatusInternalServerError
 	default:
 		return http.StatusBadRequest

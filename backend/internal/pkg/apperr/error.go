@@ -3,17 +3,17 @@ package apperr
 import "backend/internal/pkg/response"
 
 type AppErr struct {
-	Kind     Kind
-	Code response.Code
-	Message  string
-	Err      error
+	Kind    Kind
+	Code    response.Code
+	Message string
+	Err     error
 }
 
 func New(kind Kind, code response.Code, message string) AppErr {
 	return AppErr{
-		Kind:     kind,
-		Code: code,
-		Message:  message,
+		Kind:    kind,
+		Code:    code,
+		Message: message,
 	}
 }
 
@@ -27,25 +27,25 @@ func (ae AppErr) Error() string {
 }
 
 func NewValidation(code response.Code, message string) AppErr {
-	return New(KindValidation, code, message)
+	return New(kindValidation, code, message)
 }
 
 func NewNotFound(code response.Code, message string) AppErr {
-	return New(KindNotFound, code, message)
+	return New(kindNotFound, code, message)
 }
 
 func NewConflict(code response.Code, message string) AppErr {
-	return New(KindConflict, code, message)
+	return New(kindConflict, code, message)
 }
 
 func NewUnauthorized(code response.Code, message string) AppErr {
-	return New(KindUnauthorized, code, message)
+	return New(kindUnauthorized, code, message)
 }
 
 func NewForbidden(code response.Code, message string) AppErr {
-	return New(KindForbidden, code, message)
+	return New(kindForbidden, code, message)
 }
 
 func NewInternal(code response.Code, message string) AppErr {
-	return New(KindInternal, code, message)
+	return New(kindInternal, code, message)
 }
