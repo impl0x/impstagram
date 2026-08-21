@@ -38,16 +38,18 @@ const (
 
 // Registration errors
 var (
-	errMissingIdentifier     = apperr.NewValidation(response.CodeValidationError, "Need at least email or phone to register")
-	errAlreadyExistingUser   = apperr.NewConflict(codeUserAlreadyExists, "This user already exists, please try to log in")
+	errInvalidDobString      = apperr.NewValidation("Invalid date of birth string")
+	errImpossibleDobString   = apperr.NewValidation("Impossible date of birth string")
 	errNotOldEnough          = apperr.NewForbidden(codeUserNotOldEnough, "User not old enough, must be minimum of "+strconv.Itoa(int(ruleMinAge))+" years old to use this Service")
 	errTooOld                = apperr.NewForbidden(codeUserTooOld, "User too old, cannot create account")
+	errMissingIdentifier     = apperr.NewValidation("Need at least email or phone to register")
+	errAlreadyExistingUser   = apperr.NewConflict(codeUserAlreadyExists, "This user already exists, please try to log in")
 	errUsernameAlreadyExists = apperr.NewConflict(codeUsernameAlreadyExists, "This username is already registered, please try a different username")
 )
 
 // Login errors
 var (
-	errMissingIdentifierLogin = apperr.NewValidation(response.CodeValidationError, "Need at least email, phone or username to log in")
+	errMissingIdentifierLogin = apperr.NewValidation("Need at least email, phone or username to log in")
 	errCredentialsInvalid     = apperr.NewUnauthorized(codeCredentialsInvalid, "Invalid identifier or password")
 	errUserBanned             = apperr.NewForbidden(codeUserBanned, "User is permanently banned from accessing this Service")
 	errUserUnverified         = apperr.NewForbidden(codeUserUnverified, "User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to register")

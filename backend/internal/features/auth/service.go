@@ -80,8 +80,14 @@ type registerResult struct {
 func (s *Service) register(ctx context.Context, req registerRequest) (registerResult, error) {
 	// validate the date of birth string (this technically should be in the handler layer but then I would have to pass dob object separately in this function which would look bad so i just did it here)
 	userDob, err := dob.NewDobFromString(req.Dob)
-	if err != nil {
-		return registerResult{}, err // returns dob sentinel errors, which we handle in the handler layer
+	switch err {
+	case nil:
+	case dob.ErrInvalidDobString:
+		return registerResult{}, errInvalidDobString
+	case dob.ErrImpossibleDob:
+		return registerResult{}, errImpossibleDobString
+	default:
+		return registerResult{}, err
 	}
 
 	// validate the user's age against our business rules
@@ -109,12 +115,12 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	// Finding in database
 	user, err = s.repo.findUserByChannel(ctx, channel, target)
 
-	// if err != nil {
-	// 	return registerResult{}, err // ignoring database level errors as of now.
-	// }
-
-	if user != nil { // if db returned a user
-		return registerResult{}, errAlreadyExistingUser // yes i acknowledge that user has chances of being banned/unverified, but this is intended. We want user to login and then hit those errors if they exist.
+	// if db returned a user
+	if err == nil && user != nil {
+		// i acknowledge that user has chances of being banned/unverified, but this is intended. We want user to login and then hit those errors if they exist.
+		return registerResult{}, errAlreadyExistingUser
+	} else if err != errRepoNoResults { // if the error received was not a no results error then must be a database error
+		return registerResult{}, err
 	}
 
 	// checks if the username already exists because usernames are unique
@@ -193,12 +199,11 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		return loginResult{}, errMissingIdentifierLogin
 	}
 
-	// if err != nil { // database error
-	// 	return loginResult{}, err
-	// }
-	// todo : fix db error and user not found error
-	if user == nil {
-		return loginResult{}, errCredentialsInvalid
+	if err != nil {
+		if err == errRepoNoResults {
+			return loginResult{}, errCredentialsInvalid
+		}
+		return loginResult{}, err
 	}
 
 	// if user is found in database we compare the passwords and the password hash in the database to see if the user has the correct password
@@ -326,10 +331,10 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	// Find the user in the database
 	user, err := s.repo.findUserByChannel(ctx, channel, target)
 	if err != nil {
+		if err==errRepoNoResults{
+			return forgotPasswordResult{}, errUserNotFound
+		}
 		return forgotPasswordResult{}, err // db error
-	}
-	if user == nil {
-		return forgotPasswordResult{}, errUserNotFound
 	}
 
 	// Send an otp to the channel and target our user sent us
@@ -369,7 +374,10 @@ func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) e
 	// else we proceed and update the user's password, we of course hash it.
 	err := s.repo.updateUserPassword(ctx, session.userID, password.Hash(req.NewPassword))
 	if err != nil {
-		return err // db error
+		if err==errRepoNoResults{
+			return errUserNotFound
+		}
+		return err 
 	}
 	// delete the session to make sure this reference id cannot be reused
 	s.resetSessions.Delete(req.ReferenceID)
@@ -449,19 +457,16 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	user, err := s.repo.findUserByID(ctx, session.userID)
 	if err != nil {
 		if err == errRepoNoResults {
-			return verifyResult{}, errUserNotFound
+			return verifyResult{}, errUserNotFound // if the user mysteriously got deleted after just trying to log in or register...
 		}
 		return verifyResult{}, err
-	}
-	if user == nil { // if the user mysteriously got deleted after just trying to log in or register...
-		return verifyResult{}, errUserNotFound
 	}
 
 	// Switch on the purpose to do purpose related tasks
 	switch session.purpose {
 	case purposeRegistration: // if registration we need to set user status to verified in the database
 		err = s.repo.updateUserStatus(ctx, user.ID, statusVerified)
-		if err != nil {
+		if err != nil { // no need to handle for errRepoNoResults because we did that above
 			return verifyResult{}, err
 		}
 	case purposeResetPass:

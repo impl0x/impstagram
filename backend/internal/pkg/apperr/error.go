@@ -26,8 +26,8 @@ func (ae AppErr) Error() string {
 	return ae.Message
 }
 
-func NewValidation(code response.Code, message string) AppErr {
-	return New(kindValidation, code, message)
+func NewValidation(message string) AppErr {
+	return New(kindValidation, response.CodeValidationError, message)
 }
 
 func NewNotFound(code response.Code, message string) AppErr {
@@ -44,8 +44,4 @@ func NewUnauthorized(code response.Code, message string) AppErr {
 
 func NewForbidden(code response.Code, message string) AppErr {
 	return New(kindForbidden, code, message)
-}
-
-func NewInternal(code response.Code, message string) AppErr {
-	return New(kindInternal, code, message)
 }

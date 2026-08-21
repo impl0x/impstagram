@@ -12,7 +12,6 @@ const (
 	kindConflict                 // http: 409
 	kindUnauthorized             // http: 401
 	kindForbidden                // http: 403
-	kindInternal                 // http: 500
 )
 
 func (k Kind) ToStatusCode() int {
@@ -27,9 +26,7 @@ func (k Kind) ToStatusCode() int {
 		return http.StatusUnauthorized
 	case kindForbidden:
 		return http.StatusForbidden
-	case kindInternal:
-		return http.StatusInternalServerError
 	default:
-		return http.StatusBadRequest
+		return http.StatusInternalServerError
 	}
 }
