@@ -27,7 +27,7 @@ func New[K comparable, V any](interval time.Duration) *Cache[K, V] {
 		items:  make(map[K]item[V]),
 		Config: struct{ LazyDelete bool }{true},
 	}
-	go c.Cleaner(interval)
+	go c.cleaner(interval)
 	return c
 }
 
@@ -57,8 +57,25 @@ func (c *Cache[K, V]) Delete(key K) {
 	delete(c.items, key)
 }
 
+// Loops over all the items in the list and passes the key, value and expiresAt to the function provided
+//
+// the function must return a uint8, which tells when to quit the loop
+//   - return 0 to exit the loop
+//   - return >= 1 to continue the loop
+// the read lock unlocks itself only after this function call has ended, do not run any other methods on [Cache] inside the provided function
+func (c *Cache[K, V]) SearchFunc(fn func(key K, value V, expiresAt time.Time) uint8) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for k, v := range c.items {
+		if r := fn(k, v.value, v.expiresAt); r == 0 {
+			return
+		}
+
+	}
+}
+
 // Cleaner goroutine which runs on the given interval and cleans up the expired items in the map
-func (c *Cache[K, V]) Cleaner(interval time.Duration) {
+func (c *Cache[K, V]) cleaner(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
