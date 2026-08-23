@@ -99,6 +99,16 @@ func (h Handler) Login(c *mo.Context) error {
 	)
 }
 
+// ? POST - models.resendOTPRequest
+func (h Handler) ResendOTP(c *mo.Context) error{
+	var req resendOTPRequest
+	err:=c.DecodeAndValidateBody(req)
+	if err!=nil{
+		return err
+	}
+	h.Service.resendOTP(c.Request().Context(), req)
+}
+
 // ? POST - models.verifyOTPRequest
 func (h Handler) VerifyOTP(c *mo.Context) error {
 	var req verifyOTPRequest

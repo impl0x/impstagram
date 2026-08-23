@@ -55,6 +55,11 @@ var (
 	errUserUnverified         = apperr.NewForbidden(codeUserUnverified, "User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to register")
 )
 
+var (
+	errMissingIdentifierResend = apperr.NewValidation("Need at least email, phone, or username to resend otp")
+	err2FANotEnabled=apperr.NewValidation("User does not have 2FA enabled, cannot know where to send otp")
+)
+
 // Reset password errors
 var (
 	errResetSessionNotFound = apperr.NewNotFound(response.CodeNotFound, "Session not found, please try to raise a reset password request again")

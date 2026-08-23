@@ -76,6 +76,12 @@ type loginRequest struct {
 	Password string `json:"password" validate:"required,min=8,max=20"`
 }
 
+type resendOTPRequest struct {
+	Username string `json:"username" validate:"optional,min=3,max=15"`
+	Email    string `json:"email" validate:"optional,email"`
+	Phone    string `json:"phone" validate:"optional,e.164"`
+}
+
 type verifyOTPRequest struct {
 	ReferenceID string `json:"reference_id" validate:"required,startswith=otp_"` // make sure the startswith value is always correct to the config prefix value
 	OTP         string `json:"otp" validate:"required,numeric,len=6"`

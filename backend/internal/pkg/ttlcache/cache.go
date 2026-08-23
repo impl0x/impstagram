@@ -62,15 +62,15 @@ func (c *Cache[K, V]) Delete(key K) {
 // the function must return a uint8, which tells when to quit the loop
 //   - return 0 to exit the loop
 //   - return >= 1 to continue the loop
+//
 // the read lock unlocks itself only after this function call has ended, do not run any other methods on [Cache] inside the provided function
-func (c *Cache[K, V]) SearchFunc(fn func(key K, value V, expiresAt time.Time) uint8) {
+func (c *Cache[K, V]) LoopFunc(fn func(key K, value V, expiresAt time.Time) uint8) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for k, v := range c.items {
 		if r := fn(k, v.value, v.expiresAt); r == 0 {
 			return
 		}
-
 	}
 }
 

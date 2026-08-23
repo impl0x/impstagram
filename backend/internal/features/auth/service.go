@@ -8,6 +8,7 @@ import (
 	"backend/internal/pkg/token" // used to generate cryptographically random IDs and OTPs
 	"backend/internal/pkg/ttlcache"
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -103,11 +104,9 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	var channel authChannel // identifier, eg: email/phone
 	var target string       // the identifier literal, eg: jon@email.com/+1-234567890
 	if req.Email != "" {
-		channel = channelEmail
-		target = req.Email
+		channel, target = channelEmail, req.Email
 	} else if req.Phone != "" {
-		channel = channelPhone
-		target = req.Phone
+		channel, target = channelPhone, req.Phone
 	} else {
 		return registerResult{}, errMissingIdentifier // if user sent neither a email or a phone then we reject the registration request
 	}
@@ -125,7 +124,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 
 	// checks if the username already exists because usernames are unique
 	sameUsernameUser, err := s.repo.findUserByChannel(ctx, channelUsername, req.Username) // assuming req.Username is validated in validator
-	if sameUsernameUser != nil || err == nil {                                            // todo: handle db level errors
+	if sameUsernameUser != nil || err == nil {
 		return registerResult{}, errUsernameAlreadyExists
 	}
 
@@ -308,6 +307,81 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	}, nil
 }
 
+// ? ----+-----+-----Resend OTP-----+-----+-----
+
+type resendResult struct {
+	ReferenceID string
+}
+
+func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendResult, error) {
+	// Figure out what identifier the user sent, that is if the user registered with a email or a phone
+	var channel authChannel // identifier, eg: email/phone
+	var target string       // the identifier literal, eg: jon@email.com/+1-234567890
+	if req.Username != "" {
+		channel, target = channelUsername, req.Username
+	} else if req.Email != "" {
+		channel, target = channelEmail, req.Email
+	} else if req.Phone != "" {
+		channel, target = channelPhone, req.Phone
+	} else {
+		return resendResult{}, errMissingIdentifierResend
+	}
+	user, err := s.repo.findUserByChannel(ctx, channel, target)
+	if err != nil {
+		if err == errRepoNoResults {
+			return resendResult{}, errUserNotFound
+		}
+		return resendResult{}, err
+	}
+
+	var prevRefKey string
+	s.otpSessions.LoopFunc(func(key string, value otpSession, expiresAt time.Time) uint8 {
+		if value.userID == user.ID {
+			prevRefKey = key
+			return 0
+		}
+		return 1
+	})
+	if prevRefKey != "" {
+		s.otpSessions.Delete(prevRefKey)
+	}
+
+	switch channel {
+	// it means the resend it for a 2fa otp on login
+	case channelUsername:
+		if user.TwoFAs == nil {
+			return resendResult{}, err2FANotEnabled
+		}
+		primaryTwoFAChannel := user.TwoFAs[0]
+		switch primaryTwoFAChannel {
+		case channelEmail:
+			target = user.Email
+		case channelPhone:
+			target = user.Phone
+		default:
+			return resendResult{}, errInternalInvalid2FAChannel
+		}
+		otp, err := s.sendOTP(primaryTwoFAChannel, purpose2FA, target)
+		if err != nil {
+			return resendResult{}, err
+		}
+		refId := generateOTPSessionID()
+		s.otpSessions.Add(
+			refId,
+			otpSession{
+				userID:  user.ID,
+				channel: primaryTwoFAChannel,
+				purpose: purpose2FA,
+				otp:     otp,
+			},
+			time.Now().Add(ruleExpiryTimeOTP),
+		)
+		return resendResult{
+			ReferenceID: refId,
+		}, nil // todo
+	}
+}
+
 // ? ----+-----+-----Forgot password-----+-----+-----
 
 type forgotPasswordResult struct {
@@ -320,11 +394,9 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	var channel authChannel
 	var target string
 	if req.Email != "" {
-		channel = channelEmail
-		target = req.Email
+		channel, target = channelEmail, req.Email
 	} else if req.Phone != "" {
-		channel = channelPhone
-		target = req.Phone
+		channel, target = channelPhone, req.Phone
 	} else {
 		return forgotPasswordResult{}, errMissingIdentifier
 	}
@@ -386,11 +458,17 @@ func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) e
 
 // ? [HELPER] ----+-----+-----Send otp-----+-----+-----
 
+var (
+	errInternalInvalid2FAChannel = errors.New("auth.Service: invalid 2FA channel found")
+)
+
 // SendOTP sends a one-time password challenge to a user destination.
 // The behavior of this function changes based on the following configurations:
 //   - channel: The transport medium used to deliver the token (Email or SMS)
 //   - purpose: The system context (2FA, Reset password or Registration) used to select templates
 //   - target: The absolute address string (e.g., an email address or E.164 phone number)
+//
+// it returns the otp that was sent and an optional error occurs one
 func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target string) (string, error) {
 	otp, err := s.otp.Generate()
 	if err != nil { // generate otp error
@@ -414,7 +492,7 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 		// will not change the code but anyone signing up on the backend with a phone will simply not receive an otp and will not be able to continue.
 		// not returning an error or anything, its intentional, due to future compatibility. the frontend should not have phone supported.
 	default:
-		panic("invalid otp channel")
+		return "", errInternalInvalid2FAChannel
 	}
 	if err != nil { // send otp error
 		return "", err
