@@ -106,7 +106,20 @@ func (h Handler) ResendOTP(c *mo.Context) error{
 	if err!=nil{
 		return err
 	}
-	h.Service.resendOTP(c.Request().Context(), req)
+	result, err:=h.Service.resendOTP(c.Request().Context(), req)
+	if err!=nil{
+		return err
+	}
+	return c.JSON(
+		http.StatusOK,
+		response.Success(
+			response.CodeOk,
+			"OTP sent successfully to user's "+result.channel.String(),
+			struct {
+				ReferenceID string `json:"reference_id"`
+			}{result.referenceID},
+		),
+	)
 }
 
 // ? POST - models.verifyOTPRequest

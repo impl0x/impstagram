@@ -310,7 +310,8 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 // ? ----+-----+-----Resend OTP-----+-----+-----
 
 type resendResult struct {
-	ReferenceID string
+	referenceID string
+	channel     authChannel
 }
 
 func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendResult, error) {
@@ -326,6 +327,8 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 	} else {
 		return resendResult{}, errMissingIdentifierResend
 	}
+
+	// Check if the user even exists in our repository
 	user, err := s.repo.findUserByChannel(ctx, channel, target)
 	if err != nil {
 		if err == errRepoNoResults {
@@ -334,21 +337,27 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 		return resendResult{}, err
 	}
 
+	// Check if there is a already active otp session, if so we delete that first to prevent multiple active otp sessions for one user
 	var prevRefKey string
-	s.otpSessions.LoopFunc(func(key string, value otpSession, expiresAt time.Time) uint8 {
-		if value.userID == user.ID {
-			prevRefKey = key
-			return 0
-		}
-		return 1
-	})
+	s.otpSessions.LoopFunc(
+		// providing a function which receives the key, value and expiresAt when looping over all the items
+		func(key string, value otpSession, _ time.Time) uint8 {
+			if value.userID == user.ID {
+				prevRefKey = key
+				return 0 // signals the outer loop to quit
+			}
+			return 1
+		},
+	)
 	if prevRefKey != "" {
 		s.otpSessions.Delete(prevRefKey)
 	}
 
+	refId := generateOTPSessionID() // new otp session id
+
+	// Switching over the channel to see where the user wants to resend their otp
 	switch channel {
-	// it means the resend it for a 2fa otp on login
-	case channelUsername:
+	case channelUsername: // it means the resend it for a 2fa otp on login, if so we find the user's 2FA identifier and send an otp there
 		if user.TwoFAs == nil {
 			return resendResult{}, err2FANotEnabled
 		}
@@ -361,11 +370,11 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 		default:
 			return resendResult{}, errInternalInvalid2FAChannel
 		}
+		// Sending the otp and adding it to our otp sessions
 		otp, err := s.sendOTP(primaryTwoFAChannel, purpose2FA, target)
 		if err != nil {
 			return resendResult{}, err
 		}
-		refId := generateOTPSessionID()
 		s.otpSessions.Add(
 			refId,
 			otpSession{
@@ -377,8 +386,32 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 			time.Now().Add(ruleExpiryTimeOTP),
 		)
 		return resendResult{
-			ReferenceID: refId,
-		}, nil // todo
+			referenceID: refId,
+			channel:     primaryTwoFAChannel,
+		}, nil
+
+	case channelEmail, channelPhone: // must only be for registration
+		// Sending the otp and adding it to our otp sessions
+		otp, err := s.sendOTP(channel, purposeRegistration, target)
+		if err != nil {
+			return resendResult{}, err
+		}
+		s.otpSessions.Add(
+			refId,
+			otpSession{
+				userID:  user.ID,
+				channel: channel,
+				purpose: purposeRegistration,
+				otp:     otp,
+			},
+			time.Now().Add(ruleExpiryTimeOTP),
+		)
+		return resendResult{
+			referenceID: refId,
+			channel:     channel,
+		}, nil
+	default:
+		return resendResult{}, errInternalInvalid2FAChannel
 	}
 }
 
