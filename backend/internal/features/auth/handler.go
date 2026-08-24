@@ -100,14 +100,14 @@ func (h Handler) Login(c *mo.Context) error {
 }
 
 // ? POST - models.resendOTPRequest
-func (h Handler) ResendOTP(c *mo.Context) error{
+func (h Handler) ResendOTP(c *mo.Context) error {
 	var req resendOTPRequest
-	err:=c.DecodeAndValidateBody(req)
-	if err!=nil{
+	err := c.DecodeAndValidateBody(req)
+	if err != nil {
 		return err
 	}
-	result, err:=h.Service.resendOTP(c.Request().Context(), req)
-	if err!=nil{
+	result, err := h.Service.resendOTP(c.Request().Context(), req)
+	if err != nil {
 		return err
 	}
 	return c.JSON(

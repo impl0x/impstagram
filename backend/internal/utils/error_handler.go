@@ -39,9 +39,10 @@ func CustomErrorHandler(c *mo.Context, err error) {
 	// declaring some types we will need for errors.As
 	var moHttpErr mo.HTTPError
 	var validationErr validator.GroupedValidationError
-	var jsonSyntaxErr *json.SyntaxError
+	//// var jsonSyntaxErr *json.SyntaxError
 	var jsonUnmarshalErr *json.UnmarshalTypeError
 	var appErr apperr.AppErr
+
 	switch {
 	case errors.As(err, &appErr):
 		c.JSON(appErr.Kind.ToStatusCode(), response.Error(appErr.Code, appErr.Message))
@@ -71,15 +72,16 @@ func CustomErrorHandler(c *mo.Context, err error) {
 				validationErr.ToJsonStructList(),
 			},
 		)
-	case errors.As(err, &jsonSyntaxErr):
-		c.JSON(http.StatusUnprocessableEntity, response.Error(
-			response.CodeJSONInvalid,
-			fmt.Sprintf("JSON syntax error at offset %d", jsonSyntaxErr.Offset),
-		))
+	// 	it seems that json unmarshaller always returns a json.UnmarshalTypeError no matter if the syntax or type is incorrect, so this case will be commented out as being depreciated
+	// // case errors.As(err, &jsonSyntaxErr):
+	// // 	c.JSON(http.StatusUnprocessableEntity, response.Error(
+	// // 		response.CodeJSONInvalid,
+	// // 		fmt.Sprintf("JSON syntax error at offset %d", jsonSyntaxErr.Offset),
+	// // 	))
 	case errors.As(err, &jsonUnmarshalErr):
-		c.JSON(http.StatusExpectationFailed, response.Error(
+		c.JSON(http.StatusBadRequest, response.Error(
 			response.CodeValidationError,
-			fmt.Sprintf("Wrong type used for field %s", jsonUnmarshalErr.Field),
+			"Invalid JSON",
 		))
 	case errors.Is(err, io.EOF):
 		c.JSON(http.StatusUnprocessableEntity, response.Error(
