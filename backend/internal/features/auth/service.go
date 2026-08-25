@@ -175,7 +175,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 type loginResult struct {
 	accessToken  string
 	refreshToken string
-	requires2FA  bool // if this is false then below all fields are zero'd out, else the above token is zero value'd
+	requires2FA  bool // if this is false then below all fields are zeroed out, else the above token is zero valued
 	channel      authChannel
 	referenceID  string // Used to link the upcoming OTP request
 }
@@ -539,7 +539,7 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 type verifyResult struct {
 	accessToken    string
 	refreshToken   string
-	isResetRequest bool   // if this is true the above two values are zero'd out
+	isResetRequest bool   // if this is true the above two values are zeroed out
 	referenceID    string // if this verify request was for a reset password we return a referenceID instead
 }
 

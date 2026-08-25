@@ -56,20 +56,18 @@ type requestMetadata struct {
 
 // ? ----+-----+-----Request Body JSON-----+-----+-----
 
-// ! important:
-// make sure the startswith value is always correct to the config prefix value
+// ! important: make sure the validate tags are in align to the business rules and code
 
 type registerRequest struct {
-	Username string `json:"username" validate:"required,min=3,max=15"`
+	Username string `json:"username" validate:"required,min=3,max=30,username"`
 	Email    string `json:"email" validate:"optional,email"`
 	Phone    string `json:"phone" validate:"optional,e.164"`
 	Dob      string `json:"dob" validate:"required"`
-
 	Password string `json:"password" validate:"required,min=8,max=20"`
 }
 
 type loginRequest struct {
-	Username string `json:"username" validate:"optional,min=3,max=15"`
+	Username string `json:"username" validate:"optional,min=3,max=30,username"`
 	Email    string `json:"email" validate:"optional,email"`
 	Phone    string `json:"phone" validate:"optional,e.164"`
 
@@ -78,13 +76,13 @@ type loginRequest struct {
 
 type resendOTPRequest struct {
 	Purpose  string `json:"purpose" validate:"required,oneof=registration 2fa reset_password"`
-	Username string `json:"username" validate:"optional,min=3,max=15"`
+	Username string `json:"username" validate:"optional,min=3,max=30,username"`
 	Email    string `json:"email" validate:"optional,email"`
 	Phone    string `json:"phone" validate:"optional,e.164"`
 }
 
 type verifyOTPRequest struct {
-	ReferenceID string `json:"reference_id" validate:"required,startswith=otp_"` // make sure the startswith value is always correct to the config prefix value
+	ReferenceID string `json:"reference_id" validate:"required,startswith=otp_"`
 	OTP         string `json:"otp" validate:"required,numeric,len=6"`
 }
 
