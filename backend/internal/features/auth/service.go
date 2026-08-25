@@ -353,16 +353,17 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 		s.otpSessions.Delete(prevRefKey)
 	}
 
-	refId := generateOTPSessionID() // new otp session id
+	purpose := authPurpose(req.Purpose) // assuming its validated
 
-	// Switching over the channel to see where the user wants to resend their otp
-	switch channel {
-	case channelUsername: // it means the resend it for a 2fa otp on login, if so we find the user's 2FA identifier and send an otp there
+	// perform logic related to each purpose
+	switch purpose {
+	// if its for 2fa we change the channel and target to the primary 2fa identifier
+	case purpose2FA:
 		if user.TwoFAs == nil {
 			return resendResult{}, err2FANotEnabled
 		}
-		primaryTwoFAChannel := user.TwoFAs[0]
-		switch primaryTwoFAChannel {
+		channel = user.TwoFAs[0]
+		switch channel {
 		case channelEmail:
 			target = user.Email
 		case channelPhone:
@@ -370,49 +371,49 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 		default:
 			return resendResult{}, errInternalInvalid2FAChannel
 		}
-		// Sending the otp and adding it to our otp sessions
-		otp, err := s.sendOTP(primaryTwoFAChannel, purpose2FA, target)
-		if err != nil {
-			return resendResult{}, err
-		}
-		s.otpSessions.Add(
-			refId,
-			otpSession{
-				userID:  user.ID,
-				channel: primaryTwoFAChannel,
-				purpose: purpose2FA,
-				otp:     otp,
+	// if its for reset password we delete any previous reset sessions, same logic as otp sessions above
+	case purposeResetPass:
+		prevRefKey = ""
+		s.resetSessions.LoopFunc(
+			func(key string, value resetSession, expiresAt time.Time) uint8 {
+				if value.userID == user.ID {
+					prevRefKey = key
+					return 1
+				}
+				return 0
 			},
-			time.Now().Add(ruleExpiryTimeOTP),
 		)
-		return resendResult{
-			referenceID: refId,
-			channel:     primaryTwoFAChannel,
-		}, nil
-
-	case channelEmail, channelPhone: // must only be for registration
-		// Sending the otp and adding it to our otp sessions
-		otp, err := s.sendOTP(channel, purposeRegistration, target)
-		if err != nil {
-			return resendResult{}, err
+		if prevRefKey != "" {
+			s.resetSessions.Delete(prevRefKey)
 		}
-		s.otpSessions.Add(
-			refId,
-			otpSession{
-				userID:  user.ID,
-				channel: channel,
-				purpose: purposeRegistration,
-				otp:     otp,
-			},
-			time.Now().Add(ruleExpiryTimeOTP),
-		)
-		return resendResult{
-			referenceID: refId,
-			channel:     channel,
-		}, nil
-	default:
-		return resendResult{}, errInternalInvalid2FAChannel
+	// if for registration we just check if the channel is a username or not, because that is a invalid channel for registration and should not be sent.
+	case purposeRegistration:
+		if channel == channelUsername {
+			return resendResult{}, errInvalidIdenitiferResend
+		}
 	}
+
+	refId := generateOTPSessionID() // new otp session id
+
+	// Now we send the otp and store it in our session and return the user a new reference id
+	otp, err := s.sendOTP(channel, purpose, target)
+	if err != nil {
+		return resendResult{}, err
+	}
+	s.otpSessions.Add(
+		refId,
+		otpSession{
+			userID:  user.ID,
+			channel: channel,
+			purpose: purpose,
+			otp:     otp,
+		},
+		time.Now().Add(ruleExpiryTimeOTP),
+	)
+	return resendResult{
+		referenceID: refId,
+		channel:     channel,
+	}, nil
 }
 
 // ? ----+-----+-----Forgot password-----+-----+-----

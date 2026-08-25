@@ -55,9 +55,11 @@ var (
 	errUserUnverified         = apperr.NewForbidden(codeUserUnverified, "User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to register")
 )
 
+// Resend otp errors
 var (
-	errMissingIdentifierResend = apperr.NewValidation("Need at least email, phone, or username to resend otp")
-	err2FANotEnabled=apperr.NewValidation("User does not have 2FA enabled, cannot know where to send otp")
+	errMissingIdentifierResend = apperr.NewValidation("Need at least email, phone, or username to resend OTP")
+	errInvalidIdenitiferResend = apperr.NewValidation("Cannot send a registration verification OTP to username")
+	err2FANotEnabled           = apperr.NewValidation("User does not have 2FA enabled, cannot know where to send otp")
 )
 
 // Reset password errors

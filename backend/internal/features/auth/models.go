@@ -77,6 +77,7 @@ type loginRequest struct {
 }
 
 type resendOTPRequest struct {
+	Purpose  string `json:"purpose" validate:"required,oneof=registration 2fa reset_password"`
 	Username string `json:"username" validate:"optional,min=3,max=15"`
 	Email    string `json:"email" validate:"optional,email"`
 	Phone    string `json:"phone" validate:"optional,e.164"`
