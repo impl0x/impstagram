@@ -31,12 +31,17 @@ const (
 	codeResetSessionExpired response.Code = "RESET_SESSION_EXPIRED"
 
 	code2FAExistingChannel response.Code = "EXISTING_CHANNEL"
-	codeChannelEmpty     response.Code = "CHANNEL_EMPTY"
+	codeChannelEmpty       response.Code = "CHANNEL_EMPTY"
 
 	codeLoginSuccess    response.Code = "LOGIN_SUCCESS"
 	codeTwoFARequired   response.Code = "TWO_FACTOR_REQUIRED"
 	codeRegisterSuccess response.Code = "REGISTER_SUCCESS"
 	codeRefreshSuccess  response.Code = "REFRESH_SUCCESS"
+)
+
+// Common errors
+var (
+	errUserNotFound = apperr.NewNotFound(codeUserNotFound, "User not found")
 )
 
 // Registration errors
@@ -76,7 +81,6 @@ var (
 	errRefIDNotFound = apperr.NewNotFound(response.CodeNotFound, "Reference ID for this verify request not found, please request a new otp again")
 	errOTPExpired    = apperr.NewUnauthorized(codeOTPExpired, "The OTP provided is expired")
 	errIncorrectOTP  = apperr.NewUnauthorized(codeOTPIncorrect, "The OTP provided is incorrect")
-	errUserNotFound  = apperr.NewNotFound(codeUserNotFound, "User not found") // used multiple times
 )
 
 // Refresh errors
@@ -87,6 +91,6 @@ var (
 
 // Add 2FA errors
 var (
-	err2FAExistingChannel= apperr.NewConflict(code2FAExistingChannel, "This channel already has 2FA enabled")
-	errChannelEmpty     = apperr.NewNotFound(codeChannelEmpty, "The channel provided is not added to your account and cannot be set as two factor verification method")
+	err2FAExistingChannel = apperr.NewConflict(code2FAExistingChannel, "This channel already has 2FA enabled")
+	errChannelEmpty       = apperr.NewNotFound(codeChannelEmpty, "The channel provided is not added to your account and cannot be set as two factor verification method")
 )
