@@ -56,24 +56,24 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 		}
 
 		// Converting the json struct into a usable data type for our app
-		accessTokenJwt, err := accessTokenPayload.Convert()
+		accessToken, err := accessTokenPayload.Convert()
 		if err != nil {
 			return apperr.NewUnauthorized(response.CodeUnauthorized, "Invalid data in the JSON payload for authorization token")
 		}
-		// Checking if the jwt has expired
-		if accessTokenJwt.expiresAt.Before(time.Now()) {
+		// Checking if the token has expired
+		if accessToken.expiresAt.Before(time.Now()) {
 			return apperr.NewUnauthorized(response.CodeUnauthorized, "Token has expired, please refresh it using the refresh token")
 		}
 
 		// Checking if the jwt is in jwt token block list
-		_, _, ok := jwtTokenBlockList.Get(accessTokenJwt.jwtID)
+		_, _, ok := jwtTokenBlockList.Get(accessToken.jwtID)
 		if ok {
 			// try not to give the client much info about *why* it is unauthorized, even though we know that this jwt is blacklisted
 			return apperr.NewUnauthorized(response.CodeUnauthorized, "Invalid authorization token")
 		}
 
 		// We store the access token data struct in the context's store map
-		c.Store["jwt"] = accessTokenJwt
+		c.Add(keyAccessToken, accessToken)
 		return next(c)
 	}
 }

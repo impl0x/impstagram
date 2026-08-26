@@ -7,7 +7,15 @@ import (
 	"github.com/google/uuid"
 )
 
-// ? ----+-----+-----enums-----+-----+-----
+// ? ----+-----+-----Store keys-----+-----+-----
+// store keys are the keys used to store items in the context storage
+type storeKey = string
+
+const (
+	keyAccessToken storeKey = "jwt"
+)
+
+// ? ----+-----+-----Enums-----+-----+-----
 // enums are made to be equal to the database level enums for compatibility and maintainability
 
 // used to describe account status
@@ -62,6 +70,7 @@ type requestMetadata struct {
 }
 
 // ? ----+-----+-----JWT-----+-----+-----
+// jwt helper functions for generating access tokens
 
 // The access token jwt payload used in the actual token data after encoding
 type accessTokenJwtPayload struct {
@@ -158,6 +167,6 @@ type resetPasswordRequest struct {
 	NewPassword string `json:"new_password" validate:"required,min=8,max=20"`
 }
 
-type add2FARequest struct{
+type add2FARequest struct {
 	Channel string `json:"channel" validate:"required,oneof=email phone"`
 }

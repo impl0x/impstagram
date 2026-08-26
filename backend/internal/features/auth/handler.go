@@ -225,8 +225,11 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 
 // * POST - empty
 func (h Handler) Logout(c *mo.Context) error {
-	token := c.Store["jwt"].(accessTokenJwt)
-	err := h.Service.logout(c.Request().Context(), token)
+	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	if err != nil {
+		return err
+	}
+	err = h.Service.logout(c.Request().Context(), token)
 	if err != nil {
 		return err
 	}
@@ -240,10 +243,22 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token := c.Store["jwt"].(accessTokenJwt)
+	token,err:=mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	if err!=nil{
+		return err
+	}
 	err = h.Service.add2FA(c.Request().Context(), token, req)
 	if err != nil {
 		return err
 	}
 	return c.JSON(http.StatusOK, response.Success(response.CodeOk, "Added 2FA for this channel successfully", nil))
+}
+
+// * POST - empty
+func (h Handler) TotpSetup(c *mo.Context) error {
+	token, err:=mo.ContextGet[accessTokenJwt](c,keyAccessToken)	
+	if err!=nil{
+		return err
+	}
+	err = h.Service.totpSetup(c.Request().Context(), token)
 }

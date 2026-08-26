@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/google/uuid v1.6.0 // used for uuid in database and general uuid generation
-	github.com/impl0x/mo v1.5.2 // web api framework
+	github.com/impl0x/mo v1.5.3 // web api framework
 	github.com/mileusna/useragent v1.3.5 // user agent parsing
 )
 
