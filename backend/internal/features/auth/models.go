@@ -1,5 +1,12 @@
 package auth
 
+import (
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+)
+
 // ? ----+-----+-----enums-----+-----+-----
 // enums are made to be equal to the database level enums for compatibility and maintainability
 
@@ -52,6 +59,57 @@ type twoFAs []authChannel
 type requestMetadata struct {
 	IP        string
 	userAgent string
+}
+
+// ? ----+-----+-----JWT-----+-----+-----
+
+// The access token jwt payload used in the actual token data after encoding
+type accessTokenJwtPayload struct {
+	UserID    string `json:"sub" validate:"required,len=36"`
+	IssuedAt  uint   `json:"iat" validate:"required"`
+	ExpiresAt uint   `json:"exp" validate:"required"`
+	JwtID     string `json:"jti" validate:"required,len=36"`
+}
+
+// Usable struct for the service with converted data types
+type accessTokenJwt struct {
+	userID    uuid.UUID
+	issuedAt  time.Time
+	expiresAt time.Time
+	jwtID     uuid.UUID
+}
+
+// Generates a new payload with the Access Token expiry time in it using the [BasicPayload]
+func newAccessTokenPayload(userID uuid.UUID, jwtID uuid.UUID, expiryTime time.Duration) accessTokenJwtPayload {
+	now := time.Now()
+	return accessTokenJwtPayload{
+		UserID:    userID.String(),
+		IssuedAt:  uint(now.Unix()),
+		ExpiresAt: uint(now.Add(expiryTime).Unix()),
+		JwtID:     jwtID.String(),
+	}
+}
+
+var errJwtInvalidUUID = errors.New("auth.models: invalid uuid")
+
+// Converts a AccessTokenPayload to a more usable AccessToken type with the values being converted to usable uuid.UUID and time.Time
+//
+// only returns error of errJwtInvalidUUID if the UUID parsing fails
+func (atp accessTokenJwtPayload) Convert() (accessTokenJwt, error) {
+	userID, err := uuid.Parse(atp.UserID)
+	if err != nil {
+		return accessTokenJwt{}, errJwtInvalidUUID
+	}
+	jwtID := uuid.MustParse(atp.JwtID)
+	if err != nil {
+		return accessTokenJwt{}, errJwtInvalidUUID
+	}
+	return accessTokenJwt{
+		userID:    userID,
+		issuedAt:  time.Unix(int64(atp.IssuedAt), 0),
+		expiresAt: time.Unix(int64(atp.ExpiresAt), 0),
+		jwtID:     jwtID,
+	}, nil
 }
 
 // ? ----+-----+-----Request Body JSON-----+-----+-----

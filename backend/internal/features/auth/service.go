@@ -1,11 +1,11 @@
 package auth
 
 import (
+	"backend/internal/pkg/cryptoutil" // used to generate cryptographically random IDs and OTPs
 	"backend/internal/pkg/dob"
 	"backend/internal/pkg/email"
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/password"
-	"backend/internal/pkg/cryptoutil" // used to generate cryptographically random IDs and OTPs
 	"backend/internal/pkg/ttlcache"
 	"context"
 	"errors"
@@ -280,7 +280,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 
 	// generate tokens
 	jwtID := uuid.New()
-	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID, ruleExpiryTimeAccessToken))
+	accessToken, err := jwt.GenerateToken(newAccessTokenPayload(user.ID, jwtID, ruleExpiryTimeAccessToken))
 	if err != nil {
 		panic(err)
 	}
@@ -290,11 +290,11 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	err = s.repo.createSession(
 		ctx,
 		newUserSession(
-			jwtID,                               // jwtID
+			jwtID,                                    // jwtID
 			cryptoutil.GenerateMD5Hash(refreshToken), // tokenHash
-			rmd.IP,                              // userIP
-			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present
-			user.ID,                             // userID
+			rmd.IP,                                   // userIP
+			rmd.userAgent,                            // userAgent - assumes that past middleware has checked if a valid ua is present
+			user.ID,                                  // userID
 		),
 	)
 	if err != nil {
@@ -598,7 +598,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 
 	// generate new tokens and return them to the user for future usage
 	jwtID := uuid.New()
-	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(user.ID, jwtID, ruleExpiryTimeAccessToken))
+	accessToken, err := jwt.GenerateToken(newAccessTokenPayload(user.ID, jwtID, ruleExpiryTimeAccessToken))
 	if err != nil {
 		panic(err)
 	}
@@ -608,11 +608,11 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	err = s.repo.createSession(
 		ctx,
 		newUserSession(
-			jwtID,                               // jwtID
+			jwtID,                                    // jwtID
 			cryptoutil.GenerateMD5Hash(refreshToken), // tokenHash
-			rmd.IP,                              // userIP
-			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present
-			user.ID,                             // userID
+			rmd.IP,                                   // userIP
+			rmd.userAgent,                            // userAgent - assumes that past middleware has checked if a valid ua is present
+			user.ID,                                  // userID
 		),
 	)
 
@@ -653,8 +653,9 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 		return refreshResult{}, errExpiredRefreshToken
 	}
 
-	// if everything is good we generate both new tokens, we do not have to regenerate and re update the jwt id as its unnecessary. it is a fixed value which is linked with the user session in database
-	accessToken, err := jwt.GenerateToken(jwt.NewAccessTokenPayload(userSesh.UserID, userSesh.JwtID, ruleExpiryTimeAccessToken))
+	// if everything is good we generate both new tokens, we do not have to regenerate and re update the jwt id as its unnecessary.
+	// it is a fixed value which is linked with the user session in database
+	accessToken, err := jwt.GenerateToken(newAccessTokenPayload(userSesh.UserID, userSesh.JwtID, ruleExpiryTimeAccessToken))
 	if err != nil {
 		panic(err)
 	}
@@ -680,13 +681,17 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 
 // ? ----+-----+-----Logout-----+-----+-----
 
-func (s *Service) logout(ctx context.Context, token jwt.AccessToken) error {
+func (s *Service) logout(ctx context.Context, token accessTokenJwt) error {
 	// Remove user session from database
-	err := s.repo.deleteSessionByJwtID(ctx, token.JwtID)
+	err := s.repo.deleteSessionByJwtID(ctx, token.jwtID)
 	if err != nil {
 		return err // db error
 	}
 	// Add the jwt token id to the block list so this gets rejected by the auth middleware
-	jwtTokenBlockList.Add(token.JwtID, struct{}{}, token.ExpiresAt)
+	jwtTokenBlockList.Add(token.jwtID, struct{}{}, token.expiresAt)
 	return nil
 }
+
+// ? ----+-----+-----Add 2FA-----+-----+-----
+
+func (s *Service) add2FA(ctx context.Context, token accessTokenJwt)

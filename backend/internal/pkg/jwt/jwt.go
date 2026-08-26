@@ -23,7 +23,7 @@ var (
 
 // Payload must be a json compatible struct, do not use maps. It's not efficient, use structs.
 //
-// error can only be a invalid json error
+// error can only be ErrInvalidJsonPayload, which is returned if json marshalling fails
 func GenerateToken(payload any) (string, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
