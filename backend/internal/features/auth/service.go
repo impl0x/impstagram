@@ -5,7 +5,7 @@ import (
 	"backend/internal/pkg/email"
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/password"
-	"backend/internal/pkg/token" // used to generate cryptographically random IDs and OTPs
+	"backend/internal/pkg/cryptoutil" // used to generate cryptographically random IDs and OTPs
 	"backend/internal/pkg/ttlcache"
 	"context"
 	"errors"
@@ -21,7 +21,7 @@ import (
 type Service struct {
 	repo  repository
 	email email.Sender
-	otp   token.OtpGenerator
+	otp   cryptoutil.OtpGenerator
 
 	mu            sync.RWMutex                          // mutex for the OTPSessions
 	otpSessions   *ttlcache.Cache[string, otpSession]   // string is the reference id
@@ -52,21 +52,21 @@ type resetSession struct {
 	userID uuid.UUID
 }
 
-// ? ----+-----+-----Helper Wrapper Functions for token generation-----+-----+-----
+// ? ----+-----+-----Wrapper functions for cryptoutil-----+-----+-----
 
 // generates a new random string with the prefix [rulePrefixRefreshToken] and size [ruleSizeRefreshToken]
 func generateRefreshToken() string {
-	return token.GenerateToken(rulePrefixRefreshToken, ruleSizeRefreshToken)
+	return cryptoutil.GenerateToken(rulePrefixRefreshToken, ruleSizeRefreshToken)
 }
 
 // generates a new random string with the prefix [rulePrefixOTPSession] and size [ruleSizeSessionID]
 func generateOTPSessionID() string {
-	return token.GenerateToken(rulePrefixOTPSession, ruleSizeSessionID)
+	return cryptoutil.GenerateToken(rulePrefixOTPSession, ruleSizeSessionID)
 }
 
 // generates a new random string with the prefix [rulePrefixResetSession] and size [ruleSizeSessionID]
 func generateResetSessionID() string {
-	return token.GenerateToken(rulePrefixResetSession, ruleSizeSessionID)
+	return cryptoutil.GenerateToken(rulePrefixResetSession, ruleSizeSessionID)
 }
 
 // ? ----+-----+-----Register-----+-----+-----
@@ -175,7 +175,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 type loginResult struct {
 	accessToken  string
 	refreshToken string
-	requires2FA  bool // if this is false then below all fields are zeroed out, else the above token is zero valued
+	requires2FA  bool // if this is false then below all fields are zeroed out, else the above tokens is zero valued
 	channel      authChannel
 	referenceID  string // Used to link the upcoming OTP request
 }
@@ -291,7 +291,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		ctx,
 		newUserSession(
 			jwtID,                               // jwtID
-			token.GenerateMD5Hash(refreshToken), // tokenHash
+			cryptoutil.GenerateMD5Hash(refreshToken), // tokenHash
 			rmd.IP,                              // userIP
 			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present
 			user.ID,                             // userID
@@ -498,7 +498,7 @@ var (
 
 // SendOTP sends a one-time password challenge to a user destination.
 // The behavior of this function changes based on the following configurations:
-//   - channel: The transport medium used to deliver the token (Email or SMS)
+//   - channel: The transport medium used to deliver the OTP (Email or SMS)
 //   - purpose: The system context (2FA, Reset password or Registration) used to select templates
 //   - target: The absolute address string (e.g., an email address or E.164 phone number)
 //
@@ -543,8 +543,8 @@ type verifyResult struct {
 	referenceID    string // if this verify request was for a reset password we return a referenceID instead
 }
 
-// Verifies the two factor / verification / reset password OTP and generates a token / reset pass id for the user.
-func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd requestMetadata) (verifyResult, error) { // token, error
+// Verifies the two factor / verification / reset password OTP and generates a token pair / reset pass id for the user.
+func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd requestMetadata) (verifyResult, error) {
 	// retrieve the session from the reference id in the request
 	session, expiresAt, ok := s.otpSessions.Get(req.ReferenceID)
 	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
@@ -555,7 +555,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	}
 	var err error
 	if session.channel == channelTOTP { // if its a authenticator time based 2 factor code
-		session.otp, err = token.GenerateTOTP(session.otp) // in this case secretOTP is actually the secretKey for the TOTP which is used to compute the otp.
+		session.otp, err = cryptoutil.GenerateTOTP(session.otp) // in this case secretOTP is actually the secretKey for the TOTP which is used to compute the otp.
 		if err != nil {
 			return verifyResult{}, err
 		}
@@ -609,7 +609,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		ctx,
 		newUserSession(
 			jwtID,                               // jwtID
-			token.GenerateMD5Hash(refreshToken), // tokenHash
+			cryptoutil.GenerateMD5Hash(refreshToken), // tokenHash
 			rmd.IP,                              // userIP
 			rmd.userAgent,                       // userAgent - assumes that past middleware has checked if a valid ua is present
 			user.ID,                             // userID
@@ -635,7 +635,7 @@ type refreshResult struct {
 
 func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResult, error) {
 	// Do a db lookup with the refresh token's hash
-	userSesh, err := s.repo.findSessionByToken(ctx, token.GenerateMD5Hash(req.RefreshToken))
+	userSesh, err := s.repo.findSessionByToken(ctx, cryptoutil.GenerateMD5Hash(req.RefreshToken))
 	if err != nil {
 		return refreshResult{}, err // db error
 	}
@@ -664,7 +664,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	err = s.repo.updateSessionToken(
 		ctx,
 		userSesh.ID,
-		token.GenerateMD5Hash(refreshToken), // we store a hash of the token
+		cryptoutil.GenerateMD5Hash(refreshToken), // we store a hash of the token
 		time.Now().AddDate(0, 0, ruleExpiryTimeRefreshToken),
 	)
 	if err != nil {
@@ -680,13 +680,13 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 
 // ? ----+-----+-----Logout-----+-----+-----
 
-func (s *Service) logout(ctx context.Context, accessTokenJwt jwt.AccessToken) error {
+func (s *Service) logout(ctx context.Context, token jwt.AccessToken) error {
 	// Remove user session from database
-	err := s.repo.deleteSessionByJwtID(ctx, accessTokenJwt.JwtID)
+	err := s.repo.deleteSessionByJwtID(ctx, token.JwtID)
 	if err != nil {
 		return err // db error
 	}
 	// Add the jwt token id to the block list so this gets rejected by the auth middleware
-	jwtTokenBlockList.Add(accessTokenJwt.JwtID, struct{}{}, accessTokenJwt.ExpiresAt)
+	jwtTokenBlockList.Add(token.JwtID, struct{}{}, token.ExpiresAt)
 	return nil
 }

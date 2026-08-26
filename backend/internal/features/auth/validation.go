@@ -17,9 +17,11 @@ func AddValidations() {
 // Username validation logic:
 //   - allowed a-z 0-9 _ .
 //   - first!=0-9
+//   - warn: does not check length
+//
 // tag: username
-func validateUsername() (string, (func(v string) error)) {
-	// storing sentinel errors to avoid heap allocation on every call to func 
+func validateUsername() (string, func(v string) error) {
+	// storing sentinel errors to avoid heap allocation on every call to func
 	errEmptyUsername := errors.New("Empty username")
 	errStartsWithPeriod := errors.New("Cannot start username with a period")
 	errStartsWithNumber := errors.New("Cannot start username with a number")

@@ -17,15 +17,15 @@ func NewHandler(s *Service) Handler {
 	return Handler{s}
 }
 
-// some info:
-// - we are handling all the Service level errors via the [Handler.handleError] function,
-// 	 we return the function result in the Handler purely due to idiom it is never actually gonna return an actual error
-// 	 except if json encode error occurs which is not probable because its our function with valid syntax and logic.
-//
+// ! some info:
 // - we use anonymous structs to return the json response because using a map is more expensive as it allocates to the heap
+// - we also will not store this structs globally instead of creating them anonymously on every handler call because of readability and decoupling such that no handler depends on another handler
 // - Not all functions need to be explained individually as they all share the same pattern, only the first register function is explained in detail below
 
-// ? POST - models.RegisterRequest
+// ? ----+-----+-----Public paths-----+-----+-----
+// All paths below are publicly accessible without a auth token requirement
+
+// * POST - models.RegisterRequest
 func (h Handler) Register(c *mo.Context) error {
 	// Binding the request json to the struct model and validating it at the same time
 	var req registerRequest
@@ -52,12 +52,8 @@ func (h Handler) Register(c *mo.Context) error {
 	)
 }
 
-// ? POST - models.loginRequest
+// * POST - models.loginRequest
 func (h Handler) Login(c *mo.Context) error {
-	if h.Service == nil {
-		println(h.Service)
-		return c.NoContent(204)
-	}
 	var req loginRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
@@ -99,7 +95,7 @@ func (h Handler) Login(c *mo.Context) error {
 	)
 }
 
-// ? POST - models.resendOTPRequest
+// * POST - models.resendOTPRequest
 func (h Handler) ResendOTP(c *mo.Context) error {
 	var req resendOTPRequest
 	err := c.DecodeAndValidateBody(req)
@@ -122,7 +118,7 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 	)
 }
 
-// ? POST - models.verifyOTPRequest
+// * POST - models.verifyOTPRequest
 func (h Handler) VerifyOTP(c *mo.Context) error {
 	var req verifyOTPRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -157,7 +153,7 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 	)
 }
 
-// ? POST - models.RefreshRequest
+// * POST - models.RefreshRequest
 func (h Handler) Refresh(c *mo.Context) error {
 	var req refreshRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -181,17 +177,8 @@ func (h Handler) Refresh(c *mo.Context) error {
 	)
 }
 
-// ? [AUTH PROTECTED] POST - empty
-func (h Handler) Logout(c *mo.Context) error {
-	accessTokenJwt := c.Store["jwt"].(jwt.AccessToken) // type conversion and reading the map assumes that this path has the authorization [Middleware] wrapped beforehand and it is working
-	err := h.Service.logout(c.Request().Context(), accessTokenJwt)
-	if err != nil {
-		return err
-	}
-	return c.NoContent(http.StatusNoContent)
-}
 
-// ? POST - models.forgotPasswordRequest
+// * POST - models.forgotPasswordRequest
 func (h Handler) ForgotPassword(c *mo.Context) error {
 	var req forgotPasswordRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -214,7 +201,7 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 	)
 }
 
-// ? POST - models.resetPasswordRequest
+// * POST - models.resetPasswordRequest
 func (h Handler) ResetPassword(c *mo.Context) error {
 	var req resetPasswordRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -233,4 +220,17 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 			nil,
 		),
 	)
+}
+
+// ? ----+-----+-----Auth protected paths-----+-----+-----
+// All the paths below are expected to be wrapped by a authorization middleware, [Middleware]. 
+
+// * POST - empty
+func (h Handler) Logout(c *mo.Context) error {
+	accessTokenJwt := c.Store["jwt"].(jwt.AccessToken) // type conversion and reading the map assumes that this path has the authorization [Middleware] wrapped beforehand and it is working
+	err := h.Service.logout(c.Request().Context(), accessTokenJwt)
+	if err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusNoContent)
 }

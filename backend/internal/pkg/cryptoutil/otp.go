@@ -1,4 +1,4 @@
-package token
+package cryptoutil
 
 import (
 	"crypto/rand"
