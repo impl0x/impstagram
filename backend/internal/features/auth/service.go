@@ -31,8 +31,9 @@ type Service struct {
 
 func NewService(repo repository, emailClient email.Sender) *Service {
 	return &Service{
-		email:         emailClient,
 		repo:          repo,
+		email:         emailClient,
+		otp:           cryptoutil.NewOtpGenerator(ruleOTPLen, ruleTOTPLen, ruleSizeTOTPKey),
 		otpSessions:   ttlcache.New[string, otpSession](ruleTTLCacheCleanIntervalOTP),
 		resetSessions: ttlcache.New[string, resetSession](ruleTTLCacheCleanIntervalReset),
 	}
@@ -561,7 +562,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	}
 	var err error
 	if session.channel == channelTOTP { // if its a authenticator time based 2 factor code
-		session.otp, err = cryptoutil.GenerateTOTP(session.otp) // in this case secretOTP is actually the secretKey for the TOTP which is used to compute the otp.
+		session.otp, err = s.otp.GenerateTOTP(session.otp) // in this case secretOTP is actually the secretKey for the TOTP which is used to compute the otp.
 		if err != nil {
 			return verifyResult{}, err
 		}
@@ -741,4 +742,20 @@ func (s *Service) add2FA(ctx context.Context, token accessTokenJwt, req add2FARe
 	}
 	// returning empty result as there is nothing more we need to signify
 	return nil
+}
+
+// ? ----+-----+-----Totp Setup-----+-----+-----
+
+type totpSetupResult struct {
+}
+
+func (s *Service) totpSetup(ctx context.Context, token accessTokenJwt) (totpSetupResult, error) {
+	user, err := s.repo.findUserByID(ctx, token.userID)
+	if err != nil {
+		if err == errRepoNoResults {
+			return totpSetupResult{}, errUserNotFound
+		}
+		return totpSetupResult{}, err
+	}
+
 }
