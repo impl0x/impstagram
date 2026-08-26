@@ -28,14 +28,17 @@ const (
 	ruleTTLCacheCleanIntervalJWTBlockList = ruleExpiryTimeAccessToken / 2
 )
 
+// otp lengths
 const (
-	ruleOTPSize = 6
+	ruleOTPLen  = 6
+	ruleTOTPLen = 6
 )
 
 // byte sizes
 const (
 	ruleSizeSessionID    = 24 // used for otp sessions, reset password sessions, basically every ttl cache session key
-	ruleSizeRefreshToken = 32 //
+	ruleSizeRefreshToken = 32
+	ruleSizeTOTPKey      = 20 // matches the sha1 output
 )
 
 // opaque string / id prefixes
