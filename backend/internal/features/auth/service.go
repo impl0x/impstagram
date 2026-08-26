@@ -9,6 +9,7 @@ import (
 	"backend/internal/pkg/ttlcache"
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"time"
 
@@ -314,6 +315,7 @@ type resendResult struct {
 	channel     authChannel
 }
 
+// Re sends otp an otp to the according to the provided purpose and channel
 func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendResult, error) {
 	// Figure out what identifier the user sent, that is if the user registered with a email or a phone
 	var channel authChannel // identifier, eg: email/phone
@@ -394,7 +396,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 			return resendResult{}, errInvalidIdentifierResend
 		}
 	}
-	
+
 	// Now we send the otp and store it in our session and return the user a new reference id
 	refId := generateOTPSessionID() // new otp session id
 
@@ -425,6 +427,7 @@ type forgotPasswordResult struct {
 	referenceID string
 }
 
+// Raises a forgot password session request which sends an verification otp to the channel provided and stores a in memory temporary session
 func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest) (forgotPasswordResult, error) {
 	// Figure out what identifier/channel the user sent us and store those into variables
 	var channel authChannel
@@ -468,6 +471,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 
 // ? ----+-----+-----Reset password-----+-----+-----
 
+// updates a user's password
 func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) error {
 	// Retrieve the reset session from the cache using the reference id from the request data
 	session, expiresAt, ok := s.resetSessions.Get(req.ReferenceID)
@@ -635,6 +639,7 @@ type refreshResult struct {
 	refreshToken string
 }
 
+// refreshes the token pair with a new pair of tokens
 func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResult, error) {
 	// Do a db lookup with the refresh token's hash
 	userSesh, err := s.repo.findSessionByToken(ctx, cryptoutil.GenerateMD5Hash(req.RefreshToken))
@@ -683,6 +688,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 
 // ? ----+-----+-----Logout-----+-----+-----
 
+// deletes the current user session
 func (s *Service) logout(ctx context.Context, token accessTokenJwt) error {
 	// Remove user session from database
 	err := s.repo.deleteSessionByJwtID(ctx, token.jwtID)
@@ -696,4 +702,43 @@ func (s *Service) logout(ctx context.Context, token accessTokenJwt) error {
 
 // ? ----+-----+-----Add 2FA-----+-----+-----
 
-func (s *Service) add2FA(ctx context.Context, token accessTokenJwt)
+// adds a 2FA method to the user account,
+//
+// note: totp has its separate function therefore its assumed that the channel is validated to be either email or phone only
+func (s *Service) add2FA(ctx context.Context, token accessTokenJwt, req add2FARequest) error {
+	// finding the user in the database using the user id from token
+	user, err := s.repo.findUserByID(ctx, token.userID)
+	if err != nil {
+		if err == errRepoNoResults {
+			return errUserNotFound
+		}
+		return err
+	}
+	// checking if the channel already has a 2fa
+	channel := authChannel(req.Channel) // assuming its validated to valid 2fa channels only, except totp it has its own endpoints
+	if slices.Contains(user.TwoFAs, channel) {
+		return err2FAExistingChannel
+	}
+	// switching on channel to check if the channel that the user requested is even present in our database
+	switch channel {
+	case channelEmail:
+		if user.Email == "" {
+			return errChannelEmpty
+		}
+	case channelPhone:
+		if user.Phone == "" {
+			return errChannelEmpty
+		}
+	}
+	// adding the new channel to the 2fa list and updating in the database
+	user.TwoFAs = append(user.TwoFAs, channel)
+	err = s.repo.updateUser2FA(ctx, user.ID, user.TwoFAs)
+	if err != nil {
+		if err == errRepoNoResults { // really impossible as we just found the user exists but still letting it stay
+			return errUserNotFound
+		}
+		return err
+	}
+	// returning empty result as there is nothing more we need to signify
+	return nil
+}

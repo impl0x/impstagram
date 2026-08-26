@@ -225,10 +225,25 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 
 // * POST - empty
 func (h Handler) Logout(c *mo.Context) error {
-	accessTokenJwt := c.Store["jwt"].(accessTokenJwt) // type conversion and reading the map assumes that this path has the authorization [Middleware] wrapped beforehand and it is working
-	err := h.Service.logout(c.Request().Context(), accessTokenJwt)
+	token := c.Store["jwt"].(accessTokenJwt)
+	err := h.Service.logout(c.Request().Context(), token)
 	if err != nil {
 		return err
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+// * POST - add2FARequest
+func (h Handler) Add2FA(c *mo.Context) error {
+	var req add2FARequest
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
+		return err
+	}
+	token := c.Store["jwt"].(accessTokenJwt)
+	err = h.Service.add2FA(c.Request().Context(), token, req)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, response.Success(response.CodeOk, "Added 2FA for this channel successfully", nil))
 }

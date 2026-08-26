@@ -157,3 +157,7 @@ type resetPasswordRequest struct {
 	ReferenceID string `json:"reference_id" validate:"required,startswith=pwd_"`
 	NewPassword string `json:"new_password" validate:"required,min=8,max=20"`
 }
+
+type add2FARequest struct{
+	Channel string `json:"channel" validate:"required,oneof=email phone"`
+}

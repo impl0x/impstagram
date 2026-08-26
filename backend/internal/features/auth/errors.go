@@ -30,6 +30,9 @@ const (
 
 	codeResetSessionExpired response.Code = "RESET_SESSION_EXPIRED"
 
+	code2FAExistingChannel response.Code = "EXISTING_CHANNEL"
+	codeChannelEmpty     response.Code = "CHANNEL_EMPTY"
+
 	codeLoginSuccess    response.Code = "LOGIN_SUCCESS"
 	codeTwoFARequired   response.Code = "TWO_FACTOR_REQUIRED"
 	codeRegisterSuccess response.Code = "REGISTER_SUCCESS"
@@ -80,4 +83,10 @@ var (
 var (
 	errInvalidRefreshToken = apperr.NewUnauthorized(codeRefreshTokenInvalid, "Refresh token is invalid, please login again")
 	errExpiredRefreshToken = apperr.NewUnauthorized(codeRefreshTokenExpired, "Refresh token has expired, please login again")
+)
+
+// Add 2FA errors
+var (
+	err2FAExistingChannel= apperr.NewConflict(code2FAExistingChannel, "This channel already has 2FA enabled")
+	errChannelEmpty     = apperr.NewNotFound(codeChannelEmpty, "The channel provided is not added to your account and cannot be set as two factor verification method")
 )

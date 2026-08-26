@@ -21,7 +21,8 @@ func NewPostgresRepository(db *pgxpool.Pool) PostgresRepository {
 	return PostgresRepository{db}
 }
 
-// users table
+// ? ----+-----+-----Users table-----+-----+-----
+
 func (pg PostgresRepository) findUser(ctx context.Context, one string, two any) (*user, error) {
 	rows, err := pg.Db.Query(ctx, `SELECT * FROM users WHERE $1 = $2`, one, two)
 	if err != nil {
@@ -73,7 +74,7 @@ func (pg PostgresRepository) updateUser2FA(ctx context.Context, userID uuid.UUID
 	return pg.updateUser(ctx, userID, "two_fas", twoFAs)
 }
 
-// user_sessions table{}
+// ? ----+-----+-----User sessions table-----+-----+-----
 
 func (pg PostgresRepository) findSession(ctx context.Context, one string, two any) (*userSession, error) {
 	rows, err := pg.Db.Query(ctx, `SELECT * FROM user_sessions WHERE $1 = $2`, one, two)
