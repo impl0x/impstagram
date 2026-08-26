@@ -58,7 +58,7 @@ var (
 // Resend otp errors
 var (
 	errMissingIdentifierResend = apperr.NewValidation("Need at least email, phone, or username to resend OTP")
-	errInvalidIdenitiferResend = apperr.NewValidation("Cannot send a registration verification OTP to username")
+	errInvalidIdentifierResend = apperr.NewValidation("Invalid identifier for resending OTP")
 	err2FANotEnabled           = apperr.NewValidation("User does not have 2FA enabled, cannot know where to send otp")
 )
 

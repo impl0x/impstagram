@@ -35,7 +35,7 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 		}
 
 		// Decode the token into a jwt payload struct
-		var accessTokenPayload jwt.AccessTokenPayload
+		var accessTokenPayload accessTokenJwtPayload
 		err := jwt.VerifyToken(authHeader, &accessTokenPayload)
 
 		// Check if jwt decode fails or if the signature is incorrect
@@ -48,8 +48,9 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 			}
 		}
 
-		// validating the jwt payload (optional)
-		errs := validator.Validate(accessTokenPayload) //! we do not technically need to validate a access token if the server is correctly issuing tokens, comment this part out if everything is tested and working
+		// validating the jwt payload
+		// ! (optional)
+		errs := validator.Validate(accessTokenPayload) // ! we do not technically need to validate a access token if the server is correctly issuing tokens, comment this part out if everything is tested and working
 		if errs != nil {
 			return apperr.NewUnauthorized(response.CodeUnauthorized, "Invalid authorization token issued by the server! Validation error for the JSON payload")
 		}
@@ -60,12 +61,12 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 			return apperr.NewUnauthorized(response.CodeUnauthorized, "Invalid data in the JSON payload for authorization token")
 		}
 		// Checking if the jwt has expired
-		if accessTokenJwt.ExpiresAt.Before(time.Now()) {
+		if accessTokenJwt.expiresAt.Before(time.Now()) {
 			return apperr.NewUnauthorized(response.CodeUnauthorized, "Token has expired, please refresh it using the refresh token")
 		}
 
 		// Checking if the jwt is in jwt token block list
-		_, _, ok := jwtTokenBlockList.Get(accessTokenJwt.JwtID)
+		_, _, ok := jwtTokenBlockList.Get(accessTokenJwt.jwtID)
 		if ok {
 			// try not to give the client much info about *why* it is unauthorized, even though we know that this jwt is blacklisted
 			return apperr.NewUnauthorized(response.CodeUnauthorized, "Invalid authorization token")

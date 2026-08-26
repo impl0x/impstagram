@@ -141,10 +141,8 @@ func (pg PostgresRepository) handleError(err error) error {
 		return errRepoNoResults
 	case errors.Is(err, pgx.ErrTooManyRows):
 		return errRepoTooManyResults
-	case errors.Is(err, context.DeadlineExceeded):
-		return context.DeadlineExceeded // unwrap, we need to only return unwrapped errors if the handler is not going to raise a internal server error with them
-	case errors.Is(err, context.Canceled):
-		return context.Canceled // unwrap
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return err
 	case errors.As(err, &pgErr):
 		return fmt.Errorf("repository: sql error, %w, Code: %s", err, pgErr.Code) // we let the error bubble to the handler where it will eventually be turned into a internal error
 	default:

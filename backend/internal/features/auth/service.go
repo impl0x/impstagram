@@ -362,12 +362,14 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 		if user.TwoFAs == nil {
 			return resendResult{}, err2FANotEnabled
 		}
-		channel = user.TwoFAs[0]
+		channel = user.TwoFAs[0] // considering the first element in the slice to be the primary 2fa identifier
 		switch channel {
 		case channelEmail:
 			target = user.Email
 		case channelPhone:
 			target = user.Phone
+		case channelTOTP:
+			return resendResult{}, errInvalidIdentifierResend
 		default:
 			return resendResult{}, errInternalInvalid2FAChannel
 		}
@@ -389,13 +391,13 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 	// if for registration we just check if the channel is a username or not, because that is a invalid channel for registration and should not be sent.
 	case purposeRegistration:
 		if channel == channelUsername {
-			return resendResult{}, errInvalidIdenitiferResend
+			return resendResult{}, errInvalidIdentifierResend
 		}
 	}
-
+	
+	// Now we send the otp and store it in our session and return the user a new reference id
 	refId := generateOTPSessionID() // new otp session id
 
-	// Now we send the otp and store it in our session and return the user a new reference id
 	otp, err := s.sendOTP(channel, purpose, target)
 	if err != nil {
 		return resendResult{}, err

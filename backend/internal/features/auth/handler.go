@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/response"
 	"backend/internal/utils"
 	"net/http"
@@ -177,7 +176,6 @@ func (h Handler) Refresh(c *mo.Context) error {
 	)
 }
 
-
 // * POST - models.forgotPasswordRequest
 func (h Handler) ForgotPassword(c *mo.Context) error {
 	var req forgotPasswordRequest
@@ -223,11 +221,11 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 }
 
 // ? ----+-----+-----Auth protected paths-----+-----+-----
-// All the paths below are expected to be wrapped by a authorization middleware, [Middleware]. 
+// All the paths below are expected to be wrapped by a authorization middleware, [Middleware].
 
 // * POST - empty
 func (h Handler) Logout(c *mo.Context) error {
-	accessTokenJwt := c.Store["jwt"].(jwt.AccessToken) // type conversion and reading the map assumes that this path has the authorization [Middleware] wrapped beforehand and it is working
+	accessTokenJwt := c.Store["jwt"].(accessTokenJwt) // type conversion and reading the map assumes that this path has the authorization [Middleware] wrapped beforehand and it is working
 	err := h.Service.logout(c.Request().Context(), accessTokenJwt)
 	if err != nil {
 		return err

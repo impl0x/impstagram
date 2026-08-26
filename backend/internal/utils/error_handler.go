@@ -72,7 +72,7 @@ func CustomErrorHandler(c *mo.Context, err error) {
 				validationErr.ToJsonStructList(),
 			},
 		)
-	// 	it seems that json unmarshaller always returns a json.UnmarshalTypeError no matter if the syntax or type is incorrect, so this case will be commented out as being depreciated
+	// 	it seems that json unmarshaler always returns a json.UnmarshalTypeError no matter if the syntax or type is incorrect, so this case will be commented out as being depreciated
 	// // case errors.As(err, &jsonSyntaxErr):
 	// // 	c.JSON(http.StatusUnprocessableEntity, response.Error(
 	// // 		response.CodeJSONInvalid,
