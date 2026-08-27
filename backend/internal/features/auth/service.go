@@ -42,7 +42,7 @@ func NewService(repo repository, emailClient email.Sender) *Service {
 		}{
 			otp:   ttlcache.New[string, otpSession](ruleTTLCacheCleanIntervalOTP),
 			reset: ttlcache.New[string, resetSession](ruleTTLCacheCleanIntervalReset),
-			totp: ttlcache.New[string, totpSession](ruleTTLCacheCleanIntervalTOTP),
+			totp:  ttlcache.New[string, totpSession](ruleTTLCacheCleanIntervalTOTP),
 		},
 	}
 }
@@ -62,8 +62,9 @@ type resetSession struct {
 	userID uuid.UUID
 }
 
-type totpSession struct{
-	// TODO
+type totpSession struct {
+	userID    uuid.UUID
+	secretKey string
 }
 
 // ? ----+-----+-----Wrapper functions for cryptoutil-----+-----+-----
@@ -83,12 +84,18 @@ func generateResetSessionID() string {
 	return cryptoutil.GenerateToken(rulePrefixResetSession, ruleSizeSessionID)
 }
 
+// generates a new random string with the prefix [rulePrefixTOTPSession] and size [ruleSizeSessionID]
+func generateTotpSessionID() string {
+	return cryptoutil.GenerateToken(rulePrefixResetSession, ruleSizeSessionID)
+}
+
 // ? ----+-----+-----Register-----+-----+-----
 
 // Stores the result to the register call
 type registerResult struct {
 	referenceID string      // Used to link the upcoming OTP request
 	channel     authChannel // the identifier/channel used to register, eg: email/phone
+	expiresAt   time.Time   // verification otp expiration
 }
 
 // Registers a new user
@@ -156,6 +163,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 	// generate a new reference id for a otp session
 	refID := generateOTPSessionID()
+	expiresAt := time.Now().Add(ruleExpiryTimeOTP)
 	// add a new otp session to our timed cache
 	s.cache.otp.Add(
 		refID,
@@ -165,12 +173,13 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 			purpose: purposeRegistration,
 			otp:     otp,
 		},
-		time.Now().Add(ruleExpiryTimeOTP),
+		expiresAt,
 	)
 
 	return registerResult{
 		referenceID: refID,
 		channel:     channel,
+		expiresAt:   expiresAt,
 	}, nil
 }
 
@@ -189,9 +198,10 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 type loginResult struct {
 	accessToken  string
 	refreshToken string
-	requires2FA  bool // if this is false then below all fields are zeroed out, else the above tokens is zero valued
-	channel      authChannel
+	requires2FA  bool   // if this is false then below all fields are zeroed out, else the above tokens is zero valued
 	referenceID  string // Used to link the upcoming OTP request
+	channel      authChannel
+	expiresAt    time.Time
 }
 
 // Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint.
@@ -238,10 +248,10 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	// If user has 2Fa enabled ask for otp.
 	if user.TwoFAs != nil {
 		refID := generateOTPSessionID()
+		expiresAt := time.Now().Add(ruleExpiryTimeOTP)
 		primaryTwoFAChannel := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
 		// if it is TOTP
 		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
-
 			s.cache.otp.Add( // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
 				refID,
 				otpSession{
@@ -250,13 +260,14 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 					purpose: purpose2FA,
 					otp:     user.TotpSecretKey,
 				},
-				time.Now().Add(ruleExpiryTimeOTP),
+				expiresAt,
 			)
 
 			return loginResult{
 				requires2FA: true,
 				channel:     channelTOTP,
 				referenceID: refID,
+				expiresAt:   expiresAt,
 			}, nil
 		}
 		// else if its email or phone
@@ -282,15 +293,16 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 				purpose: purpose2FA,
 				otp:     otp,
 			},
-			time.Now().Add(ruleExpiryTimeOTP),
+			expiresAt,
 		)
 		return loginResult{
 			requires2FA: true,
 			channel:     primaryTwoFAChannel,
 			referenceID: refID,
+			expiresAt:   expiresAt,
 		}, nil
 	}
-	// else
+	// else if 2fa is not enabled we go on to generate the tokens
 
 	// generate tokens
 	jwtID := uuid.New()
@@ -326,6 +338,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 type resendResult struct {
 	referenceID string
 	channel     authChannel
+	expiresAt   time.Time
 }
 
 // Re sends otp an otp to the according to the provided purpose and channel
@@ -410,9 +423,9 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 		}
 	}
 
-	// Now we send the otp and store it in our session and return the user a new reference id
+	// Now we send the otp and store it in our cache and return the user a new reference id
 	refId := generateOTPSessionID() // new otp session id
-
+	expiresAt := time.Now().Add(ruleExpiryTimeOTP)
 	otp, err := s.sendOTP(channel, purpose, target)
 	if err != nil {
 		return resendResult{}, err
@@ -425,19 +438,21 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 			purpose: purpose,
 			otp:     otp,
 		},
-		time.Now().Add(ruleExpiryTimeOTP),
+		expiresAt,
 	)
 	return resendResult{
 		referenceID: refId,
 		channel:     channel,
+		expiresAt:   expiresAt,
 	}, nil
 }
 
 // ? ----+-----+-----Forgot password-----+-----+-----
 
 type forgotPasswordResult struct {
-	channel     authChannel
 	referenceID string
+	channel     authChannel
+	expiresAt   time.Time
 }
 
 // Raises a forgot password session request which sends an verification otp to the channel provided and stores a in memory temporary session
@@ -465,6 +480,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	otp, err := s.sendOTP(channel, purposeResetPass, target)
 	// generate a otp session id and add it to our ttlcache
 	refID := generateOTPSessionID()
+	expiresAt := time.Now().Add(ruleExpiryTimeOTP)
 	s.cache.otp.Add(
 		refID,
 		otpSession{
@@ -473,12 +489,13 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 			purpose: purposeResetPass,
 			otp:     otp,
 		},
-		time.Now().Add(ruleExpiryTimeOTP),
+		expiresAt,
 	)
 	// send the session id as reference to the user
 	return forgotPasswordResult{
-		channel:     channel,
 		referenceID: refID,
+		channel:     channel,
+		expiresAt:   expiresAt,
 	}, nil
 }
 
@@ -558,8 +575,9 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 type verifyResult struct {
 	accessToken    string
 	refreshToken   string
-	isResetRequest bool   // if this is true the above two values are zeroed out
-	referenceID    string // if this verify request was for a reset password we return a referenceID instead
+	isResetRequest bool // if this is true the above two values are zeroed out and fields below are populated, else vise versa
+	referenceID    string
+	expiresAt      time.Time
 }
 
 // Verifies the two factor / verification / reset password OTP and generates a token pair / reset pass id for the user.
@@ -602,16 +620,18 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		}
 	case purposeResetPass:
 		refID := generateResetSessionID()
+		expiresAt := time.Now().Add(ruleExpiryTimeResetPassword)
 		s.cache.reset.Add(
 			refID,
 			resetSession{
 				userID: user.ID,
 			},
-			time.Now().Add(ruleExpiryTimeResetPassword),
+			expiresAt,
 		)
 		return verifyResult{
 			isResetRequest: true,
 			referenceID:    refID,
+			expiresAt:      expiresAt,
 		}, nil
 	}
 
@@ -759,9 +779,13 @@ func (s *Service) add2FA(ctx context.Context, token accessTokenJwt, req add2FARe
 // ? ----+-----+-----Totp Setup-----+-----+-----
 
 type totpSetupResult struct {
+	referenceID string
+	totpUri     string
+	expiresAt   time.Time
 }
 
 func (s *Service) totpSetup(ctx context.Context, token accessTokenJwt) (totpSetupResult, error) {
+	// Find user on the database
 	user, err := s.repo.findUserByID(ctx, token.userID)
 	if err != nil {
 		if err == errRepoNoResults {
@@ -769,8 +793,33 @@ func (s *Service) totpSetup(ctx context.Context, token accessTokenJwt) (totpSetu
 		}
 		return totpSetupResult{}, err
 	}
+	// if user already has a totp secret key it means totp 2fa is enabled
 	if user.TotpSecretKey != "" {
-		return totpSetupResult{}, errTotpAlreadyExists
+		return totpSetupResult{}, errTotpAlreadyExists // user needs to disable totp first to set it up again
 	}
-
+	// choose a identifier for the totp uri, preference being email
+	var identifier string
+	if user.Email != "" {
+		identifier = user.Email
+	} else if user.Phone != "" {
+		identifier = user.Phone
+	}
+	// generating the secret key and uri
+	secretKey, totpUri := s.otp.SetupTOTP(identifier)
+	refId := generateTotpSessionID()
+	expiresAt := time.Now().Add(ruleTTLCacheCleanIntervalTOTP)
+	// adding to cache session
+	s.cache.totp.Add(
+		refId,
+		totpSession{
+			userID:    user.ID,
+			secretKey: secretKey,
+		},
+		expiresAt,
+	)
+	return totpSetupResult{
+		referenceID: refId,
+		totpUri:     totpUri,
+		expiresAt:   expiresAt,
+	}, nil
 }

@@ -1,6 +1,7 @@
 package cryptoutil
 
 import (
+	"backend/internal/config"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -74,6 +76,10 @@ func (og OtpGenerator) GenerateTOTP(secret string) (string, error) {
 	return fmt.Sprintf("%0*d", og.totp.length, code), nil
 }
 
-func (og OtpGenerator) SetupTOTP(secret string) (secretKey string, uri string) {
-	// todo
+func (og OtpGenerator) SetupTOTP(userIdentifier string) (secretKey string, uri string) {
+	keyBytes := make([]byte, og.totp.secretKeySize)
+	rand.Read(keyBytes)
+	secretKey = strings.ToUpper(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(keyBytes))
+	uri = "otpauth://totp/" + config.ServiceName + ":" + userIdentifier + "?secret=" + secretKey + "&issuer=" + config.ServiceName + "&digits=" + strconv.Itoa(og.totp.length)
+	return
 }

@@ -47,4 +47,5 @@ const (
 	rulePrefixRefreshToken = ""
 	rulePrefixOTPSession   = "otp_"
 	rulePrefixResetSession = "pwd_"
+	rulePrefixTOTPSession = "totp_"
 )
