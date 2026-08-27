@@ -46,7 +46,8 @@ func (h Handler) Register(c *mo.Context) error {
 			"Registration successful, please check your "+result.channel.String()+" for the OTP to verify your account",
 			struct { // using anon structs instead of maps to reduce allocation
 				ReferenceID string `json:"reference_id"`
-			}{result.referenceID},
+				ExpiresAt   int64  `json:"expires_at"`
+			}{result.referenceID, result.expiresAt.Unix()},
 		),
 	)
 }
@@ -77,7 +78,8 @@ func (h Handler) Login(c *mo.Context) error {
 				"Two-factor authentication is required, please check your "+result.channel.String(),
 				struct {
 					ReferenceID string `json:"reference_id"`
-				}{result.referenceID},
+					ExpiresAt   int64  `json:"expires_at"`
+				}{result.referenceID, result.expiresAt.Unix()},
 			),
 		)
 	}
@@ -112,7 +114,8 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 			"OTP sent successfully to user's "+result.channel.String(),
 			struct {
 				ReferenceID string `json:"reference_id"`
-			}{result.referenceID},
+				ExpiresAt   int64  `json:"expires_at"`
+			}{result.referenceID, result.expiresAt.Unix()},
 		),
 	)
 }
@@ -140,7 +143,8 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 			http.StatusAccepted,
 			struct {
 				ReferenceID string `json:"reference_id"`
-			}{result.referenceID},
+				ExpiresAt   int64  `json:"expires_at"`
+			}{result.referenceID, result.expiresAt.Unix()},
 		)
 	}
 	return c.JSON(
@@ -194,7 +198,8 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 			"An OTP has been sent to your "+result.channel.String(),
 			struct {
 				ReferenceID string `json:"reference_id"`
-			}{result.referenceID},
+				ExpiresAt   int64  `json:"expires_at"`
+			}{result.referenceID, result.expiresAt.Unix()},
 		),
 	)
 }
@@ -243,22 +248,44 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token,err:=mo.ContextGet[accessTokenJwt](c, keyAccessToken)
-	if err!=nil{
+	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	if err != nil {
 		return err
 	}
 	err = h.Service.add2FA(c.Request().Context(), token, req)
 	if err != nil {
 		return err
 	}
-	return c.JSON(http.StatusOK, response.Success(response.CodeOk, "Added 2FA for this channel successfully", nil))
+	return c.JSON(
+		http.StatusOK,
+		response.Success(
+			response.CodeOk,
+			"Added 2FA for this channel successfully",
+			nil,
+		),
+	)
 }
 
 // * POST - empty
 func (h Handler) TotpSetup(c *mo.Context) error {
-	token, err:=mo.ContextGet[accessTokenJwt](c,keyAccessToken)	
-	if err!=nil{
+	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	if err != nil {
 		return err
 	}
-	err = h.Service.totpSetup(c.Request().Context(), token)
+	result, err := h.Service.totpSetup(c.Request().Context(), token)
+	if err != nil {
+		return err
+	}
+	return c.JSON(
+		http.StatusOK,
+		response.Success(
+			response.CodeOk,
+			"Setup initiated",
+			struct {
+				ReferenceId string `json:"reference_id"`
+				Uri         string `json:"uri"`
+				ExpiresAt   int64  `json:"expires_at"`
+			}{result.referenceID, result.totpUri, result.expiresAt.Unix()},
+		),
+	)
 }
