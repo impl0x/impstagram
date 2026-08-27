@@ -25,6 +25,7 @@ const (
 const (
 	ruleTTLCacheCleanIntervalOTP          = 10 * time.Minute
 	ruleTTLCacheCleanIntervalReset        = 10 * time.Minute
+	ruleTTLCacheCleanIntervalTOTP         = 10 * time.Minute
 	ruleTTLCacheCleanIntervalJWTBlockList = ruleExpiryTimeAccessToken / 2
 )
 

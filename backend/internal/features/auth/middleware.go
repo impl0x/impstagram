@@ -1,9 +1,7 @@
 package auth
 
 import (
-	"backend/internal/pkg/apperr"
 	"backend/internal/pkg/jwt"
-	"backend/internal/pkg/response"
 	"backend/internal/pkg/ttlcache"
 	"time"
 

@@ -1,16 +1,15 @@
 package auth
 
 import (
-	"backend/internal/pkg/cryptoutil" // used to generate cryptographically random IDs and OTPs
-	"backend/internal/pkg/dob"
-	"backend/internal/pkg/email"
-	"backend/internal/pkg/jwt"
-	"backend/internal/pkg/password"
-	"backend/internal/pkg/ttlcache"
+	"backend/internal/pkg/cryptoutil" // generate cryptographically random IDs and OTPs
+	"backend/internal/pkg/dob"        // parse and validate date of birth / age
+	"backend/internal/pkg/email"      // send emails
+	"backend/internal/pkg/jwt"        // generate and verify jwt tokens
+	"backend/internal/pkg/password"   // hash and compare passwords
+	"backend/internal/pkg/ttlcache"   // short lived cache instances
 	"context"
 	"errors"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,22 +23,31 @@ type Service struct {
 	email email.Sender
 	otp   cryptoutil.OtpGenerator
 
-	mu            sync.RWMutex                          // mutex for the OTPSessions
-	otpSessions   *ttlcache.Cache[string, otpSession]   // string is the reference id
-	resetSessions *ttlcache.Cache[string, resetSession] // string is reference id
+	cache struct {
+		otp   *ttlcache.Cache[string, otpSession]
+		reset *ttlcache.Cache[string, resetSession]
+		totp  *ttlcache.Cache[string, totpSession]
+	}
 }
 
 func NewService(repo repository, emailClient email.Sender) *Service {
 	return &Service{
-		repo:          repo,
-		email:         emailClient,
-		otp:           cryptoutil.NewOtpGenerator(ruleOTPLen, ruleTOTPLen, ruleSizeTOTPKey),
-		otpSessions:   ttlcache.New[string, otpSession](ruleTTLCacheCleanIntervalOTP),
-		resetSessions: ttlcache.New[string, resetSession](ruleTTLCacheCleanIntervalReset),
+		repo:  repo,
+		email: emailClient,
+		otp:   cryptoutil.NewOtpGenerator(ruleOTPLen, ruleTOTPLen, ruleSizeTOTPKey),
+		cache: struct {
+			otp   *ttlcache.Cache[string, otpSession]
+			reset *ttlcache.Cache[string, resetSession]
+			totp  *ttlcache.Cache[string, totpSession]
+		}{
+			otp:   ttlcache.New[string, otpSession](ruleTTLCacheCleanIntervalOTP),
+			reset: ttlcache.New[string, resetSession](ruleTTLCacheCleanIntervalReset),
+			totp: ttlcache.New[string, totpSession](ruleTTLCacheCleanIntervalTOTP),
+		},
 	}
 }
 
-// ? ----+-----+-----Sessions-----+-----+-----
+// ? ----+-----+-----Cache sessions-----+-----+-----
 
 // Used to store the pending otp sessions
 type otpSession struct {
@@ -52,6 +60,10 @@ type otpSession struct {
 // Used to store the pending reset password sessions
 type resetSession struct {
 	userID uuid.UUID
+}
+
+type totpSession struct{
+	// TODO
 }
 
 // ? ----+-----+-----Wrapper functions for cryptoutil-----+-----+-----
@@ -145,7 +157,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	// generate a new reference id for a otp session
 	refID := generateOTPSessionID()
 	// add a new otp session to our timed cache
-	s.otpSessions.Add(
+	s.cache.otp.Add(
 		refID,
 		otpSession{
 			userID:  user.ID,
@@ -230,7 +242,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		// if it is TOTP
 		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
 
-			s.otpSessions.Add( // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
+			s.cache.otp.Add( // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
 				refID,
 				otpSession{
 					userID:  user.ID,
@@ -262,7 +274,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 			return loginResult{}, err
 		}
 		// Adding new otp session to our cache
-		s.otpSessions.Add(
+		s.cache.otp.Add(
 			refID,
 			otpSession{
 				userID:  user.ID,
@@ -342,7 +354,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 
 	// Check if there is a already active otp session, if so we delete that first to prevent multiple active otp sessions for one user
 	var prevRefKey string
-	s.otpSessions.LoopFunc(
+	s.cache.otp.LoopFunc(
 		// providing a function which receives the key, value and expiresAt when looping over all the items
 		func(key string, value otpSession, _ time.Time) uint8 {
 			if value.userID == user.ID {
@@ -353,7 +365,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 		},
 	)
 	if prevRefKey != "" {
-		s.otpSessions.Delete(prevRefKey)
+		s.cache.otp.Delete(prevRefKey)
 	}
 
 	purpose := authPurpose(req.Purpose) // assuming its validated
@@ -379,7 +391,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 	// if its for reset password we delete any previous reset sessions, same logic as otp sessions above
 	case purposeResetPass:
 		prevRefKey = ""
-		s.resetSessions.LoopFunc(
+		s.cache.reset.LoopFunc(
 			func(key string, value resetSession, expiresAt time.Time) uint8 {
 				if value.userID == user.ID {
 					prevRefKey = key
@@ -389,7 +401,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 			},
 		)
 		if prevRefKey != "" {
-			s.resetSessions.Delete(prevRefKey)
+			s.cache.reset.Delete(prevRefKey)
 		}
 	// if for registration we just check if the channel is a username or not, because that is a invalid channel for registration and should not be sent.
 	case purposeRegistration:
@@ -405,7 +417,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 	if err != nil {
 		return resendResult{}, err
 	}
-	s.otpSessions.Add(
+	s.cache.otp.Add(
 		refId,
 		otpSession{
 			userID:  user.ID,
@@ -453,7 +465,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	otp, err := s.sendOTP(channel, purposeResetPass, target)
 	// generate a otp session id and add it to our ttlcache
 	refID := generateOTPSessionID()
-	s.otpSessions.Add(
+	s.cache.otp.Add(
 		refID,
 		otpSession{
 			userID:  user.ID,
@@ -475,7 +487,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 // updates a user's password
 func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) error {
 	// Retrieve the reset session from the cache using the reference id from the request data
-	session, expiresAt, ok := s.resetSessions.Get(req.ReferenceID)
+	session, expiresAt, ok := s.cache.reset.Get(req.ReferenceID)
 	if !ok {
 		return errResetSessionNotFound
 	}
@@ -493,7 +505,7 @@ func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) e
 		return err
 	}
 	// delete the session to make sure this reference id cannot be reused
-	s.resetSessions.Delete(req.ReferenceID)
+	s.cache.reset.Delete(req.ReferenceID)
 	return nil
 }
 
@@ -553,7 +565,7 @@ type verifyResult struct {
 // Verifies the two factor / verification / reset password OTP and generates a token pair / reset pass id for the user.
 func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd requestMetadata) (verifyResult, error) {
 	// retrieve the session from the reference id in the request
-	session, expiresAt, ok := s.otpSessions.Get(req.ReferenceID)
+	session, expiresAt, ok := s.cache.otp.Get(req.ReferenceID)
 	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
 		return verifyResult{}, errRefIDNotFound
 	}
@@ -571,7 +583,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		return verifyResult{}, errIncorrectOTP
 	}
 	// if the otp matches then we remove the reference id from our map immediately
-	s.otpSessions.Delete(req.ReferenceID)
+	s.cache.otp.Delete(req.ReferenceID)
 	// find the user
 	user, err := s.repo.findUserByID(ctx, session.userID)
 	if err != nil {
@@ -590,7 +602,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		}
 	case purposeResetPass:
 		refID := generateResetSessionID()
-		s.resetSessions.Add(
+		s.cache.reset.Add(
 			refID,
 			resetSession{
 				userID: user.ID,
@@ -756,6 +768,9 @@ func (s *Service) totpSetup(ctx context.Context, token accessTokenJwt) (totpSetu
 			return totpSetupResult{}, errUserNotFound
 		}
 		return totpSetupResult{}, err
+	}
+	if user.TotpSecretKey != "" {
+		return totpSetupResult{}, errTotpAlreadyExists
 	}
 
 }
