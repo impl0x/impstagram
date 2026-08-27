@@ -12,6 +12,7 @@ const (
 	kindConflict                 // http: 409
 	kindUnauthorized             // http: 401
 	kindForbidden                // http: 403
+	KindInternal                 // http: 500
 )
 
 func (k Kind) ToStatusCode() int {
