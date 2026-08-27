@@ -45,7 +45,7 @@ func CustomErrorHandler(c *mo.Context, err error) {
 
 	switch {
 	case errors.As(err, &appErr):
-		c.JSON(appErr.Kind.ToStatusCode(), response.Error(appErr.Code, appErr.Message))
+		c.JSON(appErr.ToHttp(nil))
 	case err == nil: // if no error was returned it means handlers probably returned a nil without writing a response
 		c.NoContent(http.StatusNoContent)
 	case errors.Is(err, context.Canceled):

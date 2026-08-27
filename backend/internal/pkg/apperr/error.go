@@ -1,6 +1,8 @@
 package apperr
 
-import "backend/internal/pkg/response"
+import (
+	"backend/internal/pkg/response"
+)
 
 type AppErr struct {
 	Kind    Kind
@@ -20,6 +22,17 @@ func New(kind Kind, code response.Code, message string) AppErr {
 func (ae AppErr) Wrap(err error) AppErr {
 	ae.Err = err
 	return ae
+}
+
+// Returns the AppErr to a status code and response.Response struct
+//
+// data is optional and can be set to nil
+func (ae AppErr) ToHttp(data any) (int, response.Response) {
+	return ae.Kind.ToStatusCode(), response.Response{
+		Code:    ae.Code,
+		Message: ae.Message,
+		Data:    data,
+	}
 }
 
 func (ae AppErr) Error() string {
