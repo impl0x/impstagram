@@ -170,3 +170,8 @@ type resetPasswordRequest struct {
 type add2FARequest struct {
 	Channel string `json:"channel" validate:"required,oneof=email phone"`
 }
+
+type totpVerifyRequest struct {
+	ReferenceID string `json:"reference_id" validate:"required,startswith=totp_"`
+	OTP         string `json:"otp" validate:"required,numeric,len=6"`
+}

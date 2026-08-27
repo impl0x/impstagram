@@ -51,10 +51,11 @@ func NewService(repo repository, emailClient email.Sender) *Service {
 
 // Used to store the pending otp sessions
 type otpSession struct {
-	userID  uuid.UUID
-	channel authChannel // e.g., channelEmail
-	purpose authPurpose
-	otp     string
+	userID   uuid.UUID
+	channel  authChannel // e.g., channelEmail
+	purpose  authPurpose
+	otp      string
+	attempts int
 }
 
 // Used to store the pending reset password sessions
@@ -65,6 +66,7 @@ type resetSession struct {
 type totpSession struct {
 	userID    uuid.UUID
 	secretKey string
+	attempts  int
 }
 
 // ? ----+-----+-----Wrapper functions for cryptoutil-----+-----+-----
@@ -822,4 +824,35 @@ func (s *Service) totpSetup(ctx context.Context, token accessTokenJwt) (totpSetu
 		totpUri:     totpUri,
 		expiresAt:   expiresAt,
 	}, nil
+}
+
+// ? ----+-----+-----Totp Verify-----+-----+-----
+
+type totpVerifyResult struct {
+	remainingAttempts int
+}
+
+func (s *Service) totpVerify(ctx context.Context, token accessTokenJwt, req totpVerifyRequest) (totpVerifyResult, error) {
+	sesh, expiresAt, ok := s.cache.totp.Get(req.ReferenceID)
+	if !ok {
+		return totpVerifyResult{}, errTotpSessionNotFound
+	}
+	if sesh.userID != token.userID {
+		return totpVerifyResult{}, errUnauthorized
+	}
+	if expiresAt.Before(time.Now()) {
+		return totpVerifyResult{}, errTotpSessionExpired
+	}
+	otp, err := s.otp.GenerateTOTP(sesh.secretKey)
+	if err != nil {
+		return totpVerifyResult{}, err
+	}
+	if req.OTP != otp {
+		remainingAttempts := ruleAttemptsTOTPVerify - sesh.attempts
+		if remainingAttempts <= 0 {
+			return totpVerifyResult{}, errAttemptsExhausted
+		}
+		return totpVerifyResult{remainingAttempts}, errTotpIncorrectOTP
+	}
+	return totpVerifyResult{}, nil
 }

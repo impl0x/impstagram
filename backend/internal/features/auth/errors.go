@@ -21,11 +21,15 @@ const (
 
 // Common
 const (
-	codeUserNotFound response.Code = "USER_NOT_FOUND"
+	codeUserNotFound   response.Code = "USER_NOT_FOUND"
+	codeSessionExpired response.Code = "SESSION_EXPIRED"
+	codeAttemptsExhausted response.Code = "ATTEMPTS_EXHAUSTED"
 )
 
 var (
 	errUserNotFound = apperr.NewNotFound(codeUserNotFound, "User not found")
+	errUnauthorized = apperr.NewUnauthorized(response.CodeUnauthorized, "Unauthorized user")
+	errAttemptsExhausted = apperr.NewUnauthorized(codeAttemptsExhausted, "No attempts remaining")
 )
 
 // Middleware
@@ -40,7 +44,7 @@ var (
 	errIncorrectAuthToken      = apperr.NewUnauthorized(codeAccessTokenInvalid, "Authorization token has been tampered with, signature mismatch")
 	errInvalidAuthTokenPayload = apperr.New(apperr.KindInternal, response.CodeInternal, "Invalid data in the JSON payload for authorization token")
 	errAccessTokenExpired      = apperr.NewUnauthorized(codeAccessTokenExpired, "Token has expired, please refresh it using the refresh token")
-	errBlacklistedToken        = apperr.NewUnauthorized(response.CodeUnauthorized, "Invalid authorization token")
+	errBlacklistedToken        = errUnauthorized
 )
 
 // Registration
@@ -83,13 +87,9 @@ var (
 )
 
 // Reset password
-const (
-	codeResetSessionExpired response.Code = "RESET_SESSION_EXPIRED"
-)
-
 var (
 	errResetSessionNotFound = apperr.NewNotFound(response.CodeNotFound, "Session not found, please try to raise a reset password request again")
-	errResetSessionExpired  = apperr.NewUnauthorized(codeResetSessionExpired, "Session has expired, please try to raise a reset password request again")
+	errResetSessionExpired  = apperr.NewUnauthorized(codeSessionExpired, "Session has expired, please try to raise a reset password request again")
 )
 
 // Verify otp
@@ -128,9 +128,17 @@ var (
 
 // Totp setup
 const (
-	codeTotpExists = "TOTP_EXISTS"
+	codeTotpExists    = "TOTP_EXISTS"
+	codeTotpIncorrect = "TOTP_INCORRECT"
 )
 
 var (
 	errTotpAlreadyExists = apperr.NewConflict(codeTotpExists, "User already has TOTP enabled")
+)
+
+// Totp verify
+var (
+	errTotpSessionNotFound = apperr.NewNotFound(response.CodeNotFound, "Session not found, please try to raise a TOTP setup request again")
+	errTotpSessionExpired  = apperr.NewUnauthorized(codeSessionExpired, "Session has expired, please try to raise a TOTP setup request again")
+	errTotpIncorrectOTP    = apperr.NewForbidden(codeTotpIncorrect, "Incorrect OTP")
 )

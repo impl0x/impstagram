@@ -8,9 +8,16 @@ import (
 // the prefix "rule" to all variables here does not sound or make sense sometimes.
 // But i wanted consistency and clear meaning about what these are
 
+// common
 const (
 	ruleMinAge = 18
 	ruleMaxAge = 120
+)
+
+// attempt limits
+const(
+	ruleAttemptsOTP = 5
+	ruleAttemptsTOTPVerify = 5
 )
 
 // expiry times

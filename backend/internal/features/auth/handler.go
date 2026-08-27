@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"backend/internal/pkg/apperr"
 	"backend/internal/pkg/response"
 	"backend/internal/utils"
 	"net/http"
@@ -241,7 +242,7 @@ func (h Handler) Logout(c *mo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// * POST - add2FARequest
+// * POST - models.add2FARequest
 func (h Handler) Add2FA(c *mo.Context) error {
 	var req add2FARequest
 	err := c.DecodeAndValidateBody(&req)
@@ -288,4 +289,31 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 			}{result.referenceID, result.totpUri, result.expiresAt.Unix()},
 		),
 	)
+}
+
+// * POST - models.totpVerifyRequest
+func (h Handler) totpVerify(c *mo.Context) error {
+	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	if err != nil {
+		return err
+	}
+	var req totpVerifyRequest
+	err = c.DecodeAndValidateBody(&req)
+	if err != nil {
+		return err
+	}
+	result, err := h.Service.totpVerify(c.Request().Context(), token, req)
+	if err != nil {
+		if err == errTotpIncorrectOTP {
+			return c.JSON(
+				err.(apperr.AppErr).ToHttp(
+					struct {
+						AttemptsRemaining int `json:"attempts_remaining"`
+					}{result.remainingAttempts},
+				),
+			)
+		}
+		return err
+	}
+	return c.NoContent(http.StatusAccepted)
 }
