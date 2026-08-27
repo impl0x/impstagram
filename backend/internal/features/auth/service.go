@@ -24,9 +24,9 @@ type Service struct {
 	otp   cryptoutil.OtpGenerator
 
 	cache struct {
-		otp   *ttlcache.Cache[string, otpSession]
+		otp   *ttlcache.Cache[string, *otpSession]
 		reset *ttlcache.Cache[string, resetSession]
-		totp  *ttlcache.Cache[string, totpSession]
+		totp  *ttlcache.Cache[string, *totpSession]
 	}
 }
 
@@ -36,13 +36,13 @@ func NewService(repo repository, emailClient email.Sender) *Service {
 		email: emailClient,
 		otp:   cryptoutil.NewOtpGenerator(ruleOTPLen, ruleTOTPLen, ruleSizeTOTPKey),
 		cache: struct {
-			otp   *ttlcache.Cache[string, otpSession]
+			otp   *ttlcache.Cache[string, *otpSession]
 			reset *ttlcache.Cache[string, resetSession]
-			totp  *ttlcache.Cache[string, totpSession]
+			totp  *ttlcache.Cache[string, *totpSession]
 		}{
-			otp:   ttlcache.New[string, otpSession](ruleTTLCacheCleanIntervalOTP),
+			otp:   ttlcache.New[string, *otpSession](ruleTTLCacheCleanIntervalOTP),
 			reset: ttlcache.New[string, resetSession](ruleTTLCacheCleanIntervalReset),
-			totp:  ttlcache.New[string, totpSession](ruleTTLCacheCleanIntervalTOTP),
+			totp:  ttlcache.New[string, *totpSession](ruleTTLCacheCleanIntervalTOTP),
 		},
 	}
 }
@@ -169,7 +169,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	// add a new otp session to our timed cache
 	s.cache.otp.Add(
 		refID,
-		otpSession{
+		&otpSession{
 			userID:  user.ID,
 			channel: channel,
 			purpose: purposeRegistration,
@@ -256,7 +256,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
 			s.cache.otp.Add( // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
 				refID,
-				otpSession{
+				&otpSession{
 					userID:  user.ID,
 					channel: channelTOTP,
 					purpose: purpose2FA,
@@ -289,7 +289,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		// Adding new otp session to our cache
 		s.cache.otp.Add(
 			refID,
-			otpSession{
+			&otpSession{
 				userID:  user.ID,
 				channel: primaryTwoFAChannel,
 				purpose: purpose2FA,
@@ -371,7 +371,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 	var prevRefKey string
 	s.cache.otp.LoopFunc(
 		// providing a function which receives the key, value and expiresAt when looping over all the items
-		func(key string, value otpSession, _ time.Time) uint8 {
+		func(key string, value *otpSession, _ time.Time) uint8 {
 			if value.userID == user.ID {
 				prevRefKey = key
 				return 0 // signals the outer loop to quit
@@ -434,7 +434,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 	}
 	s.cache.otp.Add(
 		refId,
-		otpSession{
+		&otpSession{
 			userID:  user.ID,
 			channel: channel,
 			purpose: purpose,
@@ -485,7 +485,7 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	expiresAt := time.Now().Add(ruleExpiryTimeOTP)
 	s.cache.otp.Add(
 		refID,
-		otpSession{
+		&otpSession{
 			userID:  user.ID,
 			channel: channel,
 			purpose: purposeResetPass,
@@ -575,11 +575,12 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 // ? ----+-----+-----Verify otp-----+-----+-----
 
 type verifyResult struct {
-	accessToken    string
-	refreshToken   string
-	isResetRequest bool // if this is true the above two values are zeroed out and fields below are populated, else vise versa
-	referenceID    string
-	expiresAt      time.Time
+	accessToken       string
+	refreshToken      string
+	isResetRequest    bool // if this is true the above two values are zeroed out and fields below are populated, else vise versa
+	referenceID       string
+	expiresAt         time.Time
+	remainingAttempts int // only populated if returning an errIncorrectOTP error
 }
 
 // Verifies the two factor / verification / reset password OTP and generates a token pair / reset pass id for the user.
@@ -600,7 +601,12 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 		}
 	}
 	if session.otp != req.OTP { // we check the otp if it does not match we return early with a incorrect otp error
-		return verifyResult{}, errIncorrectOTP
+		session.attempts++
+		remainingAttempts := ruleAttemptsOTP - session.attempts
+		if remainingAttempts <= 0 {
+			return verifyResult{}, errAttemptsExhausted
+		}
+		return verifyResult{remainingAttempts: remainingAttempts}, errIncorrectOTP
 	}
 	// if the otp matches then we remove the reference id from our map immediately
 	s.cache.otp.Delete(req.ReferenceID)
@@ -679,12 +685,11 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	// Do a db lookup with the refresh token's hash
 	userSesh, err := s.repo.findSessionByToken(ctx, cryptoutil.GenerateMD5Hash(req.RefreshToken))
 	if err != nil {
+		if err == errRepoNoResults {
+			return refreshResult{}, errInvalidRefreshToken
+		}
 		return refreshResult{}, err // db error
 	}
-	if userSesh == nil {
-		return refreshResult{}, errInvalidRefreshToken
-	}
-
 	// Check if the session has expired
 	if userSesh.ExpiresAt.Before(time.Now()) {
 		// Deleting the user session if it is expired, the user will have to create a new session again by logging in.
@@ -813,7 +818,7 @@ func (s *Service) totpSetup(ctx context.Context, token accessTokenJwt) (totpSetu
 	// adding to cache session
 	s.cache.totp.Add(
 		refId,
-		totpSession{
+		&totpSession{
 			userID:    user.ID,
 			secretKey: secretKey,
 		},
@@ -833,22 +838,23 @@ type totpVerifyResult struct {
 }
 
 func (s *Service) totpVerify(ctx context.Context, token accessTokenJwt, req totpVerifyRequest) (totpVerifyResult, error) {
-	sesh, expiresAt, ok := s.cache.totp.Get(req.ReferenceID)
+	session, expiresAt, ok := s.cache.totp.Get(req.ReferenceID)
 	if !ok {
 		return totpVerifyResult{}, errTotpSessionNotFound
 	}
-	if sesh.userID != token.userID {
+	if session.userID != token.userID {
 		return totpVerifyResult{}, errUnauthorized
 	}
 	if expiresAt.Before(time.Now()) {
 		return totpVerifyResult{}, errTotpSessionExpired
 	}
-	otp, err := s.otp.GenerateTOTP(sesh.secretKey)
+	otp, err := s.otp.GenerateTOTP(session.secretKey)
 	if err != nil {
 		return totpVerifyResult{}, err
 	}
 	if req.OTP != otp {
-		remainingAttempts := ruleAttemptsTOTPVerify - sesh.attempts
+		session.attempts++
+		remainingAttempts := ruleAttemptsTOTPVerify - session.attempts
 		if remainingAttempts <= 0 {
 			return totpVerifyResult{}, errAttemptsExhausted
 		}
