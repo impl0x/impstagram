@@ -21,14 +21,14 @@ const (
 
 // Common
 const (
-	codeUserNotFound   response.Code = "USER_NOT_FOUND"
-	codeSessionExpired response.Code = "SESSION_EXPIRED"
+	codeUserNotFound      response.Code = "USER_NOT_FOUND"
+	codeSessionExpired    response.Code = "SESSION_EXPIRED"
 	codeAttemptsExhausted response.Code = "ATTEMPTS_EXHAUSTED"
 )
 
 var (
-	errUserNotFound = apperr.NewNotFound(codeUserNotFound, "User not found")
-	errUnauthorized = apperr.NewUnauthorized(response.CodeUnauthorized, "Unauthorized user")
+	errUserNotFound      = apperr.NewNotFound(codeUserNotFound, "User not found")
+	errUnauthorized      = apperr.NewUnauthorized(response.CodeUnauthorized, "Unauthorized user")
 	errAttemptsExhausted = apperr.NewUnauthorized(codeAttemptsExhausted, "No attempts remaining")
 )
 

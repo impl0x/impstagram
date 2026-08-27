@@ -137,6 +137,15 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 		},
 	)
 	if err != nil {
+		if err == errIncorrectOTP {
+			return c.JSON(
+				err.(apperr.AppErr).ToHttp(
+					struct {
+						AttemptsRemaining int `json:"attempts_remaining"`
+					}{result.remainingAttempts},
+				),
+			)
+		}
 		return err
 	}
 	if result.isResetRequest {
