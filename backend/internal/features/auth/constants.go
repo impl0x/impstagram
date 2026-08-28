@@ -15,8 +15,8 @@ const (
 )
 
 // attempt limits
-const(
-	ruleAttemptsOTP = 5
+const (
+	ruleAttemptsOTP        = 5
 	ruleAttemptsTOTPVerify = 5
 )
 
@@ -54,5 +54,5 @@ const (
 	rulePrefixRefreshToken = ""
 	rulePrefixOTPSession   = "otp_"
 	rulePrefixResetSession = "pwd_"
-	rulePrefixTOTPSession = "totp_"
+	rulePrefixTOTPSession  = "totp_"
 )
