@@ -600,8 +600,8 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 			return verifyResult{}, err
 		}
 	}
+	session.attempts++          // increment on every successful attempt
 	if session.otp != req.OTP { // we check the otp if it does not match we return early with a incorrect otp error
-		session.attempts++
 		remainingAttempts := ruleAttemptsOTP - session.attempts
 		if remainingAttempts <= 0 {
 			return verifyResult{}, errAttemptsExhausted
@@ -647,7 +647,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	jwtID := uuid.New()
 	accessToken, err := jwt.GenerateToken(newAccessTokenPayload(user.ID, jwtID, ruleExpiryTimeAccessToken))
 	if err != nil {
-		panic(err)
+		return verifyResult{}, err
 	}
 	refreshToken := generateRefreshToken()
 
@@ -838,27 +838,42 @@ type totpVerifyResult struct {
 }
 
 func (s *Service) totpVerify(ctx context.Context, token accessTokenJwt, req totpVerifyRequest) (totpVerifyResult, error) {
+	// Fetching session from cache
 	session, expiresAt, ok := s.cache.totp.Get(req.ReferenceID)
 	if !ok {
 		return totpVerifyResult{}, errTotpSessionNotFound
 	}
+	// checking if session and token user's match, otherwise it is a stolen token/reference id
 	if session.userID != token.userID {
 		return totpVerifyResult{}, errUnauthorized
 	}
+	// checking if session has expired
 	if expiresAt.Before(time.Now()) {
 		return totpVerifyResult{}, errTotpSessionExpired
 	}
+	// calculating the otp
 	otp, err := s.otp.GenerateTOTP(session.secretKey)
 	if err != nil {
 		return totpVerifyResult{}, err
 	}
+	session.attempts++ // increment on every attempt
+	// comparing against the otp sent
 	if req.OTP != otp {
-		session.attempts++
 		remainingAttempts := ruleAttemptsTOTPVerify - session.attempts
 		if remainingAttempts <= 0 {
 			return totpVerifyResult{}, errAttemptsExhausted
 		}
 		return totpVerifyResult{remainingAttempts}, errTotpIncorrectOTP
+	}
+	// delete the session if otp matches and verification is complete
+	s.cache.totp.Delete(req.ReferenceID)
+	// update totp secret key in database
+	err = s.repo.updateUserTotpSecretKey(ctx, session.userID, session.secretKey)
+	if err != nil {
+		if err == errRepoNoResults {
+			return totpVerifyResult{}, errUserNotFound
+		}
+		return totpVerifyResult{}, err
 	}
 	return totpVerifyResult{}, nil
 }

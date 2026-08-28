@@ -73,7 +73,9 @@ func (pg PostgresRepository) updateUserStatus(ctx context.Context, userID uuid.U
 func (pg PostgresRepository) updateUser2FA(ctx context.Context, userID uuid.UUID, twoFAs twoFAs) error {
 	return pg.updateUser(ctx, userID, "two_fas", twoFAs)
 }
-
+func (pg PostgresRepository) updateUserTotpSecretKey(ctx context.Context, userID uuid.UUID, secretKey string) error {
+	return pg.updateUser(ctx, userID, "totp_secret_key", secretKey)
+}
 // ? ----+-----+-----User sessions table-----+-----+-----
 
 func (pg PostgresRepository) findSession(ctx context.Context, one string, two any) (*userSession, error) {
