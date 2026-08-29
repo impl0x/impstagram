@@ -393,7 +393,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 	// if its for 2fa we change the channel and target to the primary 2fa identifier
 	case purpose2FA:
 		if user.TwoFAs == nil {
-			return resendResult{}, err2FANotEnabled
+			return resendResult{}, errResend2FANotEnabled
 		}
 		channel = user.TwoFAs[0] // considering the first element in the slice to be the primary 2fa identifier
 		switch channel {
@@ -783,6 +783,41 @@ func (s *Service) add2FA(ctx context.Context, token accessTokenJwt, req add2FARe
 		return err
 	}
 	// returning empty result as there is nothing more we need to signify
+	return nil
+}
+
+func (s *Service) remove2FA(ctx context.Context, token accessTokenJwt, req remove2FARequest) error {
+	// finding the user in the database using user id from the token
+	user, err := s.repo.findUserByID(ctx, token.userID)
+	if err != nil {
+		if err == errRepoNoResults {
+			return errUserNotFound
+		}
+		return err
+	}
+	channel := authChannel(req.Channel)
+	// taking the index of the channel in the 2fa slice
+	if user.TwoFAs == nil {
+		return errRemove2FANotEnabled
+	}
+	// finding the index of the channel in the slice
+	index := slices.Index(user.TwoFAs, channel)
+	if index == -1 { // if not found
+		return errRemove2FAChannelNotFound
+	}
+	// update the slice to not include the current channel
+	user.TwoFAs = append(user.TwoFAs[:index], user.TwoFAs[index+1:]...)
+	if len(user.TwoFAs) == 0 { // if this was the last 2fa then we disable 2fa altogether by setting the slice value to nil
+		user.TwoFAs = nil
+	}
+	// update in the database
+	err = s.repo.updateUser2FA(ctx, user.ID, user.TwoFAs)
+	if err != nil {
+		if err == errRepoNoResults {
+			return errUserNotFound
+		}
+		return err
+	}
 	return nil
 }
 

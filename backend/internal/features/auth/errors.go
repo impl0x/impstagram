@@ -80,10 +80,14 @@ var (
 )
 
 // Resend otp
+const (
+	code2FANotEnabled = "2FA_NOT_ENABLED"
+)
+
 var (
 	errMissingIdentifierResend = apperr.NewValidation("Need at least email, phone, or username to resend OTP")
 	errInvalidIdentifierResend = apperr.NewValidation("Invalid identifier for resending OTP")
-	err2FANotEnabled           = apperr.NewValidation("User does not have 2FA enabled, cannot know where to send otp")
+	errResend2FANotEnabled           = apperr.NewForbidden(code2FANotEnabled, "User does not have 2FA enabled, cannot know where to send otp")
 )
 
 // Reset password
@@ -124,6 +128,12 @@ const (
 var (
 	err2FAExistingChannel = apperr.NewConflict(code2FAExistingChannel, "This channel already has 2FA enabled")
 	errChannelEmpty       = apperr.NewNotFound(codeChannelEmpty, "The channel provided is not added to your account and cannot be set as two factor verification method")
+)
+
+// Remove 2FA
+var (
+	errRemove2FAChannelNotFound = apperr.NewNotFound(response.CodeNotFound, "The channel is not present in the user's 2fa to be removed")
+	errRemove2FANotEnabled      = apperr.NewForbidden(code2FANotEnabled, "2FA is not enabled for user")
 )
 
 // Totp setup
