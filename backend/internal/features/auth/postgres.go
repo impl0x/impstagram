@@ -73,8 +73,16 @@ func (pg PostgresRepository) updateUserStatus(ctx context.Context, userID uuid.U
 func (pg PostgresRepository) updateUser2FA(ctx context.Context, userID uuid.UUID, twoFAs twoFAs) error {
 	return pg.updateUser(ctx, userID, "two_fas", twoFAs)
 }
-func (pg PostgresRepository) updateUserTotpSecretKey(ctx context.Context, userID uuid.UUID, secretKey string) error {
-	return pg.updateUser(ctx, userID, "totp_secret_key", secretKey)
+func (pg PostgresRepository) enableTotp(ctx context.Context, userID uuid.UUID, secretKey string) error {
+	query := `UPDATE users SET totp_secret_key = $1 two_fas = array_append(two_fas, $2) WHERE id = $3`
+	cmdTag, err := pg.Db.Exec(ctx, query, secretKey, string(channelTOTP), userID)
+	if err != nil {
+		return pg.handleError(err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errRepoNoResults
+	}
+	return nil
 }
 // ? ----+-----+-----User sessions table-----+-----+-----
 

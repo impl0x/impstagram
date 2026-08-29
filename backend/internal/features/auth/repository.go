@@ -16,7 +16,7 @@ type repository interface {
 	updateUserPassword(ctx context.Context, userID uuid.UUID, passwordHash string) error
 	updateUserStatus(ctx context.Context, userID uuid.UUID, status accountStatus) error
 	updateUser2FA(ctx context.Context, userID uuid.UUID, twoFAs twoFAs) error
-	updateUserTotpSecretKey(ctx context.Context, userID uuid.UUID, secretKey string) error
+	enableTotp(ctx context.Context, userID uuid.UUID, totpKey string)error
 
 	// user_sessions
 	findSessionByToken(ctx context.Context, tokenHash string) (*userSession, error)

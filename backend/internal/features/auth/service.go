@@ -254,6 +254,9 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		primaryTwoFAChannel := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
 		// if it is TOTP
 		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
+			if user.TotpSecretKey == "" {
+				panic("auth.service.login: User has 2FA in twoFAs slice but no secret key in TotpSecretKey")
+			}
 			s.cache.otp.Add( // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
 				refID,
 				&otpSession{
@@ -791,6 +794,7 @@ type totpSetupResult struct {
 	expiresAt   time.Time
 }
 
+// starts a setup for totp
 func (s *Service) totpSetup(ctx context.Context, token accessTokenJwt) (totpSetupResult, error) {
 	// Find user on the database
 	user, err := s.repo.findUserByID(ctx, token.userID)
@@ -837,6 +841,7 @@ type totpVerifyResult struct {
 	remainingAttempts int
 }
 
+// verifies the otp from totp setup and sets secret in database
 func (s *Service) totpVerify(ctx context.Context, token accessTokenJwt, req totpVerifyRequest) (totpVerifyResult, error) {
 	// Fetching session from cache
 	session, expiresAt, ok := s.cache.totp.Get(req.ReferenceID)
@@ -867,8 +872,8 @@ func (s *Service) totpVerify(ctx context.Context, token accessTokenJwt, req totp
 	}
 	// delete the session if otp matches and verification is complete
 	s.cache.totp.Delete(req.ReferenceID)
-	// update totp secret key in database
-	err = s.repo.updateUserTotpSecretKey(ctx, session.userID, session.secretKey)
+	// enable totp in database
+	err = s.repo.enableTotp(ctx, session.userID, session.secretKey)
 	if err != nil {
 		if err == errRepoNoResults {
 			return totpVerifyResult{}, errUserNotFound

@@ -25,7 +25,8 @@ func NewHandler(s *Service) Handler {
 // ? ----+-----+-----Public paths-----+-----+-----
 // All paths below are publicly accessible without a auth token requirement
 
-// * POST - models.RegisterRequest
+// Registers a new user
+// 	* POST - models.RegisterRequest
 func (h Handler) Register(c *mo.Context) error {
 	// Binding the request json to the struct model and validating it at the same time
 	var req registerRequest
@@ -53,7 +54,8 @@ func (h Handler) Register(c *mo.Context) error {
 	)
 }
 
-// * POST - models.loginRequest
+// login a user
+// 	* POST - models.loginRequest
 func (h Handler) Login(c *mo.Context) error {
 	var req loginRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -97,7 +99,8 @@ func (h Handler) Login(c *mo.Context) error {
 	)
 }
 
-// * POST - models.resendOTPRequest
+// resend otp for any purpose
+// 	* POST - models.resendOTPRequest
 func (h Handler) ResendOTP(c *mo.Context) error {
 	var req resendOTPRequest
 	err := c.DecodeAndValidateBody(req)
@@ -121,7 +124,8 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 	)
 }
 
-// * POST - models.verifyOTPRequest
+// verifies the otp for any purpose
+// 	* POST - models.verifyOTPRequest
 func (h Handler) VerifyOTP(c *mo.Context) error {
 	var req verifyOTPRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -166,7 +170,8 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 	)
 }
 
-// * POST - models.RefreshRequest
+// refreshes the token and provides a new set of tokens
+// 	* POST - models.RefreshRequest
 func (h Handler) Refresh(c *mo.Context) error {
 	var req refreshRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -190,7 +195,8 @@ func (h Handler) Refresh(c *mo.Context) error {
 	)
 }
 
-// * POST - models.forgotPasswordRequest
+// raises a request for resetting password
+// 	* POST - models.forgotPasswordRequest
 func (h Handler) ForgotPassword(c *mo.Context) error {
 	var req forgotPasswordRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -214,7 +220,8 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 	)
 }
 
-// * POST - models.resetPasswordRequest
+// resets the password for a user
+// 	* POST - models.resetPasswordRequest
 func (h Handler) ResetPassword(c *mo.Context) error {
 	var req resetPasswordRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -238,7 +245,8 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 // ? ----+-----+-----Auth protected paths-----+-----+-----
 // All the paths below are expected to be wrapped by a authorization middleware, [Middleware].
 
-// * POST - empty
+// deletes the user session
+// 	* POST - empty
 func (h Handler) Logout(c *mo.Context) error {
 	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
 	if err != nil {
@@ -251,7 +259,8 @@ func (h Handler) Logout(c *mo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// * POST - models.add2FARequest
+// adds a new 2 factor method for the user, totp not included
+// 	* POST - models.add2FARequest
 func (h Handler) Add2FA(c *mo.Context) error {
 	var req add2FARequest
 	err := c.DecodeAndValidateBody(&req)
@@ -276,7 +285,8 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	)
 }
 
-// * POST - empty
+// starts a setup session for totp setup
+// 	* POST - empty
 func (h Handler) TotpSetup(c *mo.Context) error {
 	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
 	if err != nil {
@@ -300,7 +310,8 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 	)
 }
 
-// * POST - models.totpVerifyRequest
+// verifies a totp session and adds it to the user's 2fas
+// 	* POST - models.totpVerifyRequest
 func (h Handler) totpVerify(c *mo.Context) error {
 	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
 	if err != nil {
