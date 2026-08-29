@@ -14,8 +14,8 @@ type Handler struct {
 	Group   *mo.Grouped
 }
 
-func NewHandler(s *Service) Handler {
-	return Handler{s}
+func NewHandler(s *Service, g *mo.Grouped) Handler {
+	return Handler{s, g}
 }
 
 // Registers all the auth paths to the handler's group
@@ -23,17 +23,18 @@ func NewHandler(s *Service) Handler {
 // Public paths:
 //   - POST - /register
 //   - POST - /login
-//   - POST - /resend-otp
+//   - POST - /resend-otp 
 //   - POST - /verify-otp
 //   - POST - /refresh
 //   - POST - /forgot-password
 //   - POST - /reset-password
 //
 // Authorized paths: (these paths are wrapped with the authorization [Middleware])
-//   - POST - /logout
-//   - POST - /2fa/add
-//   - POST - /2fa/totp/setup
-//   - POST - /2fa/totp/verify
+//   - POST - 	/logout
+//   - PUT - 	/2fa ? adds a new 2fa
+//   - DELETE - /2fa ? removes a 2fa
+//   - POST - 	/2fa/totp/setup
+//   - POST - 	/2fa/totp/verify
 func (h Handler) RegisterPaths() {
 	h.Group.POST("/register", h.Register)
 	h.Group.POST("/login", h.Login)
@@ -292,7 +293,7 @@ func (h Handler) Logout(c *mo.Context) error {
 }
 
 // adds a new 2 factor method for the user, totp not included
-//   - POST - models.add2FARequest
+//   - PUT - models.add2FARequest
 func (h Handler) Add2FA(c *mo.Context) error {
 	var req add2FARequest
 	err := c.DecodeAndValidateBody(&req)
@@ -318,7 +319,7 @@ func (h Handler) Add2FA(c *mo.Context) error {
 }
 
 // removes an existing 2 factor method for the user
-//   - POST - models.remove2FARequest
+//   - DELETE - models.remove2FARequest
 func (h Handler) Remove2FA(c *mo.Context) error {
 	var req remove2FARequest
 	err := c.DecodeAndValidateBody(&req)
@@ -337,7 +338,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 		http.StatusOK,
 		response.Success(
 			response.CodeOk,
-			"Added 2FA for this channel successfully",
+			"Removed 2FA for this channel successfully",
 			nil,
 		),
 	)

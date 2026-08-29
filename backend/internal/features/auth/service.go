@@ -786,6 +786,7 @@ func (s *Service) add2FA(ctx context.Context, token accessTokenJwt, req add2FARe
 	return nil
 }
 
+// Removes 2fa for a user
 func (s *Service) remove2FA(ctx context.Context, token accessTokenJwt, req remove2FARequest) error {
 	// finding the user in the database using user id from the token
 	user, err := s.repo.findUserByID(ctx, token.userID)
