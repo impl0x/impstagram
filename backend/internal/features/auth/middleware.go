@@ -3,6 +3,7 @@ package auth
 import (
 	"backend/internal/pkg/jwt"
 	"backend/internal/pkg/ttlcache"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,11 +26,12 @@ var jwtTokenBlockList = ttlcache.New[uuid.UUID, struct{}](ruleTTLCacheCleanInter
 //
 // Any handler wrapped with this middleware can safely assure that mo.Context["jwt"] will ALWAYS return a valid [jwt.AccessTokenPayload] struct
 func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
+	errAuthTokenInvalidPayload:=errors.New("auth.Middleware: Auth token has invalid payload")
 	return func(c *mo.Context) (handlerErr error) {
 		// get the auth header value from the request header
 		authHeader := c.Request().Header.Get("authorization")
 		if authHeader == "" {
-			return errAuthHeaderMissing
+			return errMiddlewareAuthHeaderMissing
 		}
 
 		// Decode the token into a jwt payload struct
@@ -38,36 +40,31 @@ func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 
 		// Check if jwt decode fails or if the signature is incorrect
 		if err != nil {
-			switch err { // assuming jwt.VerifyToken can only return these 2 errors
-			case jwt.ErrInvalidJWTToken:
-				return errInvalidAuthToken
-			case jwt.ErrIncorrectJWTToken:
-				return errIncorrectAuthToken
-			}
+			return errMiddlewareAuthTokenInvalid
 		}
 
 		// validating the jwt payload
 		// ! (optional)
 		errs := validator.Validate(accessTokenPayload) // ! we do not technically need to validate a access token if the server is correctly issuing tokens, comment this part out if everything is tested and working
 		if errs != nil {
-			return errInvalidAuthTokenPayload
+			return errAuthTokenInvalidPayload // this is an internal error
 		}
 
 		// Converting the json struct into a usable data type for our app
 		accessToken, err := accessTokenPayload.Convert()
 		if err != nil {
-			return errInvalidAuthTokenPayload
+			return errAuthTokenInvalidPayload
 		}
 		// Checking if the token has expired
 		if accessToken.expiresAt.Before(time.Now()) {
-			return errAccessTokenExpired
+			return errMiddlewareAuthTokenExpired
 		}
 
 		// Checking if the jwt is in jwt token block list
 		_, _, ok := jwtTokenBlockList.Get(accessToken.jwtID)
 		if ok {
 			// try not to give the client much info about *why* it is unauthorized, even though we know that this jwt is blacklisted
-			return errBlacklistedToken
+			return errMiddlewareAuthTokenInvalid
 		}
 
 		// We store the access token data struct in the context's store map

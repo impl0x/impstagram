@@ -8,7 +8,7 @@ import (
 	"backend/internal/pkg/password"   // hash and compare passwords
 	"backend/internal/pkg/ttlcache"   // short lived cache instances
 	"context"
-	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -23,11 +23,13 @@ type Service struct {
 	email email.Sender
 	otp   cryptoutil.OtpGenerator
 
-	cache struct {
-		otp   *ttlcache.Cache[string, *otpSession]
-		reset *ttlcache.Cache[string, resetSession]
-		totp  *ttlcache.Cache[string, *totpSession]
-	}
+	cache serviceCaches
+}
+
+type serviceCaches struct {
+	otp   *ttlcache.Cache[string, *otpSession]
+	reset *ttlcache.Cache[string, resetSession]
+	totp  *ttlcache.Cache[string, *totpSession]
 }
 
 func NewService(repo repository, emailClient email.Sender) *Service {
@@ -35,11 +37,7 @@ func NewService(repo repository, emailClient email.Sender) *Service {
 		repo:  repo,
 		email: emailClient,
 		otp:   cryptoutil.NewOtpGenerator(ruleOTPLen, ruleTOTPLen, ruleSizeTOTPKey),
-		cache: struct {
-			otp   *ttlcache.Cache[string, *otpSession]
-			reset *ttlcache.Cache[string, resetSession]
-			totp  *ttlcache.Cache[string, *totpSession]
-		}{
+		cache: serviceCaches{
 			otp:   ttlcache.New[string, *otpSession](ruleTTLCacheCleanIntervalOTP),
 			reset: ttlcache.New[string, resetSession](ruleTTLCacheCleanIntervalReset),
 			totp:  ttlcache.New[string, *totpSession](ruleTTLCacheCleanIntervalTOTP),
@@ -53,7 +51,7 @@ func NewService(repo repository, emailClient email.Sender) *Service {
 type otpSession struct {
 	userID   uuid.UUID
 	channel  authChannel // e.g., channelEmail
-	purpose  authPurpose
+	purpose  authPurpose // e.g., purposeLogin
 	otp      string
 	attempts int
 }
@@ -107,20 +105,14 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	switch err {
 	case nil:
 	case dob.ErrInvalidDobString:
-		return registerResult{}, errInvalidDobString
+		return registerResult{}, errRegisterInvalidDobString
 	case dob.ErrImpossibleDob:
-		return registerResult{}, errImpossibleDobString
+		return registerResult{}, errRegisterImpossibleDobString
 	default:
 		return registerResult{}, err
 	}
 
-	// validate the user's age against our business rules
-	userAge := userDob.Age()
-	if userAge < ruleMinAge {
-		return registerResult{}, errNotOldEnough
-	} else if userAge > ruleMaxAge {
-		return registerResult{}, errTooOld
-	}
+	// doing all validations before processing business logic
 
 	// Figure out what identifier the user sent, that is if the user registered with a email or a phone
 	var user *user
@@ -131,7 +123,15 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	} else if req.Phone != "" {
 		channel, target = channelPhone, req.Phone
 	} else {
-		return registerResult{}, errMissingIdentifier // if user sent neither a email or a phone then we reject the registration request
+		return registerResult{}, errRegisterMissingIdentifier // if user sent neither a email or a phone then we reject the registration request
+	}
+
+	// validate the user's age against our business rules
+	userAge := userDob.Age()
+	if userAge < ruleMinAge {
+		return registerResult{}, errRegisterNotOldEnough
+	} else if userAge > ruleMaxAge {
+		return registerResult{}, errRegisterTooOld
 	}
 
 	// Finding in database
@@ -140,7 +140,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	// if db returned a user
 	if err == nil && user != nil {
 		// i acknowledge that user has chances of being banned/unverified, but this is intended. We want user to login and then hit those errors if they exist.
-		return registerResult{}, errAlreadyExistingUser
+		return registerResult{}, errRegisterAlreadyExistingUser
 	} else if err != errRepoNoResults { // if the error received was not a no results error then must be a database error
 		return registerResult{}, err
 	}
@@ -148,7 +148,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	// checks if the username already exists because usernames are unique
 	sameUsernameUser, err := s.repo.findUserByChannel(ctx, channelUsername, req.Username) // assuming req.Username is validated in validator
 	if sameUsernameUser != nil || err == nil {
-		return registerResult{}, errUsernameAlreadyExists
+		return registerResult{}, errRegisterUsernameAlreadyExists
 	}
 
 	// Now we hash the user's password and create a new user in the database
@@ -221,12 +221,12 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	case req.Phone != "":
 		user, err = s.repo.findUserByChannel(ctx, channelPhone, req.Phone)
 	default:
-		return loginResult{}, errMissingIdentifierLogin
+		return loginResult{}, errLoginMissingIdentifier
 	}
 
 	if err != nil {
 		if err == errRepoNoResults {
-			return loginResult{}, errCredentialsInvalid
+			return loginResult{}, errLoginCredentialsInvalid
 		}
 		return loginResult{}, err
 	}
@@ -237,14 +237,14 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		return loginResult{}, err
 	}
 	if !ok {
-		return loginResult{}, errCredentialsInvalid
+		return loginResult{}, errLoginCredentialsInvalid
 	}
 	// check if user is banned then we return immediately not allowing a login, else if unverified, in which case we trigger a resend otp request
 	switch user.Status {
 	case statusBanned:
-		return loginResult{}, errUserBanned
+		return loginResult{}, errLoginUserBanned
 	case statusUnverified:
-		return loginResult{}, errUserUnverified // todo: make a way for the user be able to resend a otp, otherwise this ends up being a edge deadlock condition
+		return loginResult{}, errLoginUserUnverified // todo: make a way for the user be able to resend a otp, otherwise this ends up being a edge deadlock condition
 	}
 
 	// If user has 2Fa enabled ask for otp.
@@ -358,14 +358,14 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 	} else if req.Phone != "" {
 		channel, target = channelPhone, req.Phone
 	} else {
-		return resendResult{}, errMissingIdentifierResend
+		return resendResult{}, errResendMissingIdentifier
 	}
 
 	// Check if the user even exists in our repository
 	user, err := s.repo.findUserByChannel(ctx, channel, target)
 	if err != nil {
 		if err == errRepoNoResults {
-			return resendResult{}, errUserNotFound
+			return resendResult{}, errCommonUserNotFound
 		}
 		return resendResult{}, err
 	}
@@ -402,9 +402,9 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 		case channelPhone:
 			target = user.Phone
 		case channelTOTP:
-			return resendResult{}, errInvalidIdentifierResend
+			return resendResult{}, errResendInvalidIdentifier
 		default:
-			return resendResult{}, errInternalInvalid2FAChannel
+			return resendResult{}, fmt.Errorf("auth.Service.resendOTP: %w in user dto from repository", errInternalInvalidChannel)
 		}
 	// if its for reset password we delete any previous reset sessions, same logic as otp sessions above
 	case purposeResetPass:
@@ -424,7 +424,7 @@ func (s *Service) resendOTP(ctx context.Context, req resendOTPRequest) (resendRe
 	// if for registration we just check if the channel is a username or not, because that is a invalid channel for registration and should not be sent.
 	case purposeRegistration:
 		if channel == channelUsername {
-			return resendResult{}, errInvalidIdentifierResend
+			return resendResult{}, errResendInvalidIdentifier
 		}
 	}
 
@@ -470,13 +470,13 @@ func (s *Service) forgotPassword(ctx context.Context, req forgotPasswordRequest)
 	} else if req.Phone != "" {
 		channel, target = channelPhone, req.Phone
 	} else {
-		return forgotPasswordResult{}, errMissingIdentifier
+		return forgotPasswordResult{}, errForgotMissingIdentifier
 	}
 	// Find the user in the database
 	user, err := s.repo.findUserByChannel(ctx, channel, target)
 	if err != nil {
 		if err == errRepoNoResults {
-			return forgotPasswordResult{}, errUserNotFound
+			return forgotPasswordResult{}, errCommonUserNotFound
 		}
 		return forgotPasswordResult{}, err // db error
 	}
@@ -522,7 +522,7 @@ func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) e
 	err := s.repo.updateUserPassword(ctx, session.userID, password.Hash(req.NewPassword))
 	if err != nil {
 		if err == errRepoNoResults {
-			return errUserNotFound
+			return errCommonUserNotFound
 		}
 		return err
 	}
@@ -532,10 +532,6 @@ func (s *Service) resetPassword(ctx context.Context, req resetPasswordRequest) e
 }
 
 // ? [HELPER] ----+-----+-----Send otp-----+-----+-----
-
-var (
-	errInternalInvalid2FAChannel = errors.New("auth.Service: invalid 2FA channel found")
-)
 
 // SendOTP sends a one-time password challenge to a user destination.
 // The behavior of this function changes based on the following configurations:
@@ -567,7 +563,7 @@ func (s *Service) sendOTP(channel authChannel, purpose authPurpose, target strin
 		// will not change the code but anyone signing up on the backend with a phone will simply not receive an otp and will not be able to continue.
 		// not returning an error or anything, its intentional, due to future compatibility. the frontend should not have phone supported.
 	default:
-		return "", errInternalInvalid2FAChannel
+		return "", fmt.Errorf("auth.Service.sendOTP [helper]: %w in this function call", errInternalInvalidChannel)
 	}
 	if err != nil { // send otp error
 		return "", err
@@ -591,10 +587,10 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	// retrieve the session from the reference id in the request
 	session, expiresAt, ok := s.cache.otp.Get(req.ReferenceID)
 	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
-		return verifyResult{}, errRefIDNotFound
+		return verifyResult{}, errVerifyRefIDNotFound
 	}
 	if expiresAt.Before(time.Now()) { // if the otp has expired we return a error, the ttl cache automatically removes any values which are expired on a Get call if Cache.Config.LazyDelete is set to true, which is default.
-		return verifyResult{}, errOTPExpired
+		return verifyResult{}, errVerifyOTPExpired
 	}
 	var err error
 	if session.channel == channelTOTP { // if its a authenticator time based 2 factor code
@@ -607,9 +603,10 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	if session.otp != req.OTP { // we check the otp if it does not match we return early with a incorrect otp error
 		remainingAttempts := ruleAttemptsOTP - session.attempts
 		if remainingAttempts <= 0 {
-			return verifyResult{}, errAttemptsExhausted
+			s.cache.otp.Delete(req.ReferenceID) // delete the session not allowing for any more verification attempts
+			return verifyResult{}, errCommonAttemptsExhausted
 		}
-		return verifyResult{remainingAttempts: remainingAttempts}, errIncorrectOTP
+		return verifyResult{remainingAttempts: remainingAttempts}, errVerifyOTPIncorrect
 	}
 	// if the otp matches then we remove the reference id from our map immediately
 	s.cache.otp.Delete(req.ReferenceID)
@@ -617,7 +614,7 @@ func (s *Service) verifyOTP(ctx context.Context, req verifyOTPRequest, rmd reque
 	user, err := s.repo.findUserByID(ctx, session.userID)
 	if err != nil {
 		if err == errRepoNoResults {
-			return verifyResult{}, errUserNotFound // if the user mysteriously got deleted after just trying to log in or register...
+			return verifyResult{}, errCommonUserNotFound // if the user mysteriously got deleted after just trying to log in, register or reset their password...
 		}
 		return verifyResult{}, err
 	}
@@ -689,7 +686,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 	userSesh, err := s.repo.findSessionByToken(ctx, cryptoutil.GenerateMD5Hash(req.RefreshToken))
 	if err != nil {
 		if err == errRepoNoResults {
-			return refreshResult{}, errInvalidRefreshToken
+			return refreshResult{}, errRefreshTokenInvalid
 		}
 		return refreshResult{}, err // db error
 	}
@@ -700,7 +697,7 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 		if err != nil {
 			return refreshResult{}, err // db error
 		}
-		return refreshResult{}, errExpiredRefreshToken
+		return refreshResult{}, errRefreshTokenExpired
 	}
 
 	// if everything is good we generate both new tokens, we do not have to regenerate and re update the jwt id as its unnecessary.
@@ -719,7 +716,10 @@ func (s *Service) refresh(ctx context.Context, req refreshRequest) (refreshResul
 		time.Now().AddDate(0, 0, ruleExpiryTimeRefreshToken),
 	)
 	if err != nil {
-		return refreshResult{}, err // db err
+		if err == errRepoNoResults { // if the user logged out instantly somehow
+			return refreshResult{}, errRefreshTokenInvalid
+		}
+		return refreshResult{}, err
 	}
 
 	// return both tokens
@@ -753,24 +753,24 @@ func (s *Service) add2FA(ctx context.Context, token accessTokenJwt, req add2FARe
 	user, err := s.repo.findUserByID(ctx, token.userID)
 	if err != nil {
 		if err == errRepoNoResults {
-			return errUserNotFound
+			return errCommonUserNotFound
 		}
 		return err
 	}
 	// checking if the channel already has a 2fa
 	channel := authChannel(req.Channel) // assuming its validated to valid 2fa channels only, except totp it has its own endpoints
 	if slices.Contains(user.TwoFAs, channel) {
-		return err2FAExistingChannel
+		return errAdd2FAChannelExists
 	}
 	// switching on channel to check if the channel that the user requested is even present in our database
 	switch channel {
 	case channelEmail:
 		if user.Email == "" {
-			return errChannelEmpty
+			return errAdd2FAChannelEmpty
 		}
 	case channelPhone:
 		if user.Phone == "" {
-			return errChannelEmpty
+			return errAdd2FAChannelEmpty
 		}
 	}
 	// adding the new channel to the 2fa list and updating in the database
@@ -778,7 +778,7 @@ func (s *Service) add2FA(ctx context.Context, token accessTokenJwt, req add2FARe
 	err = s.repo.updateUser2FA(ctx, user.ID, user.TwoFAs)
 	if err != nil {
 		if err == errRepoNoResults { // really impossible as we just found the user exists but still letting it stay
-			return errUserNotFound
+			return errCommonUserNotFound
 		}
 		return err
 	}
@@ -792,7 +792,7 @@ func (s *Service) remove2FA(ctx context.Context, token accessTokenJwt, req remov
 	user, err := s.repo.findUserByID(ctx, token.userID)
 	if err != nil {
 		if err == errRepoNoResults {
-			return errUserNotFound
+			return errCommonUserNotFound
 		}
 		return err
 	}
@@ -815,7 +815,7 @@ func (s *Service) remove2FA(ctx context.Context, token accessTokenJwt, req remov
 	err = s.repo.updateUser2FA(ctx, user.ID, user.TwoFAs)
 	if err != nil {
 		if err == errRepoNoResults {
-			return errUserNotFound
+			return errCommonUserNotFound
 		}
 		return err
 	}
@@ -836,13 +836,13 @@ func (s *Service) totpSetup(ctx context.Context, token accessTokenJwt) (totpSetu
 	user, err := s.repo.findUserByID(ctx, token.userID)
 	if err != nil {
 		if err == errRepoNoResults {
-			return totpSetupResult{}, errUserNotFound
+			return totpSetupResult{}, errCommonUserNotFound
 		}
 		return totpSetupResult{}, err
 	}
 	// if user already has a totp secret key it means totp 2fa is enabled
 	if user.TotpSecretKey != "" {
-		return totpSetupResult{}, errTotpAlreadyExists // user needs to disable totp first to set it up again
+		return totpSetupResult{}, errTotpSetupAlreadyEnabled // user needs to disable totp first to set it up again
 	}
 	// choose a identifier for the totp uri, preference being email
 	var identifier string
@@ -882,15 +882,15 @@ func (s *Service) totpVerify(ctx context.Context, token accessTokenJwt, req totp
 	// Fetching session from cache
 	session, expiresAt, ok := s.cache.totp.Get(req.ReferenceID)
 	if !ok {
-		return totpVerifyResult{}, errTotpSessionNotFound
+		return totpVerifyResult{}, errTotpVerifySessionNotFound
 	}
 	// checking if session and token user's match, otherwise it is a stolen token/reference id
 	if session.userID != token.userID {
-		return totpVerifyResult{}, errUnauthorized
+		return totpVerifyResult{}, errCommonUnauthorized
 	}
 	// checking if session has expired
 	if expiresAt.Before(time.Now()) {
-		return totpVerifyResult{}, errTotpSessionExpired
+		return totpVerifyResult{}, errTotpVerifySessionExpired
 	}
 	// calculating the otp
 	otp, err := s.otp.GenerateTOTP(session.secretKey)
@@ -902,9 +902,10 @@ func (s *Service) totpVerify(ctx context.Context, token accessTokenJwt, req totp
 	if req.OTP != otp {
 		remainingAttempts := ruleAttemptsTOTPVerify - session.attempts
 		if remainingAttempts <= 0 {
-			return totpVerifyResult{}, errAttemptsExhausted
+			s.cache.totp.Delete(req.ReferenceID) // delete the session not allowing for any more verification attempts
+			return totpVerifyResult{}, errCommonAttemptsExhausted
 		}
-		return totpVerifyResult{remainingAttempts}, errTotpIncorrectOTP
+		return totpVerifyResult{remainingAttempts}, errTotpVerifyTOTPIncorrect
 	}
 	// delete the session if otp matches and verification is complete
 	s.cache.totp.Delete(req.ReferenceID)
@@ -912,7 +913,7 @@ func (s *Service) totpVerify(ctx context.Context, token accessTokenJwt, req totp
 	err = s.repo.enableTotp(ctx, session.userID, session.secretKey)
 	if err != nil {
 		if err == errRepoNoResults {
-			return totpVerifyResult{}, errUserNotFound
+			return totpVerifyResult{}, errCommonUserNotFound
 		}
 		return totpVerifyResult{}, err
 	}

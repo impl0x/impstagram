@@ -11,11 +11,10 @@ import (
 
 type Handler struct {
 	Service *Service
-	Group   *mo.Grouped
 }
 
-func NewHandler(s *Service, g *mo.Grouped) Handler {
-	return Handler{s, g}
+func NewHandler(s *Service) Handler {
+	return Handler{s}
 }
 
 // Registers all the auth paths to the handler's group
@@ -23,7 +22,7 @@ func NewHandler(s *Service, g *mo.Grouped) Handler {
 // Public paths:
 //   - POST - /register
 //   - POST - /login
-//   - POST - /resend-otp 
+//   - POST - /resend-otp
 //   - POST - /verify-otp
 //   - POST - /refresh
 //   - POST - /forgot-password
@@ -35,19 +34,20 @@ func NewHandler(s *Service, g *mo.Grouped) Handler {
 //   - DELETE - /2fa ? removes a 2fa
 //   - POST - 	/2fa/totp/setup
 //   - POST - 	/2fa/totp/verify
-func (h Handler) RegisterPaths() {
-	h.Group.POST("/register", h.Register)
-	h.Group.POST("/login", h.Login)
-	h.Group.POST("/resend-otp", h.ResendOTP)
-	h.Group.POST("/verify-otp", h.VerifyOTP)
-	h.Group.POST("/refresh", h.Refresh)
-	h.Group.POST("/forgot-password", h.ForgotPassword)
-	h.Group.POST("/reset-password", h.ResetPassword)
+func (h Handler) RegisterPaths(g *mo.Grouped) {
+	g.POST("/register", h.Register)
+	g.POST("/login", h.Login)
+	g.POST("/resend-otp", h.ResendOTP)
+	g.POST("/verify-otp", h.VerifyOTP)
+	g.POST("/refresh", h.Refresh)
+	g.POST("/forgot-password", h.ForgotPassword)
+	g.POST("/reset-password", h.ResetPassword)
 
-	h.Group.POST("/logout", h.Logout, Middleware)
-	h.Group.POST("/2fa/add", h.Add2FA, Middleware)
-	h.Group.POST("/2fa/totp/setup", h.TotpSetup, Middleware)
-	h.Group.POST("/2fa/totp/verify", h.totpVerify, Middleware)
+	g.POST("/logout", h.Logout, Middleware)
+	g.PUT("/2fa", h.Add2FA, Middleware)
+	g.DELETE("/2fa", h.Remove2FA, Middleware)
+	g.POST("/2fa/totp/setup", h.TotpSetup, Middleware)
+	g.POST("/2fa/totp/verify", h.totpVerify, Middleware)
 }
 
 // ! some info:
@@ -77,7 +77,7 @@ func (h Handler) Register(c *mo.Context) error {
 	return c.JSON(
 		http.StatusCreated,
 		response.Success(
-			codeRegisterSuccess,
+			codeNonErrRegisterSuccess,
 			"Registration successful, please check your "+result.channel.String()+" for the OTP to verify your account",
 			struct { // using anon structs instead of maps to reduce allocation
 				ReferenceID string `json:"reference_id"`
@@ -110,7 +110,7 @@ func (h Handler) Login(c *mo.Context) error {
 		return c.JSON(
 			http.StatusAccepted,
 			response.Success(
-				codeTwoFARequired,
+				codeNonErrTwoFARequired,
 				"Two-factor authentication is required, please check your "+result.channel.String(),
 				struct {
 					ReferenceID string `json:"reference_id"`
@@ -122,7 +122,7 @@ func (h Handler) Login(c *mo.Context) error {
 	return c.JSON(
 		http.StatusOK,
 		response.Success(
-			codeLoginSuccess,
+			codeNonErrLoginSuccess,
 			"Login successful",
 			struct {
 				AccessToken  string `json:"access_token"`
@@ -147,7 +147,7 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 	return c.JSON(
 		http.StatusOK,
 		response.Success(
-			response.CodeOk,
+			codeNonErrOTPSent,
 			"OTP sent successfully to user's "+result.channel.String(),
 			struct {
 				ReferenceID string `json:"reference_id"`
@@ -174,7 +174,7 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 		},
 	)
 	if err != nil {
-		if err == errIncorrectOTP {
+		if err == errVerifyOTPIncorrect {
 			return c.JSON(
 				err.(apperr.AppErr).ToHttp(
 					struct {
@@ -218,7 +218,7 @@ func (h Handler) Refresh(c *mo.Context) error {
 	return c.JSON(
 		http.StatusOK,
 		response.Success(
-			codeRefreshSuccess,
+			codeNonErrRefreshSuccess,
 			"Token successfully refreshed",
 			struct {
 				AccessToken  string `json:"access_token"`
@@ -383,7 +383,7 @@ func (h Handler) totpVerify(c *mo.Context) error {
 	}
 	result, err := h.Service.totpVerify(c.Request().Context(), token, req)
 	if err != nil {
-		if err == errTotpIncorrectOTP {
+		if err == errTotpVerifyTOTPIncorrect {
 			return c.JSON(
 				err.(apperr.AppErr).ToHttp(
 					struct {
