@@ -26,13 +26,18 @@ func NewDobFromString(dobString string) (Dob, error) {
 		return Dob{}, ErrInvalidDobString
 	}
 
-	errs := make([]error, 0, 3)
 	var year, month, day int
-	year, errs[0] = strconv.Atoi(dobSpl[0])
-	month, errs[1] = strconv.Atoi(dobSpl[1])
-	day, errs[2] = strconv.Atoi(dobSpl[2])
-
-	if len(errs) > 0 {
+	var err error
+	year, err = strconv.Atoi(dobSpl[0])
+	if err != nil {
+		return Dob{}, ErrInvalidDobString
+	}
+	month, err = strconv.Atoi(dobSpl[1])
+	if err != nil {
+		return Dob{}, ErrInvalidDobString
+	}
+	day, err = strconv.Atoi(dobSpl[2])
+	if err != nil {
 		return Dob{}, ErrInvalidDobString
 	}
 
