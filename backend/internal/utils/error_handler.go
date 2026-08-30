@@ -45,6 +45,9 @@ func CustomErrorHandler(c *mo.Context, err error) {
 
 	switch {
 	case errors.As(err, &appErr):
+		// if appErr.Kind == apperr.KindInternal {
+		// 	// TODO: log internal app errors
+		// }
 		c.JSON(appErr.ToHttp(nil))
 	case err == nil: // if no error was returned it means handlers probably returned a nil without writing a response
 		c.NoContent(http.StatusNoContent)
@@ -54,16 +57,20 @@ func CustomErrorHandler(c *mo.Context, err error) {
 	case errors.As(err, &moHttpErr): // the framework returned a http error, this happens only on routing errors and therefore only not_found and method_not_allowed
 		// the error struct here is actually json compatible but we want to return errors in our schema so we will format it
 		var codeName response.Code
+		var message string
 		switch moHttpErr.StatusCode() {
 		case http.StatusNotFound:
 			codeName = response.CodeNotFound
+			message = "Path not found"
 		case http.StatusMethodNotAllowed:
 			codeName = response.CodeMethodNotAllowed
+			message = "Method not allowed"
 		default:
 			println("error handler: Unknown mo.HTTPError arrived, " + moHttpErr.Error())
+			message = "An unknown error occurred"
 			codeName = response.CodeUnknown // impossible logical case unless framework changes and somehow returns a different [mo.HTTPError] or we use mo.NewHTTPError in our own code. which we won't
 		}
-		c.JSON(moHttpErr.StatusCode(), response.Error(codeName, http.StatusText(moHttpErr.StatusCode()))) // e.Error returns the statusText of the statusCode if its a [HttpError]
+		c.JSON(moHttpErr.StatusCode(), response.Error(codeName, message)) // e.Error returns the statusText of the statusCode if its a [HttpError]
 	case errors.As(err, &validationErr): // returned by validator package in mo
 		c.JSON(
 			http.StatusBadRequest,
