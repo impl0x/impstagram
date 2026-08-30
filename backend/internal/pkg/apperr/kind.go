@@ -12,7 +12,7 @@ const (
 	kindConflict                 // http: 409
 	kindUnauthorized             // http: 401
 	kindForbidden                // http: 403
-	KindInternal                 // http: 500
+	// KindInternal                 // http: 500, internal errors should preferably be directly returned to the error handler instead.
 )
 
 func (k Kind) ToStatusCode() int {

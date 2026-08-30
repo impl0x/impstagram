@@ -66,7 +66,7 @@ func CustomErrorHandler(c *mo.Context, err error) {
 			codeName = response.CodeMethodNotAllowed
 			message = "Method not allowed"
 		default:
-			println("error handler: Unknown mo.HTTPError arrived, " + moHttpErr.Error())
+			println("error handler: Unknown mo.HTTPError arrived, " + moHttpErr.Error()) // replace with logger
 			message = "An unknown error occurred"
 			codeName = response.CodeUnknown // impossible logical case unless framework changes and somehow returns a different [mo.HTTPError] or we use mo.NewHTTPError in our own code. which we won't
 		}

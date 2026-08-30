@@ -10,6 +10,8 @@ import (
 // ? example usage: validator.AddCustomValidation(validateUsername())
 
 // adds all the validation rules defined to global validator package instance
+// 
+// Run this if using custom validations in the models
 func AddValidations() {
 	validator.AddCustomValidation(validateUsername())
 }

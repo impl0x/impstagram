@@ -26,7 +26,8 @@ func (ae AppErr) Wrap(err error) AppErr {
 
 // Returns the AppErr to a status code and response.Response struct
 //
-// data is optional and can be set to nil
+// data is a optional field which when given a json compatible struct sets a field "data" in the final json containing the struct.
+// Although it can be set to nil to omit the field
 func (ae AppErr) ToHttp(data any) (int, response.Response) {
 	return ae.Kind.ToStatusCode(), response.Response{
 		Code:    ae.Code,
