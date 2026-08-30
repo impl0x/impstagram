@@ -7,8 +7,9 @@ import (
 	"github.com/mileusna/useragent"
 )
 
-type user struct { // not complete, will do after i setup database properly
+type user struct {
 	ID            uuid.UUID `db:"id"`
+	DisplayName   string    `db:"display_name"`
 	Username      string    `db:"username"`
 	Email         string    `db:"email"`
 	Phone         string    `db:"phone"`

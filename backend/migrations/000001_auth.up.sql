@@ -4,6 +4,7 @@ CREATE TYPE auth_channel AS ENUM ('email','phone','username','totp');
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    display_name TEXT NOT NULL DEFAULT '',
     username TEXT UNIQUE NOT NULL,
     email TEXT UNIQUE NOT NULL DEFAULT '',
     phone TEXT UNIQUE NOT NULL DEFAULT '',
