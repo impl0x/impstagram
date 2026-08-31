@@ -4,22 +4,20 @@ CREATE TYPE auth_channel AS ENUM ('email','phone','username','totp');
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    display_name TEXT NOT NULL DEFAULT '',
-    username TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE NOT NULL DEFAULT '',
-    phone TEXT UNIQUE NOT NULL DEFAULT '',
-    totp_secret_key TEXT UNIQUE NOT NULL DEFAULT '',
+    email TEXT UNIQUE,
+    phone TEXT UNIQUE,
     password_hash TEXT NOT NULL,
     dob DATE NOT NULL,
+    totp_secret_key TEXT,
+    two_fas auth_channel[], -- can be null, if so then 2fa is disabled
     status account_status NOT NULL DEFAULT 'unverified',
-    two_fas auth_channel[], -- can be null, if so then 2fa is disabled 
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE user_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    jwt_id UUID NOT NULL,
+    jwt_id UUID NOT NULL UNIQUE,
     token_hash TEXT NOT NULL,
     user_id UUID NOT NULL,
     ip_address INET,
@@ -27,7 +25,23 @@ CREATE TABLE user_sessions (
     browser_name TEXT,
     device_type TEXT,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE profiles(
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    display_name TEXT,
+    avatar_url TEXT UNIQUE,
+    is_private BOOLEAN NOT NULL DEFAULT false,
+    bio TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_user
         FOREIGN KEY (user_id)
