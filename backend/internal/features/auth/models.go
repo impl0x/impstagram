@@ -3,9 +3,19 @@ package auth
 import (
 	"errors"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
+	"github.com/mileusna/useragent"
 )
+
+// ? INFO
+// helper file containing enums and models
+// ! Ownership and usage
+// owned and used by many files simultaneously,
+// giving it a shared responsibility where whatever part of this file is
+// used by any other file it also owns that particular part.
+// ! Extra
+// this file contains more or less enums, request models, jwt models, etc.
 
 // ? ----+-----+-----Store keys-----+-----+-----
 // store keys are the keys used to store items in the context storage
@@ -121,15 +131,118 @@ func (atp accessTokenJwtPayload) Convert() (accessTokenJwt, error) {
 	}, nil
 }
 
+func (at accessTokenJwt) ToPayload() accessTokenJwtPayload {
+	return accessTokenJwtPayload{
+		UserID:    at.userID.String(),
+		IssuedAt:  uint(at.issuedAt.Unix()),
+		ExpiresAt: uint(at.expiresAt.Unix()),
+		JwtID:     at.jwtID.String(),
+	}
+}
+
+// ? ----+-----+-----DB Models-----+-----+-----
+
+type userModel struct {
+	// user data
+	ID           uuid.UUID     `db:"id"`            // primary key default gen_random_uuid()
+	Email        *string       `db:"email"`         // unique
+	Phone        *string       `db:"phone"`         // unique
+	PasswordHash string        `db:"password_hash"` // not null
+	Dob          string        `db:"dob"`           // not null
+	Status       accountStatus `db:"status"`        // not null default 'unverified'
+	// 2fa related
+	TotpSecretKey *string `db:"totp_secret_key"`
+	TwoFAs        twoFAs  `db:"two_fas"` // slice of auth channels, if nil means twoFa not enabled, else its enabled on whichever identifiers are in the slice
+	// timestamps
+	CreatedAt time.Time `db:"created_at"` // not null default current_timestamp
+	UpdatedAt time.Time `db:"updated_at"` // not null default current_timestamp
+}
+
+func newUserModel(req registerRequest, passwordHash string) *userModel {
+	model := &userModel{
+		PasswordHash: passwordHash,
+		Dob:          req.Dob,
+	}
+	if req.Email != "" {
+		model.Email = &req.Email
+	}
+	if req.Phone != "" {
+		model.Phone = &req.Phone
+	}
+	return model
+}
+
+type userSessionModel struct {
+	// session info
+	ID        uuid.UUID `db:"id"`         // primary key default gen_random_uuid()
+	JwtID     uuid.UUID `db:"jwt_id"`     // not null unique
+	TokenHash string    `db:"token_hash"` // not null
+	UserID    uuid.UUID `db:"user_id"`    // not null references users(id)
+	// device info
+	IPAddress   *string `db:"ip_address"`
+	OSName      *string `db:"os_name"`
+	BrowserName *string `db:"browser_name"`
+	DeviceType  *string `db:"device_type"`
+	// timestamps
+	ExpiresAt time.Time `db:"expires_at"` // not null
+	CreatedAt time.Time `db:"created_at"` // not null default current_timestamp
+}
+
+func newUserSessionModel(jwtID uuid.UUID, tokenHash string, rmd requestMetadata, userID uuid.UUID) *userSessionModel {
+	// parsing the user agent and storing the current time
+	ua := useragent.Parse(rmd.userAgent)
+
+	// creating the userSession struct
+	session := &userSessionModel{
+		JwtID:     jwtID,
+		TokenHash: tokenHash,
+		UserID:    userID,
+		ExpiresAt: time.Now().AddDate(0, 0, ruleExpiryTimeRefreshToken),
+	}
+	if rmd.IP != "" {
+		session.IPAddress = &rmd.IP
+	}
+	if ua.OS != "" {
+		session.OSName = &ua.OS
+	}
+	if ua.Name != "" {
+		session.BrowserName = &ua.Name
+	}
+	if ua.Device != "" {
+		session.DeviceType = &ua.Device
+	}
+	return session
+}
+
+type profileModel struct {
+	// profile info
+	ID          uuid.UUID `db:"id"`       // primary key default gen_random_uuid()
+	UserID      uuid.UUID `db:"user_id"`  // not null references users(id)
+	Username    string    `db:"username"` // not null unique
+	DisplayName *string   `db:"display_name"`
+	AvatarUrl   *string   `db:"avatar_url"` // unique
+	IsPrivate   bool      `db:"is_private"` // not null default false
+	Bio         *string   `db:"bio"`
+	// timestamps
+	UpdatedAt time.Time `db:"updated_at"` // not null default current_timestamp
+}
+
+func newProfileModel(userID uuid.UUID, username string) *profileModel {
+	return &profileModel{
+		UserID:   userID,
+		Username: username,
+	}
+}
+
 // ? ----+-----+-----Request Body JSON-----+-----+-----
 
-// ! important: make sure the validate tags are in align to the business rules and code
+// ! important: make sure the validate tags are in align to the business rules and code, and custom validation tags are registered
 
 type registerRequest struct {
 	Username string `json:"username" validate:"required,min=3,max=30,username"`
 	Email    string `json:"email" validate:"optional,email"`
 	Phone    string `json:"phone" validate:"optional,e.164"`
-	Dob      string `json:"dob" validate:"required"`
+	Dob      string `json:"dob" validate:"required,dob"`
 	Password string `json:"password" validate:"required,min=8,max=20"`
 }
 
