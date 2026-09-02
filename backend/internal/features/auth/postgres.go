@@ -27,28 +27,22 @@ func NewPostgresRepository(db *pgxpool.Pool) PostgresRepository {
 	return PostgresRepository{db}
 }
 
-// wraps any returned T, error to pass non nil error into handlePgxError
-func wrapErrHandler[T any](t T, err error) (T, error) {
-	if err != nil {
-		return t, handlePgxError(err)
-	}
-	return t, nil
-}
-
 // ? ----+-----+-----Users table-----+-----+-----
 
 func (pg PostgresRepository) findUser(ctx context.Context, one string, two any) (*userModel, error) {
-	return wrapErrHandler(
-		postgresql.Find[userModel](
-			ctx,
-			pg.Db,
-			postgresql.QuerySelectAllWhere(
-				tableUsers,
-				one,
-				two,
-			),
+	user, err := postgresql.Find[userModel](
+		ctx,
+		pg.Db,
+		postgresql.QuerySelectAllWhere(
+			tableUsers,
+			one,
+			two,
 		),
 	)
+	if err != nil {
+		return nil, handlePgxError(err)
+	}
+	return user, nil
 }
 
 func (pg PostgresRepository) findUserByID(ctx context.Context, userID uuid.UUID) (*userModel, error) {
@@ -57,20 +51,22 @@ func (pg PostgresRepository) findUserByID(ctx context.Context, userID uuid.UUID)
 func (pg PostgresRepository) findUserByChannel(ctx context.Context, channel authChannel, target string) (*userModel, error) {
 	switch channel {
 	case channelUsername:
-		return wrapErrHandler(
-			postgresql.Find[userModel](
-				ctx,
-				pg.Db,
-				postgresql.QuerySelectAllInnerJoin(
-					tableUsers,
-					tableProfiles,
-					"id",
-					"user_id",
-					"username",
-					target,
-				),
+		user, err := postgresql.Find[userModel](
+			ctx,
+			pg.Db,
+			postgresql.QuerySelectAllInnerJoin(
+				tableUsers,
+				tableProfiles,
+				"id",
+				"user_id",
+				"username",
+				target,
 			),
 		)
+		if err != nil {
+			return nil, handlePgxError(err)
+		}
+		return user, nil
 	case channelEmail, channelPhone:
 		return pg.findUser(ctx, string(channel), target)
 	default:
@@ -81,28 +77,49 @@ func (pg PostgresRepository) findUserByChannel(ctx context.Context, channel auth
 // user parameter must only have populated values according to the db model constructor defined in models
 //
 // extra populated fields will not be inserted
-func (pg PostgresRepository) createUser(ctx context.Context, user *userModel) (uuid.UUID, error) {
-	return wrapErrHandler(
-		postgresql.CreateAndReturnID(
-			ctx,
-			pg.Db,
-			postgresql.QueryInsert(
-				tableUsers,
-				[]string{
-					"email",
-					"phone",
-					"password_hash",
-					"dob",
-				},
-				[]any{
-					user.Email,
-					user.Phone,
-					user.PasswordHash,
-					user.Dob,
-				},
-			),
-		),
+func (pg PostgresRepository) createUser(ctx context.Context, user *userModel, username string) (uuid.UUID, error) {
+
+	tx, err := pg.Db.Begin(ctx)
+	if err != nil {
+		return uuid.UUID{}, handlePgxError(err)
+	}
+	defer tx.Rollback(ctx)
+	queryInsertUser := postgresql.QueryInsert(
+		tableUsers,
+		[]string{
+			"email",
+			"phone",
+			"password_hash",
+			"dob",
+		},
+		[]any{
+			user.Email,
+			user.Phone,
+			user.PasswordHash,
+			user.Dob,
+		},
+	).WithReturning("id")
+	var userID uuid.UUID
+	err = tx.QueryRow(ctx, queryInsertUser.Query(), queryInsertUser.Args()...).Scan(&userID)
+	if err != nil {
+		return uuid.UUID{}, handlePgxError(err)
+	}
+	queryInsertProfile := postgresql.QueryInsert(
+		tableProfiles,
+		[]string{
+			"user_id",
+			"username",
+		},
+		[]any{
+			userID,
+			username,
+		},
 	)
+	_, err = tx.Exec(ctx, queryInsertProfile.Query(), queryInsertProfile.Args()...)
+	if err != nil {
+		return uuid.UUID{}, handlePgxError(err)
+	}
+	return userID, handlePgxError(tx.Commit(ctx))
 }
 
 func (pg PostgresRepository) updateUser(ctx context.Context, id uuid.UUID, one string, two any) error {
@@ -193,32 +210,16 @@ func (pg PostgresRepository) createSession(ctx context.Context, session *userSes
 		),
 	)
 }
-// TODO: below all todo
+
 func (pg PostgresRepository) updateSession(ctx context.Context, id uuid.UUID, one string, two any) error {
-	query := `UPDATE user_sessions SET $1 = $2 WHERE id = $3`
-	cmdTag, err := pg.Db.Exec(ctx, query, one, two, id)
-	if err != nil {
-		return handlePgxError(err)
-	}
-	if cmdTag.RowsAffected() == 0 {
-		return errRepoNoResults
-	}
-	return nil
+	return handlePgxError(postgresql.Update(ctx, pg.Db, postgresql.QueryUpdateOneWhere(tableUserSessions, "id", id, one, two)))
 }
 
 func (pg PostgresRepository) updateSessionToken(ctx context.Context, id uuid.UUID, tokenHash string, expiresAt time.Time) error {
 	return pg.updateSession(ctx, id, "token_hash", tokenHash)
 }
 func (pg PostgresRepository) deleteSession(ctx context.Context, one string, two any) error {
-	query := `DELETE FROM user_sessions WHERE $1 = $2`
-	cmdTag, err := pg.Db.Exec(ctx, query, one, two)
-	if err != nil {
-		return handlePgxError(err)
-	}
-	if cmdTag.RowsAffected() == 0 {
-		return errRepoNoResults
-	}
-	return nil
+	return handlePgxError(postgresql.Delete(ctx, pg.Db, postgresql.QueryDeleteWhere(tableUserSessions, one, two)))
 }
 func (pg PostgresRepository) deleteSessionByID(ctx context.Context, id uuid.UUID) error {
 	return pg.deleteSession(ctx, "id", id)
@@ -226,6 +227,7 @@ func (pg PostgresRepository) deleteSessionByID(ctx context.Context, id uuid.UUID
 func (pg PostgresRepository) deleteSessionByJwtID(ctx context.Context, jwtID uuid.UUID) error {
 	return pg.deleteSession(ctx, "id", jwtID)
 }
+
 
 func handlePgxError(err error) error {
 	var pgErr *pgconn.PgError
