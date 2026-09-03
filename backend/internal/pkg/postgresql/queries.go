@@ -12,7 +12,22 @@ type Query struct {
 	args  []any
 }
 
-func NewQuery(query string, args... any) Query{
+// returns the query string
+func (q Query) Query() string {
+	return q.query
+}
+
+// returns the query args
+func (q Query) Args() []any {
+	return q.args
+}
+
+func (q Query) WithReturning(colName string) Query {
+	q.query += " RETURNING " + colName
+	return q
+}
+
+func NewQuery(query string, args ...any) Query {
 	return Query{
 		query, args,
 	}
@@ -20,14 +35,14 @@ func NewQuery(query string, args... any) Query{
 
 var (
 	// select * from table where x = y
-	QuerySelectAllWhere = func(table string, x, y any) Query {
+	QuerySelectAllWhere = func(table string, x string, y any) Query {
 		return Query{`SELECT * FROM $1 WHERE $2 = $3`, []any{x, y}}
 	}
 	// select * from table1 t1 join table2 t2 on t1.cond1 = t2.cond2 where t2.x = y
 	//
 	// where table1 is the table you are fetching the data from and table2 is the data used for the join and comparison for cond1(table1 col) and cond2(table2 col).
 	// x and y is used for the where statement for table2
-	QuerySelectAllInnerJoin = func(table1, table2 string, cond1, cond2 any, x, y any) Query {
+	QuerySelectAllInnerJoin = func(table1, table2 string, cond1, cond2 any, x string, y any) Query {
 		return Query{`
 		SELECT t1.*
 		FROM $1 t1
@@ -47,10 +62,17 @@ var (
 		}
 	}
 
-	QueryUpdateOneWhere = func(table, field string, value, x, y any) Query {
+	QueryUpdateOneWhere = func(table, field string, value any, x string, y any) Query {
 		return Query{
 			`UPDATE $1 SET $2 = $3 WHERE $4 = $5`,
 			[]any{table, field, value, x, y},
+		}
+	}
+
+	QueryDeleteWhere = func(table string, x string, y any) Query {
+		return Query{
+			`DELETE FROM $1 WHERE $2 = $3`,
+			[]any{table, x, y},
 		}
 	}
 )

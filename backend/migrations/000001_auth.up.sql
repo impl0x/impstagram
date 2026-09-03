@@ -8,9 +8,9 @@ CREATE TABLE users (
     phone TEXT UNIQUE,
     password_hash TEXT NOT NULL,
     dob DATE NOT NULL,
+    status account_status NOT NULL DEFAULT 'unverified',
     totp_secret_key TEXT,
     two_fas auth_channel[], -- can be null, if so then 2fa is disabled
-    status account_status NOT NULL DEFAULT 'unverified',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -34,17 +34,11 @@ CREATE TABLE user_sessions (
 );
 
 CREATE TABLE profiles(
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     username TEXT UNIQUE NOT NULL,
     display_name TEXT,
-    avatar_url TEXT UNIQUE,
+    avatar_url TEXT,
     is_private BOOLEAN NOT NULL DEFAULT false,
     bio TEXT,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(id)
-        ON DELETE CASCADE
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

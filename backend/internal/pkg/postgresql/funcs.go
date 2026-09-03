@@ -5,7 +5,6 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -36,17 +35,21 @@ func Find[T any](ctx context.Context, db *pgxpool.Pool, query Query) (*T, error)
 	return &model, nil
 }
 
-func Create(ctx context.Context, db *pgxpool.Pool, query Query)error{
-	_,err:= db.Exec(ctx, query.query, query.args...)
+func Create(ctx context.Context, db *pgxpool.Pool, query Query) error {
+	_, err := db.Exec(ctx, query.query, query.args...)
 	return err
 }
 
-// assumed "id" is a valid column of type pgtype.UUID and is returned
+// assumed "id" is a valid column of type UUID and is not null
 func CreateAndReturnID(ctx context.Context, db *pgxpool.Pool, query Query) (uuid.UUID, error) {
-	var pgID pgtype.UUID
-	err := db.QueryRow(ctx, query.query+" RETURNING id", query.args...).Scan(&pgID)
+	var id uuid.UUID
+	err := db.QueryRow(ctx, query.WithReturning("id").query, query.args...).Scan(&id)
 	if err != nil {
 		return uuid.Nil(), err
 	}
-	return uuid.UUID(pgID.Bytes), nil
+	return id, nil
+}
+
+func Delete(ctx context.Context, db *pgxpool.Pool, query Query) error {
+	return exec(ctx, db, query.query, query.args...)
 }
