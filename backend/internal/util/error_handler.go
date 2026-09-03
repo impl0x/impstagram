@@ -1,4 +1,4 @@
-package utils
+package util
 
 // this file is mostly copied from the default error handler present in mo.
 import (
