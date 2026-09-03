@@ -1,3 +1,4 @@
+DROP TABLE profiles;
 DROP TABLE user_sessions;
 DROP TABLE users;
 

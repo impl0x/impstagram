@@ -11,12 +11,14 @@ import (
 	"fmt"
 	"slices"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
-// some naming clarifications if it is confusing
-// - Reset always means reset password
+// ? INFO:
+// main file for the core business logic
+// ! Ownership and usage:
+// owned by itself
+// used by handler
 
 type Service struct {
 	repo  repository
@@ -28,7 +30,7 @@ type Service struct {
 
 type serviceCaches struct {
 	otp   *ttlcache.Cache[string, *otpSession]
-	reset *ttlcache.Cache[string, resetSession]
+	reset *ttlcache.Cache[string, resetSession] // reset password
 	totp  *ttlcache.Cache[string, *totpSession]
 }
 
@@ -115,7 +117,7 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	// doing all validations before processing business logic
 
 	// Figure out what identifier the user sent, that is if the user registered with a email or a phone
-	var user *user
+	var user *userModel
 	var channel authChannel // identifier, eg: email/phone
 	var target string       // the identifier literal, eg: jon@email.com/+1-234567890
 	if req.Email != "" {
@@ -152,8 +154,8 @@ func (s *Service) register(ctx context.Context, req registerRequest) (registerRe
 	}
 
 	// Now we hash the user's password and create a new user in the database
-	user = newUser(req, password.Hash(req.Password)) // returns a unverified user by default
-	user.ID, err = s.repo.createUser(ctx, user)      // we create a user before sending otp
+	user = newUserModel(req, password.Hash(req.Password)) // returns a unverified user by default
+	user.ID, err = s.repo.createUser(ctx, user)           // we create a user before sending otp
 	if err != nil {
 		return registerResult{}, err
 	}
@@ -211,7 +213,7 @@ type loginResult struct {
 // rmd requestMetadata is required for userSession storage on successful login
 func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetadata) (loginResult, error) {
 	// Figure out what identifier the user sent, i.e. email/phone/username to log in
-	var user *user
+	var user *userModel
 	var err error
 	switch {
 	case req.Username != "":
@@ -254,7 +256,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		primaryTwoFAChannel := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
 		// if it is TOTP
 		if primaryTwoFAChannel == channelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
-			if user.TotpSecretKey == "" {
+			if user.TotpSecretKey == nil {
 				panic("auth.service.login: User has 2FA in twoFAs slice but no secret key in TotpSecretKey")
 			}
 			s.cache.otp.Add( // we don't save an otp but instead save the secret key from the database to reduce a db call on the verify endpoint
@@ -263,7 +265,7 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 					userID:  user.ID,
 					channel: channelTOTP,
 					purpose: purpose2FA,
-					otp:     user.TotpSecretKey,
+					otp:     *user.TotpSecretKey,
 				},
 				expiresAt,
 			)
@@ -279,9 +281,15 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 		var target string // either the email or the phone literal
 		switch primaryTwoFAChannel {
 		case channelEmail:
-			target = user.Email
+			if user.Email == nil {
+				panic("auth.Service.login: user primary 2fa is email but no email present in user model")
+			}
+			target = *user.Email
 		case channelPhone:
-			target = user.Phone
+			if user.Phone == nil {
+				panic("auth.Service.login: user primary 2fa is phone but no phone present in user model")
+			}
+			target = *user.Phone
 		default:
 			panic("invalid identifier found in 2fa slice of user")
 		}
@@ -320,11 +328,10 @@ func (s *Service) login(ctx context.Context, req loginRequest, rmd requestMetada
 	// Add a new user session to the database
 	err = s.repo.createSession(
 		ctx,
-		newUserSession(
+		newUserSessionModel(
 			jwtID,                                    // jwtID
 			cryptoutil.GenerateMD5Hash(refreshToken), // tokenHash
-			rmd.IP,                                   // userIP
-			rmd.userAgent,                            // userAgent - assumes that past middleware has checked if a valid ua is present
+			rmd,                                      
 			user.ID,                                  // userID
 		),
 	)

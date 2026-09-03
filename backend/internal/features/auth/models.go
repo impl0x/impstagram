@@ -219,7 +219,7 @@ type profileModel struct {
 	UserID      uuid.UUID `db:"user_id"`  // primary key references users(id)
 	Username    string    `db:"username"` // not null unique
 	DisplayName *string   `db:"display_name"`
-	AvatarUrl   *string   `db:"avatar_url"` // 
+	AvatarUrl   *string   `db:"avatar_url"` //
 	IsPrivate   bool      `db:"is_private"` // not null default false
 	Bio         *string   `db:"bio"`
 	// timestamps

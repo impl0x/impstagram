@@ -6,11 +6,17 @@ import (
 	"github.com/impl0x/mo/validator"
 )
 
-// ? This package is compatible with github.com/impl0x/mo/validator
-// ? example usage: validator.AddCustomValidation(validateUsername())
+// ? INFO:
+// helper file containing custom validations according to business logic
+// ! Ownership and usage:
+// owned by service and used by no one.
+// it is only used once by auth.go for initial addition of validations
+// ! Extra
+// This package is compatible with github.com/impl0x/mo/validator
+// example usage: validator.AddCustomValidation(validateUsername())
 
 // adds all the validation rules defined to global validator package instance
-// 
+//
 // Run this if using custom validations in the models
 func AddValidations() {
 	validator.AddCustomValidation(validateUsername())

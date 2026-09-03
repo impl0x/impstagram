@@ -5,11 +5,18 @@ import (
 	"backend/internal/pkg/ttlcache"
 	"errors"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
+	
 	"github.com/impl0x/mo"
 	"github.com/impl0x/mo/validator"
 )
+
+// ? INFO:
+// contains the middleware used to check for a auth token
+// ! Ownership and usage:
+// owned by itself
+// used by handler to wrap auth protected paths with the middleware func
+// also used by service layer in only one circumstance that is adding a token to the [jwtTokenBlockList].
 
 // Do not mutate this variable at runtime.
 //
@@ -26,7 +33,7 @@ var jwtTokenBlockList = ttlcache.New[uuid.UUID, struct{}](ruleTTLCacheCleanInter
 //
 // Any handler wrapped with this middleware can safely assure that mo.Context["jwt"] will ALWAYS return a valid [jwt.AccessTokenPayload] struct
 func Middleware(next mo.HandlerFunc) mo.HandlerFunc {
-	errAuthTokenInvalidPayload:=errors.New("auth.Middleware: Auth token has invalid payload")
+	errAuthTokenInvalidPayload := errors.New("auth.Middleware: Auth token has invalid payload")
 	return func(c *mo.Context) (handlerErr error) {
 		// get the auth header value from the request header
 		authHeader := c.Request().Header.Get("authorization")

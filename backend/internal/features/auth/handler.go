@@ -9,6 +9,19 @@ import (
 	"github.com/impl0x/mo"
 )
 
+// ? INFO:
+// main file containing all the http handlers
+// ! Ownership and usage:
+// owned by itself and used by the no one, this is an independent file.
+// handler is only used by auth.go for initiation and path registration
+// ! Extra
+// the handler struct is the heart of this file, all functions are its methods. 
+// this file has its own [Handler.RegisterPaths] which registers all the paths 
+// into a [mo.Grouped] instance into paths and methods described in the function definition.
+// it is not a necessity to use this function to register paths, but it is recommended 
+// to not register paths using the [Handler] http handlers which are exported but 
+// instead use this and modify the method/path if needed.
+
 type Handler struct {
 	Service *Service
 }
@@ -17,7 +30,8 @@ func NewHandler(s *Service) Handler {
 	return Handler{s}
 }
 
-// Registers all the auth paths to the handler's group
+// Registers all the auth paths to the handler's group,
+// it is recommended to use this function instead of registering paths one by one yourself.
 //
 // Public paths:
 //   - POST - /register
@@ -30,8 +44,8 @@ func NewHandler(s *Service) Handler {
 //
 // Authorized paths: (these paths are wrapped with the authorization [Middleware])
 //   - POST - 	/logout
-//   - PUT - 	/2fa ? adds a new 2fa
-//   - DELETE - /2fa ? removes a 2fa
+//   - PUT - 	/2fa
+//   - DELETE - /2fa
 //   - POST - 	/2fa/totp/setup
 //   - POST - 	/2fa/totp/verify
 func (h Handler) RegisterPaths(g *mo.Grouped) {

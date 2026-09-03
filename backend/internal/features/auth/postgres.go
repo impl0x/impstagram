@@ -228,7 +228,6 @@ func (pg PostgresRepository) deleteSessionByJwtID(ctx context.Context, jwtID uui
 	return pg.deleteSession(ctx, "id", jwtID)
 }
 
-
 func handlePgxError(err error) error {
 	var pgErr *pgconn.PgError
 	switch {
