@@ -70,7 +70,7 @@ func (pg PostgresRepository) findUserByChannel(ctx context.Context, channel auth
 	case channelEmail, channelPhone:
 		return pg.findUser(ctx, string(channel), target)
 	default:
-		return nil, fmt.Errorf("auth.PostgresRepository.findUserByChannel: %w in repository function call")
+		return nil, fmt.Errorf("auth.PostgresRepository.findUserByChannel: %w in repository function call", errInternalInvalidChannel)
 	}
 }
 
