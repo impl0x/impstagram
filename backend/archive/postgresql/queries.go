@@ -80,7 +80,9 @@ var (
 func indexGen(start, cap int) string {
 	var b strings.Builder
 	for i := start; i < cap+start; i++ {
-		b.WriteString("$" + strconv.Itoa(i) + ", ")
+		b.WriteString("$")
+		b.WriteString(strconv.Itoa(i))
+		b.WriteString(", ")
 	}
 	return b.String()
 }
