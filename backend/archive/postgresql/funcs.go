@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
+// wrapper for exec
 func exec(ctx context.Context, db *pgxpool.Pool, query string, args ...any) error {
 	cmdTag, err := db.Exec(ctx, query, args...)
 	if err != nil {
@@ -18,6 +18,7 @@ func exec(ctx context.Context, db *pgxpool.Pool, query string, args ...any) erro
 	}
 	return nil
 }
+// Exec with the query given
 func Update(ctx context.Context, db *pgxpool.Pool, query Query) error {
 	return exec(ctx, db, query.query, query.args)
 }
@@ -35,6 +36,7 @@ func Find[T any](ctx context.Context, db *pgxpool.Pool, query Query) (*T, error)
 	return &model, nil
 }
 
+// calls Exec
 func Create(ctx context.Context, db *pgxpool.Pool, query Query) error {
 	_, err := db.Exec(ctx, query.query, query.args...)
 	return err
