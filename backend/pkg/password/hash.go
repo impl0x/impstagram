@@ -1,7 +1,7 @@
 package password
 
 import (
-	"backend/internal/pkg/password/argon2id"
+	"backend/pkg/password/argon2id"
 	"crypto/rand"
 	"crypto/subtle"
 )

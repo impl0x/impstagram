@@ -1,14 +1,14 @@
 package auth
 
 import (
-	"backend/internal/pkg/jwt"
-	"backend/internal/pkg/ttlcache"
+	"backend/pkg/jwt"
+	"backend/pkg/ttlcache"
 	"errors"
 	"time"
 	"uuid"
 	
 	"github.com/impl0x/mo"
-	"github.com/impl0x/mo/validator"
+	"github.com/impl0x/mo/validator/v3"
 )
 
 // ? INFO:

@@ -1,7 +1,7 @@
 package apperr
 
 import (
-	"backend/internal/pkg/response"
+	"backend/pkg/response"
 )
 
 type AppErr struct {
