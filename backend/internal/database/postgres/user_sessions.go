@@ -12,6 +12,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// INFO
+// Contains user_sessions table methods
+
 type UserSessions struct {
 	postgres.Postgres
 }

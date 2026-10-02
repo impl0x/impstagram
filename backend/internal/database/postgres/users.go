@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ? INFO:
-// contains user table methods
+// INFO:
+// contains users table methods
 
 type Users struct {
 	postgres.Postgres

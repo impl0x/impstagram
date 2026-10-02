@@ -32,7 +32,7 @@ func handlePgxError(err error) error {
 
 const _argBuilderDefaultCap uint8 = 16
 
-// wrapper
+// utility struct to build sql values/cols lines.
 type argBuilder[T any] struct {
 	slice []T
 }
