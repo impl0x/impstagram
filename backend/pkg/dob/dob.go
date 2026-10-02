@@ -16,9 +16,11 @@ type Dob struct {
 	Day   int
 }
 
-// format: year-month-date
+// format: year-month-day
 //
 // example: 2000-12-30
+//
+// possible errors: [ErrInvalidDobString], [ErrImpossibleDob]
 func Parse(dobString string) (Dob, error) {
 	parts := strings.Split(dobString, "-")
 
@@ -67,4 +69,8 @@ func (d Dob) Age() int {
 		age--
 	}
 	return age
+}
+
+func (d Dob) String() string {
+	return strconv.Itoa(d.Year) + "-" + strconv.Itoa(d.Month) + "-" + strconv.Itoa(d.Day)
 }
