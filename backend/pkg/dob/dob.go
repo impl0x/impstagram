@@ -16,27 +16,27 @@ type Dob struct {
 	Day   int
 }
 
-// year-month-date
+// format: year-month-date
 //
-// 2000-12-30
-func NewDobFromString(dobString string) (Dob, error) {
-	dobSpl := strings.Split(dobString, "-")
+// example: 2000-12-30
+func Parse(dobString string) (Dob, error) {
+	parts := strings.Split(dobString, "-")
 
-	if len(dobSpl) != 3 {
+	if len(parts) != 3 {
 		return Dob{}, ErrInvalidDobString
 	}
 
 	var year, month, day int
 	var err error
-	year, err = strconv.Atoi(dobSpl[0])
+	year, err = strconv.Atoi(parts[0])
 	if err != nil {
 		return Dob{}, ErrInvalidDobString
 	}
-	month, err = strconv.Atoi(dobSpl[1])
+	month, err = strconv.Atoi(parts[1])
 	if err != nil {
 		return Dob{}, ErrInvalidDobString
 	}
-	day, err = strconv.Atoi(dobSpl[2])
+	day, err = strconv.Atoi(parts[2])
 	if err != nil {
 		return Dob{}, ErrInvalidDobString
 	}
