@@ -2,18 +2,19 @@ package util
 
 // this file is mostly copied from the default error handler present in mo.
 import (
-	"backend/internal/pkg/apperr"
-	"backend/internal/pkg/response"
+	"backend/pkg/apperr"
+	"backend/pkg/response"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/impl0x/mo"
 	"github.com/impl0x/mo/modules/logger"
-	"github.com/impl0x/mo/validator"
+	"github.com/impl0x/mo/validator/v3"
 )
 
 type validationErrorJson struct {
@@ -37,7 +38,7 @@ func CustomErrorHandler(c *mo.Context, err error) {
 	}
 	// if response was not written then we need to see if error exists and return appropriate messages
 	// declaring some types we will need for errors.As
-	var moHttpErr mo.HTTPError
+	var moHttpErr mo.HttpError
 	var validationErr validator.GroupedValidationError
 	var jsonSyntaxErr *json.SyntaxError
 	var jsonUnmarshalErr *json.UnmarshalTypeError
@@ -66,7 +67,7 @@ func CustomErrorHandler(c *mo.Context, err error) {
 			codeName = response.CodeMethodNotAllowed
 			message = "Method not allowed"
 		default:
-			println("error handler: Unknown mo.HTTPError arrived, " + moHttpErr.Error()) // replace with logger
+			log.Println("error handler: Unknown mo.HTTPError arrived, " + moHttpErr.Error()) // replace with logger
 			message = "An unknown error occurred"
 			codeName = response.CodeUnknown // impossible logical case unless framework changes and somehow returns a different [mo.HTTPError] or we use mo.NewHTTPError in our own code. which we won't
 		}

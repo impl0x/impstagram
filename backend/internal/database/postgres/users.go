@@ -28,7 +28,7 @@ func NewUsers(pg postgres.Postgres) Users {
 // user parameter must only have populated values according to the db model constructor defined in models
 //
 // extra populated fields will not be inserted
-func (pg Users) CreateUser(ctx context.Context, user *entity.User, username string) (uuid.UUID, error) {
+func (pg Users) Create(ctx context.Context, user *entity.User, username string) (uuid.UUID, error) {
 	if user == nil {
 		panic("user is nil")
 	}
@@ -74,7 +74,7 @@ func (pg Users) CreateUser(ctx context.Context, user *entity.User, username stri
 	return userID, handlePgxError(tx.Commit(ctx))
 }
 
-func (pg Users) getUser(ctx context.Context, by string, value any) (*entity.User, error) {
+func (pg Users) get(ctx context.Context, by string, value any) (*entity.User, error) {
 	sql, args, err := pg.Builder.
 		Select("id, email, phone, password_hash, dob, status, totp_secret_key, two_fas, created_at, updated_at").
 		From(database.TableUsers).
@@ -103,10 +103,10 @@ func (pg Users) getUser(ctx context.Context, by string, value any) (*entity.User
 	return &user, nil
 }
 
-func (pg Users) GetUserByID(ctx context.Context, ID uuid.UUID) (*entity.User, error) {
-	return pg.getUser(ctx, "id", ID)
+func (pg Users) GetByID(ctx context.Context, ID uuid.UUID) (*entity.User, error) {
+	return pg.get(ctx, "id", ID)
 }
-func (pg Users) GetUserByAuthChannel(ctx context.Context, channel entity.AuthChannel, target string) (*entity.User, error) {
+func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel, target string) (*entity.User, error) {
 	switch channel {
 	case entity.ChannelUsername:
 		sql, args, err := pg.Builder.
@@ -137,14 +137,14 @@ func (pg Users) GetUserByAuthChannel(ctx context.Context, channel entity.AuthCha
 		}
 		return &user, nil
 	case entity.ChannelEmail, entity.ChannelPhone:
-		return pg.getUser(ctx, string(channel), target)
+		return pg.get(ctx, string(channel), target)
 	default:
 		panic("invalid channel, provided channel: " + string(channel))
 
 	}
 }
 
-func (pg Users) UpdateUser(ctx context.Context, id uuid.UUID, col string, val any) error {
+func (pg Users) Update(ctx context.Context, id uuid.UUID, col string, val any) error {
 	sql, args, err := pg.Builder.
 		Update(database.TableUsers).
 		Set(col, val).
@@ -164,7 +164,7 @@ func (pg Users) UpdateUser(ctx context.Context, id uuid.UUID, col string, val an
 }
 
 // both user account and profile is deleted, permanently.
-func (pg Users) DeleteUser(ctx context.Context, id uuid.UUID) error {
+func (pg Users) Delete(ctx context.Context, id uuid.UUID) error {
 	sql, args, err := pg.Builder.
 		Delete(database.TableUsers).
 		Where(squirrel.Eq{"id": id}).

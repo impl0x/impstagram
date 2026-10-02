@@ -24,7 +24,7 @@ func NewUserSessions(pg postgres.Postgres) UserSessions {
 }
 
 // ? ----+-----+-----User sessions table-----+-----+-----
-func (pg UserSessions) CreateSession(ctx context.Context, session *entity.UserSession) error {
+func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) error {
 	if session == nil {
 		panic("session is nil")
 	}
@@ -52,7 +52,7 @@ func (pg UserSessions) CreateSession(ctx context.Context, session *entity.UserSe
 	return nil
 }
 
-func (pg UserSessions) getSession(ctx context.Context, by string, value any) (*entity.UserSession, error) {
+func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.UserSession, error) {
 	sql, args, err := pg.Builder.
 		Select("id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at").
 		From(database.TableUserSessions).
@@ -81,15 +81,15 @@ func (pg UserSessions) getSession(ctx context.Context, by string, value any) (*e
 	return &session, nil
 }
 
-func (pg UserSessions) GetSessionByTokenHash(ctx context.Context, tokenHash string) (*entity.UserSession, error) {
-	return pg.getSession(ctx, "token_hash", tokenHash)
+func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*entity.UserSession, error) {
+	return pg.get(ctx, "token_hash", tokenHash)
 }
 
-func (pg UserSessions) GetSessionByID(ctx context.Context, id uuid.UUID) (*entity.UserSession, error) {
-	return pg.getSession(ctx, "id", id)
+func (pg UserSessions) GetByID(ctx context.Context, id uuid.UUID) (*entity.UserSession, error) {
+	return pg.get(ctx, "id", id)
 }
 
-func (pg UserSessions) UpdateSession(ctx context.Context, id uuid.UUID, col string, val any) error {
+func (pg UserSessions) Update(ctx context.Context, id uuid.UUID, col string, val any) error {
 	sql, args, err := pg.Builder.
 		Update(database.TableUserSessions).
 		Set(col, val).
@@ -107,7 +107,7 @@ func (pg UserSessions) UpdateSession(ctx context.Context, id uuid.UUID, col stri
 	return nil
 }
 
-func (pg UserSessions) DeleteSession(ctx context.Context, by string, value any) error {
+func (pg UserSessions) Delete(ctx context.Context, by string, value any) error {
 	sql, args, err := pg.Builder.
 		Delete(database.TableUserSessions).
 		Where(squirrel.Eq{by: value}).
