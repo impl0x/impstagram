@@ -46,7 +46,7 @@ var ErrInvalidSecretKey = errors.New("invalid secret key")
 
 // Generates a 6 digit time based otp with the given secret key
 //
-// possible errors are only ErrInvalidSecretKey which occurs if the key cannot be decoded
+// possible errors are only [ErrInvalidSecretKey] which occurs if the key cannot be decoded
 func (og OtpGenerator) GenerateTOTP(secret string) (string, error) {
 	secret = strings.ToUpper(strings.TrimSpace(secret))
 	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
@@ -73,7 +73,17 @@ func (og OtpGenerator) GenerateTOTP(secret string) (string, error) {
 	mod := int32(math.Pow10(og.totp.length))
 	code := binaryCode % mod
 
-	return fmt.Sprintf("%0*d", og.totp.length, code), nil
+	return padLeft(int(code), og.totp.length), nil
+}
+func padLeft(code int, totalLen int) string {
+	str := strconv.Itoa(code)
+	// If the string is already long enough, return it as-is
+	if len(str) >= totalLen {
+		return str
+	}
+
+	// Calculate missing length and prepend repeated zeros
+	return strings.Repeat("0", totalLen-len(str)) + str
 }
 
 func (og OtpGenerator) SetupTOTP(userIdentifier string) (secretKey string, uri string) {
