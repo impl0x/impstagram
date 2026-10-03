@@ -12,16 +12,10 @@ type UserAgentData struct {
 
 func Parse(u string) UserAgentData {
 	ua := useragent.Parse(u)
-	var ud UserAgentData
-	if ua.OS != "" {
-		ud.OSName = ua.OS
+	return UserAgentData{
+		OSName:      ua.OS,
+		BrowserName: ua.Name,
+		DeviceType:  ua.Device,
+		IsBot:       ua.Bot,
 	}
-	if ua.Name != "" {
-		ud.BrowserName = ua.Name
-	}
-	if ua.Device != "" {
-		ud.DeviceType = ua.Name
-	}
-	ud.IsBot = ua.Bot
-	return ud
 }
