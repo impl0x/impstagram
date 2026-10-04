@@ -6,7 +6,7 @@ import (
 	"uuid"
 )
 
-// Contains tables users, user_sessions and profiles
+// Contains tables users
 type UserRepository interface {
 	// ? ----+----+---- Create ----+----+----
 
