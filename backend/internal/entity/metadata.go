@@ -1,8 +1,8 @@
 package entity
 
-import "github.com/mileusna/useragent"
+import "backend/pkg/useragent"
 
 type ClientMetadata struct {
 	IPAddress string
-	UserAgent useragent.UserAgent
+	UserAgent useragent.UserAgentData
 }
