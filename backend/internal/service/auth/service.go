@@ -259,7 +259,6 @@ type LoginResult struct {
 	RefreshToken string
 	Requires2FA  bool   // if this is false then below all fields are zeroed out, else the above tokens is zero valued
 	ReferenceID  string // Used to link the upcoming OTP request
-	Channel      entity.AuthChannel
 	ExpiresAt    time.Time
 }
 
@@ -317,7 +316,6 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientM
 
 			return LoginResult{
 				Requires2FA: true,
-				Channel:     entity.ChannelTOTP,
 				ReferenceID: refID,
 				ExpiresAt:   expiresAt,
 			}, nil
@@ -356,7 +354,6 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientM
 		)
 		return LoginResult{
 			Requires2FA: true,
-			Channel:     primaryTwoFAChannel,
 			ReferenceID: refID,
 			ExpiresAt:   expiresAt,
 		}, nil
@@ -392,7 +389,6 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientM
 
 type ResendResult struct {
 	ReferenceID string
-	Channel     entity.AuthChannel
 	ExpiresAt   time.Time
 }
 
@@ -487,7 +483,6 @@ func (s *Service) ResendOTP(ctx context.Context, req ResendOTPRequest) (ResendRe
 	)
 	return ResendResult{
 		ReferenceID: refId,
-		Channel:     req.Channel,
 		ExpiresAt:   expiresAt,
 	}, nil
 }
@@ -594,9 +589,8 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest, md entity
 // ? ----+-----+-----Forgot password-----+-----+-----
 
 type ForgotPasswordResult struct {
-	referenceID string
-	channel     entity.AuthChannel
-	expiresAt   time.Time
+	ReferenceID string
+	ExpiresAt   time.Time
 }
 
 // Raises a forgot password session request which sends an verification otp to the channel provided and stores a in memory temporary session
@@ -627,9 +621,8 @@ func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest)
 	)
 	// send the session id as reference to the user
 	return ForgotPasswordResult{
-		referenceID: refID,
-		channel:     req.Channel,
-		expiresAt:   expiresAt,
+		ReferenceID: refID,
+		ExpiresAt:   expiresAt,
 	}, nil
 }
 
@@ -817,25 +810,25 @@ func (s *Service) Remove2FA(ctx context.Context, token AccessTokenJwt, req Remov
 
 // ? ----+-----+-----Totp Setup-----+-----+-----
 
-type totpSetupResult struct {
-	referenceID string
-	totpUri     string
-	expiresAt   time.Time
+type TotpSetupResult struct {
+	ReferenceID string
+	TotpUri     string
+	ExpiresAt   time.Time
 }
 
 // starts a setup for totp
-func (s *Service) TotpSetup(ctx context.Context, token AccessTokenJwt) (totpSetupResult, error) {
+func (s *Service) TotpSetup(ctx context.Context, token AccessTokenJwt) (TotpSetupResult, error) {
 	// Find user on the database
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
 		if err == repository.ErrNoResults {
-			return totpSetupResult{}, errCommonUserNotFound
+			return TotpSetupResult{}, errCommonUserNotFound
 		}
-		return totpSetupResult{}, err
+		return TotpSetupResult{}, err
 	}
 	// if user already has a totp secret key it means totp 2fa is enabled
 	if user.TotpSecretKey != nil {
-		return totpSetupResult{}, errTotpSetupAlreadyEnabled // user needs to disable totp first to set it up again
+		return TotpSetupResult{}, errTotpSetupAlreadyEnabled // user needs to disable totp first to set it up again
 	}
 	// choose a identifier for the totp uri, preference being email
 	var identifier string
@@ -857,10 +850,10 @@ func (s *Service) TotpSetup(ctx context.Context, token AccessTokenJwt) (totpSetu
 		},
 		expiresAt,
 	)
-	return totpSetupResult{
-		referenceID: refId,
-		totpUri:     totpUri,
-		expiresAt:   expiresAt,
+	return TotpSetupResult{
+		ReferenceID: refId,
+		TotpUri:     totpUri,
+		ExpiresAt:   expiresAt,
 	}, nil
 }
 
