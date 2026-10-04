@@ -695,7 +695,7 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResul
 	refreshToken := generateRefreshToken()
 
 	// update the session with the new refresh token and also update the expires at field to the max capacity again.
-	err = s.repo.session.UpdateTokenAndExpiry(
+	err = s.repo.session.UpdateTokenHashAndExpiry(
 		ctx,
 		userSesh.ID,
 		cryptoutil.GenerateMD5Hash(refreshToken), // we store a hash of the token

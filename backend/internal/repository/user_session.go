@@ -21,7 +21,7 @@ type UserSessionRepository interface {
 	// ? ----+----+---- Update ----+----+----
 
 	UpdateStatus(ctx context.Context, id uuid.UUID, status entity.AccountStatus) error
-	UpdateTokenAndExpiry(ctx context.Context, id uuid.UUID, token string, expiry time.Time) error
+	UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUID, tokenHash string, expiry time.Time) error
 
 	// ? ----+----+---- Delete ----+----+----
 
