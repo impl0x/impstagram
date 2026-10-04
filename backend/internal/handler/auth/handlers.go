@@ -2,6 +2,7 @@ package auth
 
 import (
 	"backend/internal/entity"
+	"backend/internal/middleware"
 	"backend/internal/service/auth"
 	"backend/internal/util"
 	"backend/pkg/apperr"
@@ -61,11 +62,11 @@ func (h Handler) RegisterPaths(g *mo.Grouped) {
 	g.POST("/reset-password", h.ResetPassword)
 	g.POST("/refresh", h.Refresh)
 
-	g.POST("/logout", h.Logout, h.AuthMiddleware)
-	g.PUT("/2fa", h.Add2FA, h.AuthMiddleware)
-	g.DELETE("/2fa", h.Remove2FA, h.AuthMiddleware)
-	g.POST("/2fa/totp/setup", h.TotpSetup, h.AuthMiddleware)
-	g.POST("/2fa/totp/verify", h.totpVerify, h.AuthMiddleware)
+	g.POST("/logout", h.Logout, middleware.Authorization)
+	g.PUT("/2fa", h.Add2FA, middleware.Authorization)
+	g.DELETE("/2fa", h.Remove2FA, middleware.Authorization)
+	g.POST("/2fa/totp/setup", h.TotpSetup, middleware.Authorization)
+	g.POST("/2fa/totp/verify", h.totpVerify, middleware.Authorization)
 }
 
 // ! some info:
@@ -356,7 +357,7 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 // deletes the user session
 //   - POST - empty
 func (h Handler) Logout(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -375,7 +376,7 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -401,7 +402,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -422,7 +423,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 // starts a setup session for totp setup
 //   - POST - empty
 func (h Handler) TotpSetup(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -447,7 +448,7 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 // verifies a totp session and adds it to the user's 2fas
 //   - POST - models.totpVerifyRequest
 func (h Handler) totpVerify(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
 	if err != nil {
 		return err
 	}

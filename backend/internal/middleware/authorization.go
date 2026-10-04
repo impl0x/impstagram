@@ -1,4 +1,4 @@
-package auth
+package middleware
 
 import (
 	"backend/internal/service/auth"
@@ -9,12 +9,14 @@ import (
 	"github.com/impl0x/mo"
 )
 
-// ? ----+-----+-----Auth Middleware-----+-----+-----
+const KeyAuthToken = "at"
 
-// Checks for authorization header and expects a valid JWT, if satisfied stores it in the [mo.Context.Store] map with the key [keyAuthToken]
+// Checks for authorization header and expects a valid JWT, 
+// if satisfied stores it in the [mo.Context] with the key [KeyAuthToken], 
+// use [mo.Context.Get] or [mo.Context.GetTyped] to retrieve using the same key.
 //
-// else it returns a 401 Unauthorized error to the client if header not present, not valid jwt, jwt expired, etc other errors.
-func (h Handler) AuthMiddleware(next mo.HandlerFunc) mo.HandlerFunc {
+// calls the service method [auth.IsAuthorized] to check the token validity
+func Authorization(next mo.HandlerFunc) mo.HandlerFunc {
 	errHeaderMissing := apperr.NewUnauthorized(response.CodeUnauthorized, "Authorization header missing or empty")
 	errUnsupportedAuth := apperr.NewUnauthorized(response.CodeUnauthorized, "Authorization type is unsupported or not provided")
 	return func(c *mo.Context) error {
@@ -30,7 +32,7 @@ func (h Handler) AuthMiddleware(next mo.HandlerFunc) mo.HandlerFunc {
 		if err != nil {
 			return err
 		}
-		c.Add(keyAuthToken, jwt)
+		c.Add(KeyAuthToken, jwt)
 		return next(c)
 	}
 }
