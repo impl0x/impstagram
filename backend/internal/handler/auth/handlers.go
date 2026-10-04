@@ -300,7 +300,18 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.forgotPassword(c.Request().Context(), req)
+	var ch entity.AuthChannel
+	var v string
+	if req.Email != "" {
+		ch = entity.ChannelEmail
+		v = req.Email
+	} else if req.Phone != "" {
+		ch = entity.ChannelPhone
+		v = req.Phone
+	} else {
+		return errIdentifierNotProvided("Need an Email/Phone to send reset password")
+	}
+	result, err := h.Service.ForgotPassword(c.Request().Context(), req.service(ch, v))
 	if err != nil {
 		return err
 	}
@@ -308,11 +319,11 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 		http.StatusOK,
 		response.Success(
 			response.CodeOk,
-			"An OTP has been sent to your "+result.channel.String(),
+			"An OTP has been sent to your "+string(ch),
 			struct {
 				ReferenceID string `json:"reference_id"`
 				ExpiresAt   int64  `json:"expires_at"`
-			}{result.referenceID, result.expiresAt.Unix()},
+			}{result.ReferenceID, result.ExpiresAt.Unix()},
 		),
 	)
 }
@@ -325,7 +336,7 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	err = h.Service.resetPassword(c.Request().Context(), req)
+	err = h.Service.ResetPassword(c.Request().Context(), req.service())
 	if err != nil {
 		return err
 	}
@@ -345,11 +356,11 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 // deletes the user session
 //   - POST - empty
 func (h Handler) Logout(c *mo.Context) error {
-	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}
-	err = h.Service.logout(c.Request().Context(), token)
+	err = h.Service.Logout(c.Request().Context(), token)
 	if err != nil {
 		return err
 	}
@@ -364,11 +375,11 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}
-	err = h.Service.add2FA(c.Request().Context(), token, req)
+	err = h.Service.Add2FA(c.Request().Context(), token, req.service())
 	if err != nil {
 		return err
 	}
@@ -390,11 +401,11 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}
-	err = h.Service.remove2FA(c.Request().Context(), token, req)
+	err = h.Service.Remove2FA(c.Request().Context(), token, req.service())
 	if err != nil {
 		return err
 	}
@@ -411,11 +422,11 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 // starts a setup session for totp setup
 //   - POST - empty
 func (h Handler) TotpSetup(c *mo.Context) error {
-	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.totpSetup(c.Request().Context(), token)
+	result, err := h.Service.TotpSetup(c.Request().Context(), token)
 	if err != nil {
 		return err
 	}
@@ -428,7 +439,7 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 				ReferenceId string `json:"reference_id"`
 				Uri         string `json:"uri"`
 				ExpiresAt   int64  `json:"expires_at"`
-			}{result.referenceID, result.totpUri, result.expiresAt.Unix()},
+			}{result.ReferenceID, result.TotpUri, result.ExpiresAt.Unix()},
 		),
 	)
 }
@@ -436,7 +447,7 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 // verifies a totp session and adds it to the user's 2fas
 //   - POST - models.totpVerifyRequest
 func (h Handler) totpVerify(c *mo.Context) error {
-	token, err := mo.ContextGet[accessTokenJwt](c, keyAccessToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -445,14 +456,14 @@ func (h Handler) totpVerify(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.totpVerify(c.Request().Context(), token, req)
+	result, err := h.Service.TotpVerify(c.Request().Context(), token, req.service())
 	if err != nil {
-		if err == errTotpVerifyTOTPIncorrect {
+		if result.RemainingAttempts != 0 { // if not 0 then this field was populated and we need to add that to the error struct data.
 			return c.JSON(
 				err.(apperr.AppErr).ToHttp(
 					struct {
 						AttemptsRemaining int `json:"attempts_remaining"`
-					}{result.remainingAttempts},
+					}{result.RemainingAttempts},
 				),
 			)
 		}
