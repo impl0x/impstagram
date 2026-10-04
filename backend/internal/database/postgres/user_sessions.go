@@ -81,12 +81,12 @@ func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.U
 	return &session, nil
 }
 
-func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*entity.UserSession, error) {
-	return pg.get(ctx, "token_hash", tokenHash)
-}
-
 func (pg UserSessions) GetByID(ctx context.Context, id uuid.UUID) (*entity.UserSession, error) {
 	return pg.get(ctx, "id", id)
+}
+
+func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*entity.UserSession, error) {
+	return pg.get(ctx, "token_hash", tokenHash)
 }
 
 func (pg UserSessions) Update(ctx context.Context, id uuid.UUID, col string, val any) error {
@@ -107,10 +107,10 @@ func (pg UserSessions) Update(ctx context.Context, id uuid.UUID, col string, val
 	return nil
 }
 
-func (pg UserSessions) Delete(ctx context.Context, by string, value any) error {
+func (pg UserSessions) Delete(ctx context.Context, col string, val any) error {
 	sql, args, err := pg.Builder.
 		Delete(database.TableUserSessions).
-		Where(squirrel.Eq{by: value}).
+		Where(squirrel.Eq{col: val}).
 		ToSql()
 	if err != nil {
 		return fmt.Errorf("UserRepo - UpdateSession - pg.Builder")
