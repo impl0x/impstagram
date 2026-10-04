@@ -13,7 +13,7 @@ import (
 	"net/http"
 
 	"github.com/impl0x/mo"
-	"github.com/impl0x/mo/modules/logger"
+	"github.com/impl0x/mo/modules/logger" // TODO: change to use app logger instead of framework's logger, wrong to use someone else's logger tbh
 	"github.com/impl0x/mo/validator/v3"
 )
 
@@ -45,13 +45,13 @@ func CustomErrorHandler(c *mo.Context, err error) {
 	var appErr apperr.AppErr
 
 	switch {
+	case err == nil: // if no error was returned it means handlers probably returned a nil without writing a response
+		c.NoContent(http.StatusNoContent)
 	case errors.As(err, &appErr):
 		// if appErr.Kind == apperr.KindInternal {
 		// 	// TODO: log internal app errors
 		// }
 		c.JSON(appErr.ToHttp(nil))
-	case err == nil: // if no error was returned it means handlers probably returned a nil without writing a response
-		c.NoContent(http.StatusNoContent)
 	case errors.Is(err, context.Canceled):
 	case errors.Is(err, context.DeadlineExceeded):
 		c.JSON(http.StatusGatewayTimeout, response.Error(response.CodeTimeout, "Request timed out"))
