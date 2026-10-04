@@ -53,7 +53,7 @@ func NewHandler(s *auth.Service) Handler {
 //   - DELETE - /2fa
 //   - POST - 	/2fa/totp/setup
 //   - POST - 	/2fa/totp/verify
-func (h Handler) RegisterPaths(g *mo.Grouped) {
+func (h Handler) RegisterPaths(g mo.Grouped) {
 	g.POST("/register", h.Register)
 	g.POST("/login", h.Login)
 	g.POST("/resend-otp", h.ResendOTP)

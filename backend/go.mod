@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/Masterminds/squirrel v1.5.4 // sql builder
 	github.com/impl0x/go-utils v0.8.2 // used for /cache.TTLCache short lived caches.
-	github.com/impl0x/mo v1.6.0 // web api framework
+	github.com/impl0x/mo v1.6.1 // web api framework
 	github.com/jackc/pgx/v5 v5.10.0 // postgresql driver
 	github.com/mileusna/useragent v1.3.5 // user agent parsing
 	golang.org/x/crypto v0.55.0 // password hashing
