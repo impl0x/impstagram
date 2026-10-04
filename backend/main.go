@@ -24,4 +24,5 @@ func main() {
 	}
 	auth.Register(m.Group("/api/v1/auth"), db)
 	m.Start(":8080")
+	
 }

@@ -1,3 +1,5 @@
+currently all code is commented because it cannot be used, its only present as archive.
+
 # Authentication
 
 This will have everything related to authentication and authorization,  
