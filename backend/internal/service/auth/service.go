@@ -641,7 +641,7 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest) e
 	}
 
 	// else we proceed and update the user's password, we of course hash it.
-	err := s.repo.user.Update(ctx, session.userID, "password_hash", password.Hash(req.NewPassword))
+	err := s.repo.user.UpdatePasswordHash(ctx, session.userID, password.Hash(req.NewPassword))
 	if err != nil {
 		if err == repository.ErrNoResults {
 			return errCommonUserNotFound
@@ -761,11 +761,8 @@ func (s *Service) Add2FA(ctx context.Context, token AccessTokenJwt, req Add2FARe
 	}
 	// adding the new channel to the 2fa list and updating in the database
 	user.TwoFAs = append(user.TwoFAs, channel)
-	err = s.repo.user.Update(ctx, user.ID, user.TwoFAs) // TODO
+	err = s.repo.user.UpdateTwoFAs(ctx, user.ID, user.TwoFAs)
 	if err != nil {
-		if err == repository.ErrNoResults { // really impossible as we just found the user exists but still letting it stay
-			return errCommonUserNotFound
-		}
 		return err
 	}
 	// returning empty result as there is nothing more we need to signify
@@ -798,7 +795,7 @@ func (s *Service) Remove2FA(ctx context.Context, token AccessTokenJwt, req Remov
 		user.TwoFAs = nil
 	}
 	// update in the database
-	err = s.repo.updateUser2FA(ctx, user.ID, user.TwoFAs) //TODO
+	err = s.repo.user.UpdateTwoFAs(ctx, user.ID, user.TwoFAs)
 	if err != nil {
 		if err == repository.ErrNoResults {
 			return errCommonUserNotFound
@@ -896,7 +893,7 @@ func (s *Service) TotpVerify(ctx context.Context, token AccessTokenJwt, req Totp
 	// delete the session if otp matches and verification is complete
 	s.cache.totp.Delete(req.ReferenceID)
 	// enable totp in database
-	err = s.repo.enableTotp(ctx, session.userID, session.secretKey) //TODO
+	err = s.repo.user.UpdateAddTotp(ctx, session.userID, session.secretKey)
 	if err != nil {
 		if err == repository.ErrNoResults {
 			return TotpVerifyResult{}, errCommonUserNotFound
