@@ -22,7 +22,7 @@ type UserRepository interface {
 
 	// ? ----+----+---- Update ----+----+----
 
-	UpdatePasswordHash(ctx context.Context, id uuid.UUID, newHash string) error
+	UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error
 	UpdateTwoFAs(ctx context.Context, id uuid.UUID, twoFAs []entity.AuthChannel) error
 	UpdateAddTotp(ctx context.Context, id uuid.UUID, secretKey string) error
 

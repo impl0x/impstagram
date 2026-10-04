@@ -538,7 +538,7 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest, md entity
 	// Switch on the purpose to do purpose related tasks
 	switch session.purpose {
 	case purposeRegistration: // if registration we need to set user status to verified in the database
-		err = s.repo.session.Update(ctx, user.ID, "status", entity.StatusVerified)
+		err = s.repo.session.UpdateStatus(ctx, user.ID, entity.StatusVerified)
 		if err != nil { // no need to handle for errRepoNoResults because we did that above
 			return VerifyResult{}, err
 		}
@@ -695,7 +695,7 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResul
 	refreshToken := generateRefreshToken()
 
 	// update the session with the new refresh token and also update the expires at field to the max capacity again.
-	err = s.repo.session.Update( // TODO: this method call has error, fix repo methods.
+	err = s.repo.session.UpdateTokenAndExpiry(
 		ctx,
 		userSesh.ID,
 		cryptoutil.GenerateMD5Hash(refreshToken), // we store a hash of the token
