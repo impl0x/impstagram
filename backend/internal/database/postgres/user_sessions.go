@@ -6,6 +6,7 @@ import (
 	"backend/pkg/postgres"
 	"context"
 	"fmt"
+	"time"
 	"uuid"
 
 	"github.com/Masterminds/squirrel"
@@ -23,7 +24,8 @@ func NewUserSessions(pg postgres.Postgres) UserSessions {
 	return UserSessions{pg}
 }
 
-// ? ----+-----+-----User sessions table-----+-----+-----
+// ? -----+-----+----- Create -----+-----+-----
+
 func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) error {
 	if session == nil {
 		panic("session is nil")
@@ -51,6 +53,8 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 	}
 	return nil
 }
+
+// ? -----+-----+----- Get -----+-----+-----
 
 func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.UserSession, error) {
 	sql, args, err := pg.Builder.
@@ -89,10 +93,12 @@ func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*e
 	return pg.get(ctx, "token_hash", tokenHash)
 }
 
-func (pg UserSessions) Update(ctx context.Context, id uuid.UUID, col string, val any) error {
+// ? -----+-----+----- Update -----+-----+-----
+func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val any) error {
 	sql, args, err := pg.Builder.
 		Update(database.TableUserSessions).
 		Set(col, val).
+		Where(squirrel.Eq{"id": id}).
 		ToSql()
 	if err != nil {
 		return fmt.Errorf("UserRepo - UpdateSession - pg.Builder")
@@ -106,6 +112,32 @@ func (pg UserSessions) Update(ctx context.Context, id uuid.UUID, col string, val
 	}
 	return nil
 }
+
+func (pg UserSessions) UpdateStatus(ctx context.Context, id uuid.UUID, status entity.AccountStatus) error {
+	return pg.update(ctx, id, "status", status)
+}
+
+func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUID, tokenHash string, expiry time.Time) error {
+	sql, args, err := pg.Builder.
+		Update(database.TableUserSessions).
+		Set("token_hash", tokenHash).
+		Set("expires_at",expiry).
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("UserRepo - UpdateSession - pg.Builder")
+	}
+	cmdTag, err := pg.Pool.Exec(ctx, sql, args...)
+	if err != nil {
+		return handlePgxError(err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return handlePgxError(pgx.ErrNoRows)
+	}
+	return nil
+}
+
+// ? -----+-----+----- Delete -----+-----+-----
 
 func (pg UserSessions) Delete(ctx context.Context, col string, val any) error {
 	sql, args, err := pg.Builder.

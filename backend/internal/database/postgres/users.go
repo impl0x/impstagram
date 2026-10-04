@@ -23,7 +23,7 @@ func NewUsers(pg postgres.Postgres) Users {
 	return Users{pg}
 }
 
-// ? ----+-----+-----Users table-----+-----+-----
+// ? -----+-----+----- Create -----+-----+-----
 //
 // user parameter must only have populated values according to the db model constructor defined in models
 //
@@ -74,6 +74,9 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 	return userID, handlePgxError(tx.Commit(ctx))
 }
 
+// ? -----+-----+----- Get -----+-----+-----
+
+// wrapper for get methods
 func (pg Users) get(ctx context.Context, by string, value any) (*entity.User, error) {
 	sql, args, err := pg.Builder.
 		Select("id, email, phone, password_hash, dob, status, totp_secret_key, two_fas, created_at, updated_at").
@@ -144,7 +147,10 @@ func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel
 	}
 }
 
-func (pg Users) Update(ctx context.Context, id uuid.UUID, col string, val any) error {
+// ? -----+-----+----- Update -----+-----+-----
+
+// wrapper for update methods
+func (pg Users) update(ctx context.Context, id uuid.UUID, col string, val any) error {
 	sql, args, err := pg.Builder.
 		Update(database.TableUsers).
 		Set(col, val).
@@ -162,6 +168,34 @@ func (pg Users) Update(ctx context.Context, id uuid.UUID, col string, val any) e
 	}
 	return nil
 }
+
+func (pg Users) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error {
+	return pg.update(ctx, id, "password_hash", hash)
+}
+func (pg Users) UpdateTwoFAs(ctx context.Context, id uuid.UUID, twoFAs []entity.AuthChannel) error {
+	return pg.update(ctx, id, "two_fas", twoFAs)
+}
+func (pg Users) UpdateAddTotp(ctx context.Context, id uuid.UUID, secretKey string) error {
+	sql, args, err := pg.Builder.
+		Update(database.TableUsers).
+		Set("two_fas", "array_append(two_fas, 'totp')").
+		Set("totp_secret_key", secretKey).
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("UserRepo - UpdateTwoFAs - pg.Builder: %w", err)
+	}
+	cmdTag, err := pg.Pool.Exec(ctx, sql, args...)
+	if err != nil {
+		return handlePgxError(err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return handlePgxError(pgx.ErrNoRows)
+	}
+	return nil
+}
+
+// ? -----+-----+----- Delete -----+-----+-----
 
 // both user account and profile is deleted, permanently.
 func (pg Users) Delete(ctx context.Context, id uuid.UUID) error {
