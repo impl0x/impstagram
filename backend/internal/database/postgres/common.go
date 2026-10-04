@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// returns pgx errors mapped to repository errors and handles unknown errors as well
 func handlePgxError(err error) error {
 	var pgErr *pgconn.PgError
 	switch {
