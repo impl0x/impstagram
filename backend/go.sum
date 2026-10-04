@@ -13,6 +13,8 @@ github.com/go-playground/validator/v10 v10.30.4 h1:9Rcod2ZPO6mOEG6b4GqyoHE/H6//Z
 github.com/go-playground/validator/v10 v10.30.4/go.mod h1:numpT+RPLE91R9oYWMY/R9zRgJBewr3IXHko4OISPpk=
 github.com/impl0x/go-utils v0.8.1 h1:7vHcI6Tlza4rI0O86VZhpcmEPmBHwkFO9JJr9Pk/oac=
 github.com/impl0x/go-utils v0.8.1/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
+github.com/impl0x/go-utils v0.8.2 h1:ea1Pv4gYKWMEXXLwNPDpLkxD9ptN125282HjSNAbf8w=
+github.com/impl0x/go-utils v0.8.2/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
 github.com/impl0x/mo v1.5.7 h1:2VN/bhuQzLmnvF3qq+qQrPpLNC9VEUyMRHa4rISxXjA=
 github.com/impl0x/mo v1.5.7/go.mod h1:xnSqvJSc/5OW1tcEqNOt4cwuCrSnokjUOyTQlnxfInU=
 github.com/impl0x/mo v1.6.0 h1:YY6Mn19wBLncmwVeRoolGR+xXl37y7EF5rQRLW3RIQU=
