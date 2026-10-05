@@ -11,7 +11,7 @@ import (
 type UserSessionRepository interface {
 	// ? ----+----+---- Create ----+----+----
 
-	Create(ctx context.Context, session *entity.UserSession) (uuid.UUID, error)
+	Create(ctx context.Context, session *entity.UserSession) error
 
 	// ? ----+----+---- Get ----+----+----
 
