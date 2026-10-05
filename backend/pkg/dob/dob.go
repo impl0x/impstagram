@@ -3,65 +3,72 @@ package dob
 import (
 	"errors"
 	"strconv"
-	"strings"
 	"time"
 )
 
-var ErrInvalidDobString = errors.New("dob: Invalid date of birth string")
-var ErrImpossibleDob = errors.New("dob: Impossible date of birth")
-
 type Dob struct {
-	Year  int
-	Month int
-	Day   int
+	Year  uint16
+	Month uint16
+	Day   uint16
 }
 
-// format: year-month-day
+// same as parse but panics if parsing fails
+func MustParse(dobString string) Dob {
+	d, err := Parse(dobString)
+	if err != nil {
+		panic("dob: fail to parse dob string")
+	}
+	return d
+}
+
+// Dob errors
+var (
+	ErrEmpty           = errors.New("dob: empty")
+	ErrIncorrectFormat = errors.New("dob: wrong format, format must be YYYY-MM-DD")
+	ErrNotParseable    = errors.New("dob: not parseable")
+	ErrImpossible      = errors.New("dob: dob is impossible")
+)
+
+// format: year-month-day, YYYY-MM-DD. Strict.
 //
-// example: 2000-12-30
+// example: 2000-12-30, 2005-01-03
 //
-// possible errors: [ErrInvalidDobString], [ErrImpossibleDob]
-func Parse(dobString string) (Dob, error) {
-	parts := strings.Split(dobString, "-")
-
-	if len(parts) != 3 {
-		return Dob{}, ErrInvalidDobString
+// possible errors: [ErrEmpty], [ErrIncorrectFormat], [ErrNotParseable], [ErrImpossible]
+func Parse(s string) (Dob, error) {
+	if s == "" {
+		return Dob{}, ErrEmpty
 	}
-
-	var year, month, day int
-	var err error
-	year, err = strconv.Atoi(parts[0])
+	if len(s) != 10 || s[4] != '-' || s[7] != '-' {
+		return Dob{}, ErrIncorrectFormat
+	}
+	y, err := strconv.Atoi(s[:4])
 	if err != nil {
-		return Dob{}, ErrInvalidDobString
+		return Dob{}, ErrNotParseable
 	}
-	month, err = strconv.Atoi(parts[1])
+	if y > time.Now().Year() || y < 1900 { // 1900 is the lower limit, the oldest living person as of now was born on 1909, so we can safely put this.
+		return Dob{}, ErrImpossible
+	}
+	m, err := strconv.Atoi(s[5:7])
 	if err != nil {
-		return Dob{}, ErrInvalidDobString
+		return Dob{}, ErrNotParseable
 	}
-	day, err = strconv.Atoi(parts[2])
-	if err != nil {
-		return Dob{}, ErrInvalidDobString
+	if m > 12 || m <= 0 {
+		return Dob{}, ErrImpossible
 	}
+	d, err := strconv.Atoi(s[8:])
+	if d > 31 || d <= 0 {
+		return Dob{}, ErrImpossible
+	}
+	return Dob{uint16(y), uint16(m), uint16(d)}, nil
 
-	if year > time.Now().Year() || month > 12 || day > 31 {
-		return Dob{}, ErrImpossibleDob
-	}
-
-	dob := Dob{
-		Year:  year,
-		Month: month,
-		Day:   day,
-	}
-
-	return dob, nil
 }
 
 // Calculates age from dob instance
-func (d Dob) Age() int {
+func (d Dob) Age() uint16 {
 	now := time.Now()
-	year := now.Year()
-	day := now.Day()
-	month := int(now.Month())
+	year := uint16(now.Year()) // we are not reaching 65,536 years in the future for this function to fail
+	day := uint16(now.Day())
+	month := uint16(now.Month())
 
 	age := year - d.Year
 	if month < d.Month ||
@@ -72,5 +79,5 @@ func (d Dob) Age() int {
 }
 
 func (d Dob) String() string {
-	return strconv.Itoa(d.Year) + "-" + strconv.Itoa(d.Month) + "-" + strconv.Itoa(d.Day)
+	return strconv.Itoa(int(d.Year)) + "-" + strconv.Itoa(int(d.Month)) + "-" + strconv.Itoa(int(d.Day))
 }
