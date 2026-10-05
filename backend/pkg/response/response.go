@@ -2,7 +2,7 @@ package response
 
 type Response struct {
 	Code    Code   `json:"code"`
-	Message string `json:"message"`
+	Message string `json:"message,omitempty"`
 	Data    any    `json:"data,omitempty"`
 }
 

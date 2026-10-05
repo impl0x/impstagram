@@ -48,7 +48,11 @@ type repositories struct {
 	session repository.UserSessionRepository
 }
 
+// Instantiates a new service instance with default rules and caches, and repositories provided in the parameters.
 func NewService(userRepo repository.UserRepository, sessionRepo repository.UserSessionRepository, emailClient email.Sender) *Service {
+	if userRepo==nil||sessionRepo==nil||emailClient==nil{
+		panic("Service: nil parameter found in instantiation function")
+	}
 	return &Service{
 		email: emailClient,
 		repo:  repositories{userRepo, sessionRepo},
@@ -77,6 +81,7 @@ type resetPasswordSession struct {
 	userID uuid.UUID
 }
 
+// Used to store the pending totp sessions
 type totpSession struct {
 	userID    uuid.UUID
 	secretKey string
@@ -155,6 +160,7 @@ func newUserSession(userID, jwtID uuid.UUID, refreshToken string, md entity.Clie
 		UserID:    userID,
 		TokenHash: cryptoutil.GenerateMD5Hash(refreshToken),
 	}
+	// populating struct fields according to what's populated in client metadata struct
 	if md.IPAddress != "" {
 		session.IPAddress = &md.IPAddress
 	}
@@ -374,7 +380,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientM
 	}
 	refreshToken := generateRefreshToken()
 	// Add a new user session to the database
-	_, err = s.repo.session.Create(ctx, newUserSession(user.ID, jwtID, refreshToken, md))
+	err = s.repo.session.Create(ctx, newUserSession(user.ID, jwtID, refreshToken, md))
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -574,7 +580,7 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest, md entity
 	refreshToken := generateRefreshToken()
 
 	// Add a new user session to the database
-	_, err = s.repo.session.Create(ctx, newUserSession(user.ID, jwtID, refreshToken, md))
+	err = s.repo.session.Create(ctx, newUserSession(user.ID, jwtID, refreshToken, md))
 
 	if err != nil {
 		return VerifyResult{}, err
