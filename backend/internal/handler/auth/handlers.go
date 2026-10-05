@@ -16,10 +16,6 @@ import (
 
 // ? INFO:
 // main file containing all the http handlers
-// ! Ownership and usage:
-// owned by itself and used by the no one, this is an independent file.
-// handler is only used by auth.go for initiation and path registration
-// ! Extra
 // the handler struct is the heart of this file, all functions are its methods.
 // this file has its own [Handler.RegisterPaths] which registers all the paths
 // into a [mo.Grouped] instance into paths and methods described in the function definition.
@@ -78,7 +74,7 @@ func (h Handler) RegisterPaths(g mo.Grouped) {
 // All paths below are publicly accessible without a auth token requirement
 
 // Registers a new user
-//   - POST - models.RegisterRequest
+//   - POST - [registerRequest]
 func (h Handler) Register(c *mo.Context) error {
 	// Binding the request json to the struct model and validating it at the same time
 	var req registerRequest
@@ -97,15 +93,7 @@ func (h Handler) Register(c *mo.Context) error {
 	} else {
 		return errIdentifierNotProvided("Need an Email or Phone to register an account")
 	}
-	d, err := dob.Parse(req.Dob)
-	if err != nil {
-		switch err {
-		case dob.ErrInvalidDobString:
-			return errInvalidDob
-		case dob.ErrImpossibleDob:
-			return errImpossibleDob
-		}
-	}
+	d:= dob.MustParse(req.Dob) // assuming validator has already validated this.
 	result, err := h.Service.Register(c.Request().Context(), req.service(ch, v, d))
 	if err != nil {
 		return err
@@ -125,7 +113,7 @@ func (h Handler) Register(c *mo.Context) error {
 }
 
 // login a user
-//   - POST - models.loginRequest
+//   - POST - [loginRequest]
 func (h Handler) Login(c *mo.Context) error {
 	var req loginRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -184,7 +172,7 @@ func (h Handler) Login(c *mo.Context) error {
 }
 
 // resend otp for any purpose
-//   - POST - models.resendOTPRequest
+//   - POST - [resendOTPRequest]
 func (h Handler) ResendOTP(c *mo.Context) error {
 	var req resendOTPRequest
 	err := c.DecodeAndValidateBody(req)
@@ -223,7 +211,7 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 }
 
 // verifies the otp for any purpose
-//   - POST - models.verifyOTPRequest
+//   - POST - [verifyOTPRequest]
 func (h Handler) VerifyOTP(c *mo.Context) error {
 	var req verifyOTPRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -269,7 +257,7 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 }
 
 // refreshes the token and provides a new set of tokens
-//   - POST - models.RefreshRequest
+//   - POST - [refreshRequest]
 func (h Handler) Refresh(c *mo.Context) error {
 	var req refreshRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -294,7 +282,7 @@ func (h Handler) Refresh(c *mo.Context) error {
 }
 
 // raises a request for resetting password
-//   - POST - models.forgotPasswordRequest
+//   - POST - [forgotPasswordRequest]
 func (h Handler) ForgotPassword(c *mo.Context) error {
 	var req forgotPasswordRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -330,7 +318,7 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 }
 
 // resets the password for a user
-//   - POST - models.resetPasswordRequest
+//   - POST - [resetPasswordRequest]
 func (h Handler) ResetPassword(c *mo.Context) error {
 	var req resetPasswordRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -369,7 +357,7 @@ func (h Handler) Logout(c *mo.Context) error {
 }
 
 // adds a new 2 factor method for the user, totp not included
-//   - PUT - models.add2FARequest
+//   - PUT - [add2FARequest]
 func (h Handler) Add2FA(c *mo.Context) error {
 	var req add2FARequest
 	err := c.DecodeAndValidateBody(&req)
@@ -395,7 +383,7 @@ func (h Handler) Add2FA(c *mo.Context) error {
 }
 
 // removes an existing 2 factor method for the user
-//   - DELETE - models.remove2FARequest
+//   - DELETE - [remove2FARequest]
 func (h Handler) Remove2FA(c *mo.Context) error {
 	var req remove2FARequest
 	err := c.DecodeAndValidateBody(&req)
@@ -446,7 +434,7 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 }
 
 // verifies a totp session and adds it to the user's 2fas
-//   - POST - models.totpVerifyRequest
+//   - POST - [totpVerifyRequest]
 func (h Handler) totpVerify(c *mo.Context) error {
 	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
 	if err != nil {
