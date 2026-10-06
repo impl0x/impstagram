@@ -30,22 +30,20 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 	if session == nil {
 		panic("session is nil")
 	}
-	cols := newArgBuilder[string]()
-	vals := newArgBuilder[any]()
+	ag := newArgBuilder()
 	if session.ID != uuid.Nil() {
-		cols.add("id")
-		vals.add(session.ID)
+		ag.add("id", session.ID)
 	}
 	// ignore created_at even if provided. hardcoded to not set it via service call
-	cols.add("jwt_id", "user_id", "token_hash", "os_name", "browser_name", "device_type", "expires_at")
-	vals.add(session.JwtID, session.UserID, session.TokenHash, session.OSName, session.BrowserName, session.DeviceType, session.ExpiresAt)
+	ag.addCols("jwt_id", "user_id", "token_hash", "os_name", "browser_name", "device_type", "expires_at")
+	ag.addVals(session.JwtID, session.UserID, session.TokenHash, session.OSName, session.BrowserName, session.DeviceType, session.ExpiresAt)
 	sql, args, err := pg.Builder.
-		Insert(argBuilderJoinArgs(cols.unwrap())).
+		Insert(ag.unwrapCols()).
 		Into(database.TableUserSessions).
-		Values(vals.unwrap()...).
+		Values(ag.getVals()...).
 		ToSql()
 	if err != nil {
-		return fmt.Errorf("UserRepo - createSession - pg.Builder: %w", err)
+		return fmt.Errorf("UserSessionRepo - create - pg.Builder: %w", err)
 	}
 	_, err = pg.Pool.Exec(ctx, sql, args...)
 	if err != nil {
@@ -63,7 +61,7 @@ func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.U
 		Where(squirrel.Eq{by: value}).
 		ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("UserRepo - getSession - pg.Builder: %w", err)
+		return nil, fmt.Errorf("UserSessionRepo - get - pg.Builder: %w", err)
 	}
 	var session entity.UserSession
 	err = pg.Pool.QueryRow(ctx, sql, args...).
@@ -101,7 +99,7 @@ func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val
 		Where(squirrel.Eq{"id": id}).
 		ToSql()
 	if err != nil {
-		return fmt.Errorf("UserRepo - UpdateSession - pg.Builder")
+		return fmt.Errorf("UserSessionRepo - Update - pg.Builder")
 	}
 	cmdTag, err := pg.Pool.Exec(ctx, sql, args...)
 	if err != nil {
@@ -121,11 +119,11 @@ func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUI
 	sql, args, err := pg.Builder.
 		Update(database.TableUserSessions).
 		Set("token_hash", tokenHash).
-		Set("expires_at",expiry).
+		Set("expires_at", expiry).
 		Where(squirrel.Eq{"id": id}).
 		ToSql()
 	if err != nil {
-		return fmt.Errorf("UserRepo - UpdateSession - pg.Builder")
+		return fmt.Errorf("UserSessionRepo - Update - pg.Builder")
 	}
 	cmdTag, err := pg.Pool.Exec(ctx, sql, args...)
 	if err != nil {
@@ -145,7 +143,7 @@ func (pg UserSessions) Delete(ctx context.Context, col string, val any) error {
 		Where(squirrel.Eq{col: val}).
 		ToSql()
 	if err != nil {
-		return fmt.Errorf("UserRepo - UpdateSession - pg.Builder")
+		return fmt.Errorf("UserSessionRepo - Delete - pg.Builder")
 	}
 	cmdTag, err := pg.Pool.Exec(ctx, sql, args...)
 	if err != nil {

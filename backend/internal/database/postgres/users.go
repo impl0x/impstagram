@@ -37,20 +37,18 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 		return uuid.UUID{}, handlePgxError(err)
 	}
 	defer tx.Rollback(ctx)
-	cols := newArgBuilder[string]()
-	vals := newArgBuilder[any]()
+	ag := newArgBuilder()
 	// if provided a ID then don't rely on the database to make one again, use the id given
 	if user.ID != uuid.Nil() {
-		cols.add("id")
-		vals.add(user.ID)
+		ag.add("id", user.ID)
 	}
 	// we dont actually care if the user sent a created_at or a updated_at because those are hardcoded here to be the current timestamp by the database.
-	cols.add("email", "phone", "password_hash", "dob", "status", "totp_secret_key", "two_fas")
-	vals.add(user.Email, user.Phone, user.PasswordHash, user.Dob, user.TotpSecretKey, user.TwoFAs)
+	ag.addCols("email", "phone", "password_hash", "dob", "status", "totp_secret_key", "two_fas")
+	ag.addVals(user.Email, user.Phone, user.PasswordHash, user.Dob, user.TotpSecretKey, user.TwoFAs)
 	sql, args, err := pg.Builder.
 		Insert(database.TableUsers).
-		Columns(argBuilderJoinArgs(cols.unwrap())).
-		Values(vals.unwrap()...).
+		Columns(ag.unwrapCols()).
+		Values(ag.getVals()...).
 		Suffix("RETURNING id").
 		ToSql()
 	if err != nil {

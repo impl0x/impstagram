@@ -25,6 +25,9 @@ func handlePgxError(err error) error {
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
 		return err
 	case errors.As(err, &pgErr):
+		if pgErr.Code == "23505" { // unique violation
+			return repository.ErrAlreadyExists
+		}
 		return fmt.Errorf("postgres: sql error, %w, Code: %s", err, pgErr.Code) // we let the error bubble to the handler where it will eventually be turned into a internal error and be logged
 	default:
 		return fmt.Errorf("postgres: unknown error, %w", err)
@@ -33,29 +36,39 @@ func handlePgxError(err error) error {
 
 const _argBuilderDefaultCap uint8 = 16
 
-// utility struct to build sql values/cols lines.
-type argBuilder[T any] struct {
-	slice []T
+type argBuilder struct {
+	cols []string
+	vals []any
 }
 
-// returns a new arg builder with the default capacity [_argBuilderDefaultCap] for the underlying slice
-func newArgBuilder[T any]() argBuilder[T] {
-	return argBuilder[T]{make([]T, 0, _argBuilderDefaultCap)}
+func newArgBuilder() argBuilder {
+	return argBuilder{
+		make([]string, 0, _argBuilderDefaultCap),
+		make([]any, 0, _argBuilderDefaultCap),
+	}
 }
 
 // grows the underlying slice to the capacity provided
-func (ag argBuilder[T]) withCap(cap uint8) argBuilder[T] {
-	return argBuilder[T]{slices.Grow(ag.slice, int(cap))}
+func (ag argBuilder) withCap(cap int) argBuilder {
+	return argBuilder{slices.Grow(ag.cols, cap), slices.Grow(ag.vals, cap)}
 }
 
-func (ag argBuilder[T]) add(elem ...T) {
-	ag.slice = append(ag.slice, elem...)
+func (ag argBuilder) add(col string, val any) {
+	ag.cols = append(ag.cols, col)
+	ag.vals = append(ag.vals, val)
 }
 
-func (ag argBuilder[T]) unwrap() []T {
-	return ag.slice
+func (ag argBuilder) addCols(col ...string) {
+	ag.cols = append(ag.cols, col...)
+}
+func (ag argBuilder) addVals(val ...any) {
+	ag.vals = append(ag.vals, val...)
 }
 
-func argBuilderJoinArgs(elems []string) string {
-	return strings.Join(elems, ", ")
+func (ag argBuilder) unwrapCols() string {
+	return strings.Join(ag.cols, ", ")
+}
+
+func (ag argBuilder) getVals() []any {
+	return ag.vals
 }
