@@ -1,15 +1,15 @@
 package auth
 
 import (
-	"backend/internal/entity"
-	"fmt"
-
-	"backend/internal/repository"
-	"backend/pkg/cryptoutil" // generate cryptographically random IDs and OTPs
-	"backend/pkg/email"      // send emails
-	"backend/pkg/jwt"        // generate and verify jwt tokens
-	"backend/pkg/password"   // hash and compare passwords
+	"backend/internal/config"
+	"backend/internal/entity"     // entity data objects
+	"backend/internal/repository" // repository
+	"backend/pkg/cryptoutil"      // generate cryptographically random IDs and OTPs
+	"backend/pkg/email"           // send emails
+	"backend/pkg/jwt"             // generate and verify jwt tokens
+	"backend/pkg/password"        // hash and compare passwords
 	"context"
+	"fmt"
 	"slices"
 	"time"
 	"uuid"
@@ -17,7 +17,9 @@ import (
 	"github.com/impl0x/go-utils/cache" // used for ttlcache
 )
 
-// ? Enums
+// ! INFO:
+// main file for the core business logic for auth
+
 // authPurpose defines WHY the OTP or action is happening.
 type authPurpose string
 
@@ -27,13 +29,15 @@ const (
 	purposeResetPass    authPurpose = "reset_password"
 )
 
-// ? INFO:
-// main file for the core business logic
-
 type Service struct {
-	cache serviceCaches
-	repo  repositories
-	otp   cryptoutil.OtpGenerator
+	config config.AuthConfig
+	cache  serviceCaches
+	repo   repositories
+	otp    cryptoutil.OtpGenerator
+	jwt    jwt.JWTManager
+	// TODO: add a proper logger
+	// log   *log.Logger
+
 	email email.Sender
 }
 
@@ -41,27 +45,43 @@ type serviceCaches struct {
 	otp           *cache.TTLCache[string, *otpSession]
 	resetPassword *cache.TTLCache[string, resetPasswordSession]
 	totp          *cache.TTLCache[string, *totpSession]
+	jwtBlocklist  *cache.TTLCache[uuid.UUID, struct{}]
 } // some fields use pointer while others don't due to nature of modification to the struct, read only structs are passed by value.
 
 type repositories struct {
 	user    repository.UserRepository
 	session repository.UserSessionRepository
+	profile repository.ProfileRepository
+}
+
+// wrapper to pass repositories into [NewService] easier
+func NewRepositories(user repository.UserRepository, session repository.UserSessionRepository, profile repository.ProfileRepository) repositories {
+	return repositories{user, session, profile}
 }
 
 // Instantiates a new service instance with default rules and caches, and repositories provided in the parameters.
-func NewService(userRepo repository.UserRepository, sessionRepo repository.UserSessionRepository, emailClient email.Sender) *Service {
-	if userRepo==nil||sessionRepo==nil||emailClient==nil{
+func NewService(
+	serviceName string,
+	cfg *config.AuthConfig,
+	repos repositories,
+	emailClient email.Sender,
+) *Service {
+	if repos.user == nil || repos.session == nil || repos.profile == nil || emailClient == nil {
 		panic("Service: nil parameter found in instantiation function")
 	}
+	config := *cfg // dereferencing pointer to store as whole in struct
 	return &Service{
-		email: emailClient,
-		repo:  repositories{userRepo, sessionRepo},
-		otp:   cryptoutil.NewOtpGenerator(ruleOTPLen, ruleTOTPLen, ruleSizeTOTPKey),
+		config: config,
 		cache: serviceCaches{
-			otp:           cache.NewTTLCache[string, *otpSession](ruleTTLCacheCleanIntervalOTP),
-			resetPassword: cache.NewTTLCache[string, resetPasswordSession](ruleTTLCacheCleanIntervalReset),
-			totp:          cache.NewTTLCache[string, *totpSession](ruleTTLCacheCleanIntervalTOTP),
+			otp:           cache.NewTTLCache[string, *otpSession](config.TTLCacheCleanIntervalOTP),
+			resetPassword: cache.NewTTLCache[string, resetPasswordSession](config.TTLCacheCleanIntervalReset),
+			totp:          cache.NewTTLCache[string, *totpSession](config.TTLCacheCleanIntervalTOTP),
+			jwtBlocklist:  cache.NewTTLCache[uuid.UUID, struct{}](config.TTLCacheCleanIntervalJWTBlockList),
 		},
+		repo:  repos,
+		otp:   cryptoutil.NewOtpGenerator(serviceName, config.LenOTP, config.LenTOTP, cfg.SizeTOTPKey),
+		jwt:   jwt.NewJWTManager(config.JwtSecret),
+		email: emailClient,
 	}
 }
 
@@ -90,24 +110,24 @@ type totpSession struct {
 
 // ? ----+-----+-----Wrapper functions for cryptoutil-----+-----+-----
 
-// generates a new random string with the prefix [rulePrefixRefreshToken] and size [ruleSizeRefreshToken]
-func generateRefreshToken() string {
-	return cryptoutil.GenerateToken(rulePrefixRefreshToken, ruleSizeRefreshToken)
+// generates a new random string with the prefix [Service.config.PrefixRefreshToken] and size [Service.config.SizeRefreshToken]
+func (s *Service) generateRefreshToken() string {
+	return cryptoutil.GenerateToken(s.config.PrefixRefreshToken, s.config.SizeRefreshToken)
 }
 
-// generates a new random string with the prefix [rulePrefixOTPSession] and size [ruleSizeSessionID]
-func generateOTPSessionID() string {
-	return cryptoutil.GenerateToken(rulePrefixOTPSession, ruleSizeSessionID)
+// generates a new random string with the prefix [Service.config.PrefixOTPSession] and size [Service.config.SizeSessionID]
+func (s *Service) generateOTPSessionID() string {
+	return cryptoutil.GenerateToken(s.config.PrefixOTPSession, s.config.SizeSessionID)
 }
 
-// generates a new random string with the prefix [rulePrefixResetSession] and size [ruleSizeSessionID]
-func generateResetSessionID() string {
-	return cryptoutil.GenerateToken(rulePrefixResetSession, ruleSizeSessionID)
+// generates a new random string with the prefix [Service.config.PrefixResetSession] and size [Service.config.SizeSessionID]
+func (s *Service) generateResetSessionID() string {
+	return cryptoutil.GenerateToken(s.config.PrefixResetSession, s.config.SizeSessionID)
 }
 
-// generates a new random string with the prefix [rulePrefixTOTPSession] and size [ruleSizeSessionID]
-func generateTotpSessionID() string {
-	return cryptoutil.GenerateToken(rulePrefixResetSession, ruleSizeSessionID)
+// generates a new random string with the prefix [Service.config.PrefixTOTPSession] and size [Service.config.SizeSessionID]
+func (s *Service) generateTotpSessionID() string {
+	return cryptoutil.GenerateToken(s.config.PrefixTOTPSession, s.config.SizeSessionID)
 }
 
 // ? ----+-----+-----Helper functions-----+-----+-----
@@ -176,6 +196,10 @@ func newUserSession(userID, jwtID uuid.UUID, refreshToken string, md entity.Clie
 	return session
 }
 
+// ! ----x-----x-----NORMAL METHODS-----x-----x-----
+// methods in service take a request data as a struct and return a result struct and error
+// this pattern is common among all service methods
+
 // ? ----+-----+-----Register-----+-----+-----
 
 // Result struct
@@ -192,9 +216,9 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 
 	// validate the user's age against our business rules
 	userAge := req.Dob.Age()
-	if userAge < ruleMinAge {
+	if userAge < s.config.AgeMin {
 		return RegisterResult{}, errRegisterNotOldEnough
-	} else if userAge > ruleMaxAge {
+	} else if userAge > s.config.AgeMax {
 		return RegisterResult{}, errRegisterTooOld
 	}
 
@@ -237,8 +261,8 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 		return RegisterResult{}, err
 	}
 	// generate a new reference id for a otp session
-	refID := generateOTPSessionID()
-	expiresAt := time.Now().Add(ruleExpiryTimeOTP)
+	refID := s.generateOTPSessionID()
+	expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
 	// add a new otp session to our timed cache
 	s.cache.otp.Add(
 		refID,
@@ -255,6 +279,21 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 		ReferenceID: refID,
 		ExpiresAt:   expiresAt,
 	}, nil
+}
+
+// ? ----+-----+-----Check Username-----+-----+-----
+
+type CheckUsernameResult struct {
+	Exists bool
+}
+
+func (s *Service) CheckUsername(ctx context.Context, req CheckUsernameRequest) (CheckUsernameResult, error) {
+	exists, err := s.repo.profile.CheckUsername(ctx, req.Username)
+	if err != nil {
+		return CheckUsernameResult{}, err
+	}
+	return CheckUsernameResult{exists}, nil
+
 }
 
 // ? ----+-----+-----Login-----+-----+-----
@@ -301,8 +340,8 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientM
 
 	// If user has 2FA enabled ask for otp.
 	if user.TwoFAs != nil {
-		refID := generateOTPSessionID()
-		expiresAt := time.Now().Add(ruleExpiryTimeOTP)
+		refID := s.generateOTPSessionID()
+		expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
 		primaryTwoFAChannel := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
 		// if it is TOTP
 		if primaryTwoFAChannel == entity.ChannelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
@@ -368,17 +407,17 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientM
 
 	// generate tokens
 	jwtID := uuid.New()
-	accessToken, err := jwt.GenerateToken(
+	accessToken, err := s.jwt.GenerateToken(
 		newAccessToken( // generating a new access token struct and taking its payload version with json compatible tags
 			user.ID,
 			jwtID,
-			ruleExpiryTimeAccessToken,
+			s.config.ExpiryTimeAccessToken,
 		).Payload(),
 	)
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("service.auth.login - failed to generate jwt: %w", err)
 	}
-	refreshToken := generateRefreshToken()
+	refreshToken := s.generateRefreshToken()
 	// Add a new user session to the database
 	err = s.repo.session.Create(ctx, newUserSession(user.ID, jwtID, refreshToken, md))
 	if err != nil {
@@ -471,8 +510,8 @@ func (s *Service) ResendOTP(ctx context.Context, req ResendOTPRequest) (ResendRe
 	}
 
 	// Now we send the otp and store it in our cache and return the user a new reference id
-	refId := generateOTPSessionID() // new otp session id
-	expiresAt := time.Now().Add(ruleExpiryTimeOTP)
+	refId := s.generateOTPSessionID() // new otp session id
+	expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
 	otp, err := s.sendOTP(req.Channel, purpose, req.Value)
 	if err != nil {
 		return ResendResult{}, err
@@ -523,7 +562,7 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest, md entity
 	}
 	session.attempts++          // increment on every successful attempt
 	if session.otp != req.OTP { // we check the otp if it does not match we return early with a incorrect otp error
-		remainingAttempts := ruleAttemptsOTP - session.attempts
+		remainingAttempts := s.config.AttemptsOTP - session.attempts
 		if remainingAttempts <= 0 {
 			s.cache.otp.Delete(req.ReferenceID) // delete the session not allowing for any more verification attempts
 			return VerifyResult{}, errCommonAttemptsExhausted
@@ -549,8 +588,8 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest, md entity
 			return VerifyResult{}, err
 		}
 	case purposeResetPass:
-		refID := generateResetSessionID()
-		expiresAt := time.Now().Add(ruleExpiryTimeResetPassword)
+		refID := s.generateResetSessionID()
+		expiresAt := time.Now().Add(s.config.ExpiryTimeResetPassword)
 		s.cache.resetPassword.Add(
 			refID,
 			resetPasswordSession{
@@ -567,17 +606,17 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest, md entity
 
 	// generate new tokens and return them to the user for future usage
 	jwtID := uuid.New()
-	accessToken, err := jwt.GenerateToken(
+	accessToken, err := s.jwt.GenerateToken(
 		newAccessToken(
 			user.ID,
 			jwtID,
-			ruleExpiryTimeAccessToken,
+			s.config.ExpiryTimeAccessToken,
 		).Payload(),
 	)
 	if err != nil {
 		return VerifyResult{}, fmt.Errorf("service.auth.verify otp - failed to generate jwt: %w", err)
 	}
-	refreshToken := generateRefreshToken()
+	refreshToken := s.generateRefreshToken()
 
 	// Add a new user session to the database
 	err = s.repo.session.Create(ctx, newUserSession(user.ID, jwtID, refreshToken, md))
@@ -613,8 +652,8 @@ func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest)
 	// Send an otp to the channel and target our user sent us
 	otp, err := s.sendOTP(req.Channel, purposeResetPass, req.Value)
 	// generate a otp session id and add it to our ttlcache
-	refID := generateOTPSessionID()
-	expiresAt := time.Now().Add(ruleExpiryTimeOTP)
+	refID := s.generateOTPSessionID()
+	expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
 	s.cache.otp.Add(
 		refID,
 		&otpSession{
@@ -688,24 +727,24 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResul
 
 	// if everything is good we generate both new tokens, we do not have to regenerate and re update the jwt id as its unnecessary.
 	// it is a fixed value which is linked with the user session in database
-	accessToken, err := jwt.GenerateToken(
+	accessToken, err := s.jwt.GenerateToken(
 		newAccessToken(
 			userSesh.UserID,
 			userSesh.JwtID,
-			ruleExpiryTimeAccessToken,
+			s.config.ExpiryTimeAccessToken,
 		).Payload(),
 	)
 	if err != nil {
 		return RefreshResult{}, fmt.Errorf("service.auth.refresh - failed to generate jwt: %w", err)
 	}
-	refreshToken := generateRefreshToken()
+	refreshToken := s.generateRefreshToken()
 
 	// update the session with the new refresh token and also update the expires at field to the max capacity again.
 	err = s.repo.session.UpdateTokenHashAndExpiry(
 		ctx,
 		userSesh.ID,
 		cryptoutil.GenerateMD5Hash(refreshToken), // we store a hash of the token
-		time.Now().AddDate(0, 0, ruleExpiryTimeRefreshToken),
+		time.Now().Add(s.config.ExpiryTimeRefreshToken),
 	)
 	if err != nil {
 		if err == repository.ErrNoResults { // if the user logged out instantly somehow
@@ -721,6 +760,8 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResul
 	}, nil
 }
 
+// ! ----x-----x-----[AUTH TOKEN REQUIRED METHODS]-----x-----x-----
+
 // ? ----+-----+-----Logout-----+-----+-----
 
 // deletes the current user session
@@ -731,7 +772,19 @@ func (s *Service) Logout(ctx context.Context, token AccessTokenJwt) error {
 		return err // db error
 	}
 	// Add the jwt token id to the block list so this gets rejected by the authorization
-	jwtTokenBlockList.Add(token.JwtID, struct{}{}, token.ExpiresAt)
+	s.cache.jwtBlocklist.Add(token.JwtID, struct{}{}, token.ExpiresAt)
+	return nil
+}
+
+// ? ----+-----+-----Delete Account-----+-----+-----
+func (s *Service) DeleteAccount(ctx context.Context, token AccessTokenJwt) error {
+	err := s.repo.user.Delete(ctx, token.UserID) // assuming there is cascade such that profiles and user sessions also gets deleted.
+	if err != nil {
+		if err == repository.ErrNoResults {
+			return errCommonUserNotFound
+		}
+		return err
+	}
 	return nil
 }
 
@@ -744,9 +797,6 @@ func (s *Service) Add2FA(ctx context.Context, token AccessTokenJwt, req Add2FARe
 	// finding the user in the database using the user id from token
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
-		if err == repository.ErrNoResults {
-			return errCommonUserNotFound
-		}
 		return err
 	}
 	// checking if the channel already has a 2fa
@@ -780,9 +830,6 @@ func (s *Service) Remove2FA(ctx context.Context, token AccessTokenJwt, req Remov
 	// finding the user in the database using user id from the token
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
-		if err == repository.ErrNoResults {
-			return errCommonUserNotFound
-		}
 		return err
 	}
 	channel := entity.AuthChannel(req.Channel)
@@ -824,9 +871,6 @@ func (s *Service) TotpSetup(ctx context.Context, token AccessTokenJwt) (TotpSetu
 	// Find user on the database
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
-		if err == repository.ErrNoResults {
-			return TotpSetupResult{}, errCommonUserNotFound
-		}
 		return TotpSetupResult{}, err
 	}
 	// if user already has a totp secret key it means totp 2fa is enabled
@@ -842,8 +886,8 @@ func (s *Service) TotpSetup(ctx context.Context, token AccessTokenJwt) (TotpSetu
 	}
 	// generating the secret key and uri
 	secretKey, totpUri := s.otp.SetupTOTP(identifier)
-	refId := generateTotpSessionID()
-	expiresAt := time.Now().Add(ruleTTLCacheCleanIntervalTOTP)
+	refId := s.generateTotpSessionID()
+	expiresAt := time.Now().Add(s.config.TTLCacheCleanIntervalTOTP)
 	// adding to cache session
 	s.cache.totp.Add(
 		refId,
@@ -889,7 +933,7 @@ func (s *Service) TotpVerify(ctx context.Context, token AccessTokenJwt, req Totp
 	session.attempts++ // increment on every attempt
 	// comparing against the otp sent
 	if req.OTP != otp {
-		remainingAttempts := ruleAttemptsTOTPVerify - session.attempts
+		remainingAttempts := s.config.AttemptsTOTPVerify - session.attempts
 		if remainingAttempts <= 0 {
 			s.cache.totp.Delete(req.ReferenceID) // delete the session not allowing for any more verification attempts
 			return TotpVerifyResult{}, errCommonAttemptsExhausted
@@ -901,9 +945,6 @@ func (s *Service) TotpVerify(ctx context.Context, token AccessTokenJwt, req Totp
 	// enable totp in database
 	err = s.repo.user.UpdateAddTotp(ctx, session.userID, session.secretKey)
 	if err != nil {
-		if err == repository.ErrNoResults {
-			return TotpVerifyResult{}, errCommonUserNotFound
-		}
 		return TotpVerifyResult{}, err
 	}
 	return TotpVerifyResult{}, nil
