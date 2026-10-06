@@ -7,9 +7,9 @@ import (
 )
 
 type Dob struct {
-	Year  uint16
-	Month uint16
-	Day   uint16
+	Year  int
+	Month int
+	Day   int
 }
 
 // same as parse but panics if parsing fails
@@ -59,16 +59,16 @@ func Parse(s string) (Dob, error) {
 	if d > 31 || d <= 0 {
 		return Dob{}, ErrImpossible
 	}
-	return Dob{uint16(y), uint16(m), uint16(d)}, nil
+	return Dob{y, m, d}, nil
 
 }
 
 // Calculates age from dob instance
-func (d Dob) Age() uint16 {
+func (d Dob) Age() int {
 	now := time.Now()
-	year := uint16(now.Year()) // we are not reaching 65,536 years in the future for this function to fail
-	day := uint16(now.Day())
-	month := uint16(now.Month())
+	year := now.Year()
+	day := now.Day()
+	month := int(now.Month())
 
 	age := year - d.Year
 	if month < d.Month ||
@@ -78,6 +78,7 @@ func (d Dob) Age() uint16 {
 	return age
 }
 
+// Converts the Dob instance to string using the format defined
 func (d Dob) String() string {
-	return strconv.Itoa(int(d.Year)) + "-" + strconv.Itoa(int(d.Month)) + "-" + strconv.Itoa(int(d.Day))
+	return strconv.Itoa(d.Year) + "-" + strconv.Itoa(d.Month) + "-" + strconv.Itoa(d.Day)
 }
