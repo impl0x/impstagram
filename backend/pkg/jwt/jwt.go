@@ -8,7 +8,6 @@
 package jwt
 
 import (
-	"backend/internal/config"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -21,17 +20,25 @@ var (
 	ErrInvalidJsonPayload = errors.New("jwt: invalid json payload")
 )
 
+type JWTManager struct {
+	SecretKey string
+}
+
+func NewJWTManager(secretKey string)JWTManager{
+	return JWTManager{secretKey}
+}
+
 // Payload must be a json compatible struct, do not use maps. It's not efficient, use structs.
 //
 // error can only be ErrInvalidJsonPayload, which is returned if json marshalling fails
-func GenerateToken(payload any) (string, error) {
+func (j JWTManager) GenerateToken(payload any) (string, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return "", ErrInvalidJsonPayload
 	}
 	payloadB64 := base64.RawURLEncoding.EncodeToString(payloadBytes)
 
-	mac := hmac.New(sha256.New, []byte(config.JwtHMACKey))
+	mac := hmac.New(sha256.New, []byte(j.SecretKey))
 	mac.Write([]byte(payloadB64))
 	signature := mac.Sum(nil)
 
@@ -51,13 +58,13 @@ var (
 // validation is not done here, so validate it yourself
 //
 // only errors returned are ErrInvalidJWTToken, ErrIncorrectJWTToken
-func VerifyToken(token string, target any) error {
+func (j JWTManager) VerifyToken(token string, target any) error {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
 		return ErrInvalidJWTToken
 	}
 
-	mac := hmac.New(sha256.New, []byte(config.JwtHMACKey))
+	mac := hmac.New(sha256.New, []byte(j.SecretKey))
 	mac.Write([]byte(parts[0]))
 	signature := mac.Sum(nil)
 
