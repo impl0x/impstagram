@@ -2,7 +2,6 @@ package auth
 
 import (
 	"backend/internal/entity"
-	"backend/internal/middleware"
 	"backend/internal/service/auth"
 	"backend/internal/util"
 	"backend/pkg/apperr"
@@ -45,24 +44,27 @@ func NewHandler(s *auth.Service) Handler {
 //
 // Authorized paths: (these paths are wrapped with the authorization [Middleware])
 //   - POST - 	/logout
+//   - DELETE - /account
 //   - PUT - 	/2fa
 //   - DELETE - /2fa
 //   - POST - 	/2fa/totp/setup
 //   - POST - 	/2fa/totp/verify
 func (h Handler) RegisterPaths(g mo.Grouped) {
 	g.POST("/register", h.Register)
+	g.POST("/check/username", h.CheckUsername)
 	g.POST("/login", h.Login)
 	g.POST("/resend-otp", h.ResendOTP)
 	g.POST("/verify-otp", h.VerifyOTP)
+	g.POST("/refresh", h.Refresh)
 	g.POST("/forgot-password", h.ForgotPassword)
 	g.POST("/reset-password", h.ResetPassword)
-	g.POST("/refresh", h.Refresh)
 
-	g.POST("/logout", h.Logout, middleware.Authorization)
-	g.PUT("/2fa", h.Add2FA, middleware.Authorization)
-	g.DELETE("/2fa", h.Remove2FA, middleware.Authorization)
-	g.POST("/2fa/totp/setup", h.TotpSetup, middleware.Authorization)
-	g.POST("/2fa/totp/verify", h.totpVerify, middleware.Authorization)
+	g.POST("/logout", h.Logout, h.Middleware)
+	g.DELETE("/account", h.DeleteAccount, h.Middleware)
+	g.PUT("/2fa", h.Add2FA, h.Middleware)
+	g.DELETE("/2fa", h.Remove2FA, h.Middleware)
+	g.POST("/2fa/totp/setup", h.TotpSetup, h.Middleware)
+	g.POST("/2fa/totp/verify", h.totpVerify, h.Middleware)
 }
 
 // ! some info:
@@ -93,7 +95,7 @@ func (h Handler) Register(c *mo.Context) error {
 	} else {
 		return errIdentifierNotProvided("Need an Email or Phone to register an account")
 	}
-	d:= dob.MustParse(req.Dob) // assuming validator has already validated this.
+	d := dob.MustParse(req.Dob) // assuming validator has already validated this.
 	result, err := h.Service.Register(c.Request().Context(), req.service(ch, v, d))
 	if err != nil {
 		return err
@@ -109,6 +111,30 @@ func (h Handler) Register(c *mo.Context) error {
 				ExpiresAt   int64  `json:"expires_at"`
 			}{result.ReferenceID, result.ExpiresAt.Unix()},
 		),
+	)
+}
+
+func (h Handler) CheckUsername(c *mo.Context) error {
+	var req checkUsernameRequest
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
+		return err
+	}
+	result, err := h.Service.CheckUsername(c.Request().Context(), req.service())
+	if err != nil {
+		return err
+	}
+	var statusCode int
+	if result.Exists {
+		statusCode = http.StatusConflict
+	} else {
+		statusCode = http.StatusOK
+	}
+	return c.JSON(
+		statusCode,
+		struct {
+			Taken bool `json:"taken"`
+		}{result.Exists},
 	)
 }
 
@@ -345,11 +371,25 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 // deletes the user session
 //   - POST - empty
 func (h Handler) Logout(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}
 	err = h.Service.Logout(c.Request().Context(), token)
+	if err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// deletes the account, profile and all user sessions
+//   - DELETE - empty
+func (h Handler) DeleteAccount(c *mo.Context) error {
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	if err != nil {
+		return err
+	}
+	err = h.Service.DeleteAccount(c.Request().Context(), token)
 	if err != nil {
 		return err
 	}
@@ -364,7 +404,7 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -390,7 +430,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -411,7 +451,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 // starts a setup session for totp setup
 //   - POST - empty
 func (h Handler) TotpSetup(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -436,7 +476,7 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 // verifies a totp session and adds it to the user's 2fas
 //   - POST - [totpVerifyRequest]
 func (h Handler) totpVerify(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](middleware.KeyAuthToken)
+	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
 	if err != nil {
 		return err
 	}

@@ -29,6 +29,16 @@ func (r registerRequest) service(c entity.AuthChannel, v string, d dob.Dob) auth
 	}
 }
 
+type checkUsernameRequest struct {
+	Username string `json:"username" validate:"required,min=3,max=30,username"`
+}
+
+func (r checkUsernameRequest) service() auth.CheckUsernameRequest {
+	return auth.CheckUsernameRequest{
+		Username: r.Username,
+	}
+}
+
 type loginRequest struct {
 	Username string `json:"username" validate:"optional,min=3,max=30,username"`
 	Email    string `json:"email" validate:"optional,email"`
