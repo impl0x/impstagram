@@ -45,12 +45,12 @@ import "time"
 // Auth Service configuration values
 type AuthConfig struct {
 	// age limits
-	AgeMin int `env:"AUTH_AGE_MIN"`
-	AgeMax int `env:"AUTH_AGE_MAX"`
+	AgeMin int `env:"AUTH_AGE_MIN" validate:"min=1"`
+	AgeMax int `env:"AUTH_AGE_MAX" validate:"min=120"`
 
 	// attempt limits
-	AttemptsOTP        int `env:"AUTH_ATTEMPTS_OTP"`
-	AttemptsTOTPVerify int `en:"AUTH_ATTEMPTS_TOTP_VERIFY"`
+	AttemptsOTP        int `env:"AUTH_ATTEMPTS_OTP" validate:"min=0"`
+	AttemptsTOTPVerify int `en:"AUTH_ATTEMPTS_TOTP_VERIFY" validate:"min=0"`
 
 	// expiry times
 	ExpiryTimeOTP           time.Duration `env:"AUTH_EXPIRY_TIME_OTP"`
@@ -65,13 +65,13 @@ type AuthConfig struct {
 	TTLCacheCleanIntervalJWTBlockList time.Duration `env:"AUTH_TTLCACHE_CLEAN_INTERVAL_JWT_BLOCKLIST"`
 
 	// otp lengths
-	LenOTP  int `env:"AUTH_LEN_OTP"`
-	LenTOTP int `env:"AUTH_LEN_TOTP"`
+	LenOTP  int `env:"AUTH_LEN_OTP" validate:"min=1"`
+	LenTOTP int `env:"AUTH_LEN_TOTP" validate:"min=1"`
 
 	// byte sizes
-	SizeSessionID    int `env:"AUTH_SIZE_SESSION_ID"`
-	SizeRefreshToken int `env:"AUTH_SIZE_REFRESH_TOKEN"`
-	SizeTOTPKey      int `env:"AUTH_SIZE_TOTP_KEY"`
+	SizeSessionID    int `env:"AUTH_SIZE_SESSION_ID" validate:"min=1"`
+	SizeRefreshToken int `env:"AUTH_SIZE_REFRESH_TOKEN" validate:"min=1"`
+	SizeTOTPKey      int `env:"AUTH_SIZE_TOTP_KEY" validate:"min=1"`
 
 	// session id prefixes
 	PrefixRefreshToken string `env:"AUTH_PREFIX_REFRESH_TOKEN"`
@@ -82,8 +82,8 @@ type AuthConfig struct {
 	JwtSecret string `env:"AUTH_JWT_SECRET,required"`
 }
 
-// the default configuration values for AuthConfig 
-var defaultAuthConfig = AuthConfig{
+// the default configuration values for AuthConfig
+var DefaultAuthConfig = AuthConfig{
 	AgeMin: 13,
 	AgeMax: 120,
 
