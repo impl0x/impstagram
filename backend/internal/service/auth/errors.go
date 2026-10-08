@@ -4,27 +4,16 @@ import (
 	"backend/pkg/apperr"
 	"backend/pkg/response"
 	"errors"
-	"strconv"
 )
 
 // ? INFO
 // Contains errors which later get handled by global error handler
-// ! Ownership and usage
-// owned and used by service, middleware and handler. (some parts are owned and used by some and the others by others)
-// the error codes and apperr sentinel errors used by the service layer
-// only the non error codes are used by the handler layer
-// whichever layer uses something from this file also owns it in this file
-// service never uses the codes directly, instead handler uses them most of the time
 // ! Extra
 // all codes are prefixed with "code" and all errors with "err", for consistency reasons.
 // all sub divisions of codes and errors are also prefixed with the category that it belongs to.
 // examples, where Name is the var name for the code/name
-// eg: non error codes have a prefix of "code" + "NonErr" + Name
 // eg: common errors have prefix of "err" + "Common" + Name
 // all categories for errors are based on the service function that it belongs to, such as middleware errors are of category middleware and have that as its prefix
-
-
-// ? info:
 
 // Common codes, prefix: common
 const (
@@ -79,7 +68,7 @@ var (
 	)
 	errRegisterNotOldEnough = apperr.NewForbidden(
 		"USER_NOT_OLD_ENOUGH",
-		"User not old enough, must be minimum of "+strconv.Itoa(ruleMinAge)+" years old to use this Service",
+		"User not old enough to use this service",
 	)
 	errRegisterTooOld = apperr.NewForbidden(
 		"USER_TOO_OLD",
