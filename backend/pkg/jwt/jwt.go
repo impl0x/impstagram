@@ -24,15 +24,17 @@ type JWTManager struct {
 	SecretKey string
 }
 
-func NewJWTManager(secretKey string)JWTManager{
+// returns a new jwt manager using the secret key provided, 
+// by default only generates hmac sha256 tokens without a header
+func NewJWTManager(secretKey string) JWTManager {
 	return JWTManager{secretKey}
 }
 
 // Payload must be a json compatible struct, do not use maps. It's not efficient, use structs.
 //
 // error can only be ErrInvalidJsonPayload, which is returned if json marshalling fails
-func (j JWTManager) GenerateToken(payload any) (string, error) {
-	payloadBytes, err := json.Marshal(payload)
+func (j JWTManager) GenerateToken(claims *Claims) (string, error) {
+	payloadBytes, err := json.Marshal(claims)
 	if err != nil {
 		return "", ErrInvalidJsonPayload
 	}
@@ -57,8 +59,8 @@ var (
 //
 // validation is not done here, so validate it yourself
 //
-// only errors returned are ErrInvalidJWTToken, ErrIncorrectJWTToken
-func (j JWTManager) VerifyToken(token string, target any) error {
+// only errors returned are [ErrInvalidJWTToken], [ErrIncorrectJWTToken]
+func (j JWTManager) VerifyToken(token string, target *Claims) error {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
 		return ErrInvalidJWTToken
