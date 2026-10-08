@@ -48,14 +48,19 @@ type serviceCaches struct {
 	jwtBlocklist  *cache.TTLCache[uuid.UUID, struct{}]
 } // some fields use pointer while others don't due to nature of modification to the struct, read only structs are passed by value.
 
+// segregated interface because we only need one of the methods available in [repository.profileRepository]
+type profileRepository interface {
+	CheckUsername(ctx context.Context, username string) (bool, error)
+}
+
 type repositories struct {
 	user    repository.UserRepository
 	session repository.UserSessionRepository
-	profile repository.ProfileRepository
+	profile profileRepository
 }
 
 // wrapper to pass repositories into [NewService] easier
-func NewRepositories(user repository.UserRepository, session repository.UserSessionRepository, profile repository.ProfileRepository) repositories {
+func NewRepositories(user repository.UserRepository, session repository.UserSessionRepository, profile profileRepository) repositories {
 	return repositories{user, session, profile}
 }
 
