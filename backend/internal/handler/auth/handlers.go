@@ -371,7 +371,7 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 // deletes the user session
 //   - POST - empty
 func (h Handler) Logout(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -385,7 +385,7 @@ func (h Handler) Logout(c *mo.Context) error {
 // deletes the account, profile and all user sessions
 //   - DELETE - empty
 func (h Handler) DeleteAccount(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -404,7 +404,7 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -430,7 +430,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -451,7 +451,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 // starts a setup session for totp setup
 //   - POST - empty
 func (h Handler) TotpSetup(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
 	if err != nil {
 		return err
 	}
@@ -476,7 +476,7 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 // verifies a totp session and adds it to the user's 2fas
 //   - POST - [totpVerifyRequest]
 func (h Handler) totpVerify(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessTokenJwt](keyAuthToken)
+	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
 	if err != nil {
 		return err
 	}
