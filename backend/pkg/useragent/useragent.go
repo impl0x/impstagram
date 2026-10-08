@@ -2,7 +2,7 @@ package useragent
 
 import "github.com/mileusna/useragent"
 
-// wrapper over "github.com/mileusna/useragent" to only have required fields.
+// wrapper over [github.com/mileusna/useragent] to only have required fields.
 type UserAgentData struct {
 	OSName      string
 	BrowserName string
