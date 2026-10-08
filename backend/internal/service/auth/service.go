@@ -140,10 +140,8 @@ func (s *Service) generateTotpSessionID() string {
 //
 // it returns the otp that was sent and an optional error occurs one
 func (s *Service) sendOTP(channel entity.AuthChannel, purpose authPurpose, target string) (string, error) {
-	otp, err := s.otp.Generate()
-	if err != nil { // generate otp error
-		return "", err
-	}
+	otp := s.otp.Generate()
+	var err error
 	// Send otp based on the identifier
 	switch channel {
 	case entity.ChannelEmail:
@@ -412,7 +410,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientM
 			user.ID,
 			jwtID,
 			s.config.ExpiryTimeAccessToken,
-		).Payload(),
+		).Claims(),
 	)
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("service.auth.login - failed to generate jwt: %w", err)
@@ -611,7 +609,7 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest, md entity
 			user.ID,
 			jwtID,
 			s.config.ExpiryTimeAccessToken,
-		).Payload(),
+		).Claims(),
 	)
 	if err != nil {
 		return VerifyResult{}, fmt.Errorf("service.auth.verify otp - failed to generate jwt: %w", err)
@@ -732,7 +730,7 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResul
 			userSesh.UserID,
 			userSesh.JwtID,
 			s.config.ExpiryTimeAccessToken,
-		).Payload(),
+		).Claims(),
 	)
 	if err != nil {
 		return RefreshResult{}, fmt.Errorf("service.auth.refresh - failed to generate jwt: %w", err)
@@ -765,7 +763,7 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResul
 // ? ----+-----+-----Logout-----+-----+-----
 
 // deletes the current user session
-func (s *Service) Logout(ctx context.Context, token AccessTokenJwt) error {
+func (s *Service) Logout(ctx context.Context, token AccessToken) error {
 	// Remove user session from database
 	err := s.repo.session.Delete(ctx, "jwt_id", token.JwtID)
 	if err != nil && err != repository.ErrNoResults { // ignore no results
@@ -777,7 +775,7 @@ func (s *Service) Logout(ctx context.Context, token AccessTokenJwt) error {
 }
 
 // ? ----+-----+-----Delete Account-----+-----+-----
-func (s *Service) DeleteAccount(ctx context.Context, token AccessTokenJwt) error {
+func (s *Service) DeleteAccount(ctx context.Context, token AccessToken) error {
 	err := s.repo.user.Delete(ctx, token.UserID) // assuming there is cascade such that profiles and user sessions also gets deleted.
 	if err != nil {
 		if err == repository.ErrNoResults {
@@ -793,7 +791,7 @@ func (s *Service) DeleteAccount(ctx context.Context, token AccessTokenJwt) error
 // adds a 2FA method to the user account,
 //
 // note: totp has its separate function therefore its assumed that the channel is validated to be either email or phone only
-func (s *Service) Add2FA(ctx context.Context, token AccessTokenJwt, req Add2FARequest) error {
+func (s *Service) Add2FA(ctx context.Context, token AccessToken, req Add2FARequest) error {
 	// finding the user in the database using the user id from token
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
@@ -826,7 +824,7 @@ func (s *Service) Add2FA(ctx context.Context, token AccessTokenJwt, req Add2FARe
 }
 
 // Removes 2fa for a user
-func (s *Service) Remove2FA(ctx context.Context, token AccessTokenJwt, req Remove2FARequest) error {
+func (s *Service) Remove2FA(ctx context.Context, token AccessToken, req Remove2FARequest) error {
 	// finding the user in the database using user id from the token
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
@@ -867,7 +865,7 @@ type TotpSetupResult struct {
 }
 
 // starts a setup for totp
-func (s *Service) TotpSetup(ctx context.Context, token AccessTokenJwt) (TotpSetupResult, error) {
+func (s *Service) TotpSetup(ctx context.Context, token AccessToken) (TotpSetupResult, error) {
 	// Find user on the database
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
@@ -911,7 +909,7 @@ type TotpVerifyResult struct {
 }
 
 // verifies the otp from totp setup and sets secret in database
-func (s *Service) TotpVerify(ctx context.Context, token AccessTokenJwt, req TotpVerifyRequest) (TotpVerifyResult, error) {
+func (s *Service) TotpVerify(ctx context.Context, token AccessToken, req TotpVerifyRequest) (TotpVerifyResult, error) {
 	// Fetching session from cache
 	session, expiresAt, ok := s.cache.totp.Get(req.ReferenceID)
 	if !ok {
