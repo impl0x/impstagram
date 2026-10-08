@@ -13,6 +13,10 @@ type RegisterRequest struct {
 	Password string
 }
 
+type CheckUsernameRequest struct {
+	Username string
+}
+
 type LoginRequest struct {
 	Channel  entity.AuthChannel // only in "email" / "phone" / "username"
 	Value    string             // the value for the channel
