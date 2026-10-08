@@ -80,9 +80,9 @@ func parse(v reflect.Value) error {
 			}
 		}
 		envName := segs[0]
-		envVal := os.Getenv(envName)
+		envVal, ok := os.LookupEnv(envName)
 
-		if envVal == "" {
+		if !ok {
 			if isRequired {
 				return errors.New("env: required variable not found in environment, field: " + ct.Name)
 			}
@@ -110,10 +110,10 @@ func setValueFromString(v reflect.Value, strVal string) error {
 	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		var t time.Duration
-		if v.Type()==reflect.TypeOf(t){
-			t,err:=time.ParseDuration(strVal)
-			if err!=nil{
-				return fmt.Errorf("invalid time.Duration value, %w",err)
+		if v.Type() == reflect.TypeOf(t) {
+			t, err := time.ParseDuration(strVal)
+			if err != nil {
+				return fmt.Errorf("invalid time.Duration value, %w", err)
 			}
 			v.SetInt(int64(t))
 			return nil
