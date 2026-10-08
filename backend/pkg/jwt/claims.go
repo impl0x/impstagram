@@ -1,6 +1,7 @@
 package jwt
 
 // Source: [github.com/golang-jwt/jwt/v5] / [registered_claims.go] file
+// Claims are the payload fields in the jwt token, only populate the ones you want in the payload
 type Claims struct {
 	// the `iss` (Issuer) claim. See https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.1
 	Issuer string `json:"iss,omitempty"`
