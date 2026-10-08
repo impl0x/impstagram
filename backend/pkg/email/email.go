@@ -1,7 +1,6 @@
 package email
 
 import (
-	"backend/internal/config"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -20,12 +19,18 @@ func (mc MockClient) Send(req SendRequest) error {
 }
 
 type Client struct {
-	httpClient *http.Client
+	serviceName string
+	apiKey      string
+	emailID     string
+	httpClient  *http.Client
 }
 
-func NewClient(httpClient *http.Client) Client {
+func NewClient(apiKey, serviceName, emailID string, httpClient *http.Client) Client {
 	return Client{
-		httpClient: httpClient,
+		serviceName: serviceName,
+		apiKey:      apiKey,
+		emailID:     emailID,
+		httpClient:  httpClient,
 	}
 }
 
@@ -37,7 +42,11 @@ type SendRequest struct {
 }
 
 func NewSendRequest(to, subject, html string) SendRequest {
-	return SendRequest{config.EmailID, []string{to}, subject, html}
+	return SendRequest{
+		To:      []string{to},
+		Subject: subject,
+		HTML:    html,
+	}
 }
 
 type SendResponse struct {
@@ -45,9 +54,10 @@ type SendResponse struct {
 }
 
 func (c Client) Send(req SendRequest) error {
+	req.From = c.emailID
 	body, err := json.Marshal(req)
 	if err != nil {
-		return fmt.Errorf("marshal email: %w", err)
+		return fmt.Errorf("email: marshal email: %w", err)
 	}
 
 	httpReq, err := http.NewRequest(
@@ -56,20 +66,20 @@ func (c Client) Send(req SendRequest) error {
 		bytes.NewReader(body),
 	)
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return fmt.Errorf("email: create request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+config.ResendApiKey)
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("send email: %w", err)
+		return fmt.Errorf("email: send email: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("resend returned status %s", resp.Status)
+		return fmt.Errorf("email: resend returned unexpected status %s", resp.Status)
 	}
 	return nil
 }
