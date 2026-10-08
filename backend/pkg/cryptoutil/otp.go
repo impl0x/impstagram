@@ -1,14 +1,12 @@
 package cryptoutil
 
 import (
-	"backend/internal/config"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base32"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -17,32 +15,39 @@ import (
 )
 
 type OtpGenerator struct {
-	otpLimit *big.Int
-	totp     struct {
+	serviceName string // required for totp uri generation
+	otpLimit    *big.Int
+	otpLen      int
+	totp        struct {
 		length        int
 		secretKeySize int
 	}
 }
 
-func NewOtpGenerator(otpLength, totpLen, totpKeyLen int) OtpGenerator {
+func NewOtpGenerator(serviceName string, otpLength, totpLen, totpKeyLen int) OtpGenerator {
 	return OtpGenerator{
-		big.NewInt(int64(math.Pow(10, float64(otpLength)))),
-		struct {
+		serviceName: serviceName,
+		otpLimit:    big.NewInt(int64(math.Pow(10, float64(otpLength)))),
+		otpLen:      otpLength,
+		totp: struct {
 			length        int
 			secretKeySize int
 		}{totpLen, totpKeyLen},
 	}
 }
 
-func (og OtpGenerator) Generate() (string, error) {
-	num, err := rand.Int(rand.Reader, og.otpLimit)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%06d", num.Int64()), nil
+// pads the code with the totalLen amount of "0"
+func padLeftWithZeros(code int, totalLen int) string {
+	s := strconv.Itoa(code)
+	return strings.Repeat("0", totalLen-len(s)) + s
 }
 
-var ErrInvalidSecretKey = errors.New("invalid secret key")
+func (og OtpGenerator) Generate() string {
+	num, _ := rand.Int(rand.Reader, og.otpLimit)
+	return padLeftWithZeros(int(num.Int64()), og.otpLen)
+}
+
+var ErrInvalidSecretKey = errors.New("cryptoutil: invalid secret key")
 
 // Generates a 6 digit time based otp with the given secret key
 //
@@ -73,24 +78,17 @@ func (og OtpGenerator) GenerateTOTP(secret string) (string, error) {
 	mod := int32(math.Pow10(og.totp.length))
 	code := binaryCode % mod
 
-	return padLeft(int(code), og.totp.length), nil
-}
-func padLeft(code int, totalLen int) string {
-	str := strconv.Itoa(code)
-	if len(str) >= totalLen {
-		return str
-	}
-	return strings.Repeat("0", totalLen-len(str)) + str
+	return padLeftWithZeros(int(code), og.totp.length), nil
 }
 
 func (og OtpGenerator) SetupTOTP(userIdentifier string) (secretKey string, uri string) {
 	keyBytes := make([]byte, og.totp.secretKeySize)
 	rand.Read(keyBytes)
 	secretKey = strings.ToUpper(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(keyBytes))
-	uri = "otpauth://totp/" + config.ServiceName +
+	uri = "otpauth://totp/" + og.serviceName +
 		":" + userIdentifier +
 		"?secret=" + secretKey +
-		"&issuer=" + config.ServiceName +
+		"&issuer=" + og.serviceName +
 		"&digits=" + strconv.Itoa(og.totp.length)
 	return
 }
