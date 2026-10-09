@@ -14,7 +14,8 @@ import (
 	"time"
 )
 
-type OtpGenerator struct {
+// Manager for generating OTPs and TOTPs
+type OtpManager struct {
 	serviceName string // required for totp uri generation
 	otpLimit    *big.Int
 	otpLen      int
@@ -24,8 +25,8 @@ type OtpGenerator struct {
 	}
 }
 
-func NewOtpGenerator(serviceName string, otpLength, totpLen, totpKeyLen int) OtpGenerator {
-	return OtpGenerator{
+func NewOtpGenerator(serviceName string, otpLength, totpLen, totpKeyLen int) OtpManager {
+	return OtpManager{
 		serviceName: serviceName,
 		otpLimit:    big.NewInt(int64(math.Pow(10, float64(otpLength)))),
 		otpLen:      otpLength,
@@ -42,7 +43,8 @@ func padLeftWithZeros(code int, totalLen int) string {
 	return strings.Repeat("0", totalLen-len(s)) + s
 }
 
-func (og OtpGenerator) Generate() string {
+// generates a new random otp code with of length provided in the [OtpManager] instance
+func (og OtpManager) Generate() string {
 	num, _ := rand.Int(rand.Reader, og.otpLimit)
 	return padLeftWithZeros(int(num.Int64()), og.otpLen)
 }
@@ -52,7 +54,7 @@ var ErrInvalidSecretKey = errors.New("cryptoutil: invalid secret key")
 // Generates a 6 digit time based otp with the given secret key
 //
 // possible errors are only [ErrInvalidSecretKey] which occurs if the key cannot be decoded
-func (og OtpGenerator) GenerateTOTP(secret string) (string, error) {
+func (og OtpManager) GenerateTOTP(secret string) (string, error) {
 	secret = strings.ToUpper(strings.TrimSpace(secret))
 	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
 	if err != nil {
@@ -81,7 +83,8 @@ func (og OtpGenerator) GenerateTOTP(secret string) (string, error) {
 	return padLeftWithZeros(int(code), og.totp.length), nil
 }
 
-func (og OtpGenerator) SetupTOTP(userIdentifier string) (secretKey string, uri string) {
+// returns a totp uri with the user identifier in the uri and newly generated secret key
+func (og OtpManager) SetupTOTP(userIdentifier string) (secretKey string, uri string) {
 	keyBytes := make([]byte, og.totp.secretKeySize)
 	rand.Read(keyBytes)
 	secretKey = strings.ToUpper(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(keyBytes))
