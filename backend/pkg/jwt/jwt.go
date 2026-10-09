@@ -24,7 +24,7 @@ type Manager struct {
 	SecretKey string
 }
 
-// returns a new jwt manager using the secret key provided, 
+// returns a new jwt manager using the secret key provided,
 // by default only generates hmac sha256 tokens without a header
 func NewJWTManager(secretKey string) Manager {
 	return Manager{secretKey}
