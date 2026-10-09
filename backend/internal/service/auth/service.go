@@ -30,11 +30,11 @@ const (
 )
 
 type Service struct {
-	config config.AuthConfig
+	config config.Auth
 	cache  serviceCaches
 	repo   repositories
-	otp    cryptoutil.OtpGenerator
-	jwt    jwt.JWTManager
+	otp    cryptoutil.OtpManager
+	jwt    jwt.Manager
 	// TODO: add a proper logger
 	// log   *log.Logger
 
@@ -66,26 +66,27 @@ func NewRepositories(user repository.UserRepository, session repository.UserSess
 
 // Instantiates a new service instance with default rules and caches, and repositories provided in the parameters.
 func NewService(
-	serviceName string,
-	cfg *config.AuthConfig,
+	config *config.Auth,
 	repos repositories,
+	otp cryptoutil.OtpManager,
+	jwt jwt.Manager,
 	emailClient email.Sender,
 ) *Service {
 	if repos.user == nil || repos.session == nil || repos.profile == nil || emailClient == nil {
-		panic("Service: nil parameter found in instantiation function")
+		panic("Service: nil parameter found in instantiation function") // we need to panic early because these variables aren't used now but later when a request arrives.
 	}
-	config := *cfg // dereferencing pointer to store as whole in struct
+	cfg := *config // dereferencing pointer to store as whole in struct to avoid pointer chasing 2 times in methods
 	return &Service{
-		config: config,
+		config: cfg,
 		cache: serviceCaches{
-			otp:           cache.NewTTLCache[string, *otpSession](config.TTLCacheCleanIntervalOTP),
-			resetPassword: cache.NewTTLCache[string, resetPasswordSession](config.TTLCacheCleanIntervalReset),
-			totp:          cache.NewTTLCache[string, *totpSession](config.TTLCacheCleanIntervalTOTP),
-			jwtBlocklist:  cache.NewTTLCache[uuid.UUID, struct{}](config.TTLCacheCleanIntervalJWTBlockList),
+			otp:           cache.NewTTLCache[string, *otpSession](cfg.TTLCacheCleanIntervalOTP),
+			resetPassword: cache.NewTTLCache[string, resetPasswordSession](cfg.TTLCacheCleanIntervalReset),
+			totp:          cache.NewTTLCache[string, *totpSession](cfg.TTLCacheCleanIntervalTOTP),
+			jwtBlocklist:  cache.NewTTLCache[uuid.UUID, struct{}](cfg.TTLCacheCleanIntervalJWTBlockList),
 		},
 		repo:  repos,
-		otp:   cryptoutil.NewOtpGenerator(serviceName, config.LenOTP, config.LenTOTP, cfg.SizeTOTPKey),
-		jwt:   jwt.NewJWTManager(config.JwtSecret),
+		otp:   otp,
+		jwt:   jwt,
 		email: emailClient,
 	}
 }
