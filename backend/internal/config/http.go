@@ -6,7 +6,7 @@ import (
 
 // contains http *Requests* and client config, not webserver or rest api
 
-type HttpConfig struct {
+type httpConfig struct {
 	DialerTimeout         time.Duration `env:"HTTP_DIALER_TIMEOUT"`
 	DialerKeepAlive       time.Duration `env:"HTTP_DIALER_KEEP_ALIVE"`
 	TLSHandshakeTimeout   time.Duration `env:"HTTP_TLS_HANDSHAKE_TIMEOUT"`
@@ -20,7 +20,7 @@ type HttpConfig struct {
 	Timeout               time.Duration `env:"HTTP_TIMEOUT"`
 }
 
-var DefaultHttpConfig = HttpConfig{
+var DefaultHttpConfig = httpConfig{
 	DialerTimeout:         5 * time.Second,  // Time to establish a TCP connection
 	DialerKeepAlive:       30 * time.Second, // Keep TCP connection alive
 	TLSHandshakeTimeout:   5 * time.Second,  // Max time waiting for TLS handshake

@@ -9,19 +9,19 @@ import "time"
 //
 //
 // LLM generated overview below:
-
+//
 // This Go code defines an `AuthConfig` struct with various fields related to
 // authentication settings, such as expiry times, cache clean intervals, OTP lengths,
 // byte sizes, and session ID prefixes. The struct is designed to be populated with
 // values from environment variables, as indicated by the `env` struct tags.
-
+//
 // The `NewAuthConfig` function returns a new instance of the `AuthConfig` struct.
 // This struct can be used to configure authentication settings for an application,
 // such as the duration for which an OTP (One-Time Password) is valid, the interval
 // at which the cache is cleaned, and the length of the OTP.
-
+//
 // Here is a brief explanation of some of the fields in the `AuthConfig` struct:
-
+//
 // - `ExpiryTimeOTP`: The duration for which an OTP is valid.
 // - `ExpiryTimeAccessToken`: The duration for which an access token is valid.
 // - `ExpiryTimeRefreshToken`: The duration for which a refresh token is valid.
@@ -40,10 +40,15 @@ import "time"
 // - `PrefixTOTPSession`: The prefix for the TOTP session ID.
 // - `PrefixResetSession`: The prefix for the password reset session ID.
 
-// The `NewAuthConfig` function can be used to create a new instance of the `AuthConfig` struct, which can then be populated with values from environment variables using a library such as `github.com/kelseyhightower/envconfig`.`
 
-// Auth Service configuration values
-type AuthConfig struct {
+type authConfig struct {
+	JWT  JWTConfig
+	OTP  OTPConfig
+	Auth Auth
+}
+
+// config values for auth service
+type Auth struct {
 	// age limits
 	AgeMin int `env:"AUTH_AGE_MIN" validate:"min=1"`
 	AgeMax int `env:"AUTH_AGE_MAX" validate:"min=120"`
@@ -64,51 +69,60 @@ type AuthConfig struct {
 	TTLCacheCleanIntervalReset        time.Duration `env:"AUTH_TTLCACHE_CLEAN_INTERVAL_RESET"`
 	TTLCacheCleanIntervalJWTBlockList time.Duration `env:"AUTH_TTLCACHE_CLEAN_INTERVAL_JWT_BLOCKLIST"`
 
-	// otp lengths
-	LenOTP  int `env:"AUTH_LEN_OTP" validate:"min=1"`
-	LenTOTP int `env:"AUTH_LEN_TOTP" validate:"min=1"`
-
 	// byte sizes
 	SizeSessionID    int `env:"AUTH_SIZE_SESSION_ID" validate:"min=1"`
 	SizeRefreshToken int `env:"AUTH_SIZE_REFRESH_TOKEN" validate:"min=1"`
-	SizeTOTPKey      int `env:"AUTH_SIZE_TOTP_KEY" validate:"min=1"`
 
 	// session id prefixes
 	PrefixRefreshToken string `env:"AUTH_PREFIX_REFRESH_TOKEN"`
 	PrefixOTPSession   string `env:"AUTH_PREFIX_OTP_SESSION"`
 	PrefixTOTPSession  string `env:"AUTH_PREFIX_TOTP_SESSION"`
 	PrefixResetSession string `env:"AUTH_PREFIX_RESET_SESSION"`
+}
 
+// jwt config
+type JWTConfig struct {
 	JwtSecret string `env:"AUTH_JWT_SECRET,required"`
 }
 
-// the default configuration values for AuthConfig
-var DefaultAuthConfig = AuthConfig{
-	AgeMin: 13,
-	AgeMax: 120,
+// otp config
+type OTPConfig struct {
+	LenOTP      int `env:"AUTH_LEN_OTP" validate:"min=1"`
+	LenTOTP     int `env:"AUTH_LEN_TOTP" validate:"min=1"`
+	SizeTOTPKey int `env:"AUTH_SIZE_TOTP_KEY" validate:"min=1"`
+}
 
-	AttemptsOTP:        5,
-	AttemptsTOTPVerify: 5,
+// the default configuration values for [authConfig]
+var DefaultAuthConfig = authConfig{
+	OTP: OTPConfig{
+		SizeTOTPKey: 20,
+		LenOTP:      6,
+		LenTOTP:     6,
+	},
+	Auth: Auth{
 
-	ExpiryTimeOTP:           10 * time.Minute,
-	ExpiryTimeAccessToken:   30 * time.Minute,
-	ExpiryTimeRefreshToken:  7 * 24 * time.Hour,
-	ExpiryTimeResetPassword: 30 * time.Minute,
+		AgeMin: 13,
+		AgeMax: 120,
 
-	TTLCacheCleanIntervalOTP:          10 * time.Minute,
-	TTLCacheCleanIntervalTOTP:         10 * time.Minute,
-	TTLCacheCleanIntervalReset:        10 * time.Minute,
-	TTLCacheCleanIntervalJWTBlockList: 15 * time.Minute,
+		AttemptsOTP:        5,
+		AttemptsTOTPVerify: 5,
 
-	LenOTP:  6,
-	LenTOTP: 6,
+		ExpiryTimeOTP:           10 * time.Minute,
+		ExpiryTimeAccessToken:   30 * time.Minute,
+		ExpiryTimeRefreshToken:  7 * 24 * time.Hour,
+		ExpiryTimeResetPassword: 30 * time.Minute,
 
-	SizeSessionID:    24,
-	SizeRefreshToken: 32,
-	SizeTOTPKey:      20,
+		TTLCacheCleanIntervalOTP:          10 * time.Minute,
+		TTLCacheCleanIntervalTOTP:         10 * time.Minute,
+		TTLCacheCleanIntervalReset:        10 * time.Minute,
+		TTLCacheCleanIntervalJWTBlockList: 15 * time.Minute,
 
-	PrefixRefreshToken: "ref_",
-	PrefixOTPSession:   "otp_",
-	PrefixTOTPSession:  "totp_",
-	PrefixResetSession: "pwd_",
+		SizeSessionID:    24,
+		SizeRefreshToken: 32,
+
+		PrefixRefreshToken: "ref_",
+		PrefixOTPSession:   "otp_",
+		PrefixTOTPSession:  "totp_",
+		PrefixResetSession: "pwd_",
+	},
 }

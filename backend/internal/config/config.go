@@ -13,24 +13,25 @@ const _APP_VERSION = "0.5.0"
 
 type Config struct {
 	App      app
-	Services Services
-	Infra    Infrastructure
+	Services services
+	Infra    infrastructure
 	Log      log
-}
-
-type Services struct {
-	Auth AuthConfig
-	Http HttpConfig // http requests client
-}
-type Infrastructure struct {
-	RestAPI  restApi
-	Postgres postgres
-	Email    email
 }
 
 type app struct {
 	Name    string `env:"APP_NAME,required"`
 	Version string // to be set by the program, as version changes by each compile not by deployment
+}
+
+type services struct {
+	Auth authConfig
+	Http httpConfig // http requests client
+}
+
+type infrastructure struct {
+	RestAPI  restApi
+	Postgres postgres
+	Email    email
 }
 
 type restApi struct {
