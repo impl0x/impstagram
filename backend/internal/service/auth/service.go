@@ -30,7 +30,7 @@ const (
 )
 
 type Service struct {
-	config config.Auth
+	config config.AuthService
 	cache  serviceCaches
 	repo   repositories
 	otp    cryptoutil.OtpManager
@@ -66,7 +66,7 @@ func NewRepositories(user repository.UserRepository, session repository.UserSess
 
 // Instantiates a new service instance with default rules and caches, and repositories provided in the parameters.
 func NewService(
-	config *config.Auth,
+	config *config.AuthService,
 	repos repositories,
 	otp cryptoutil.OtpManager,
 	jwt jwt.Manager,
