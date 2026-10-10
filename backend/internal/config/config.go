@@ -4,7 +4,6 @@ import (
 	"backend/pkg/env"
 	"backend/pkg/structutils"
 	"fmt"
-	"time"
 
 	"github.com/impl0x/mo/validator/v3"
 )
@@ -12,48 +11,38 @@ import (
 const _APP_VERSION = "0.5.0"
 
 type Config struct {
-	App      app
-	Services services
-	Infra    infrastructure
-	Log      log
+	App      App
+	Infra    Infrastructure
+	Log      Log
+	Services Services
 }
 
-type app struct {
+type App struct {
 	Name    string `env:"APP_NAME,required"`
 	Version string // to be set by the program, as version changes by each compile not by deployment
 }
 
-type services struct {
-	Auth AuthConfig
-	Http HttpConfig // http requests client
+type Log struct {
+	Level string `env:"LOG_LEVEL"`
 }
 
-type infrastructure struct {
-	RestAPI  restApi
-	Postgres postgres
-	Email    email
+var DefaultLog = Log{
+	Level: "ERROR",
 }
 
-type restApi struct {
-	Port              string        `env:"REST_API_PORT,required"`
-	ReadTimeout       time.Duration `env:"REST_API_READ_TIMEOUT,default=5s"`
-	ReadHeaderTimeout time.Duration `env:"REST_API_READ_HEADER_TIMEOUT,default=2s"`
-	WriteTimeout      time.Duration `env:"REST_API_WRITE_TIMEOUT,default=10s"`
-	IdleTimeout       time.Duration `env:"REST_API_IDLE_TIMEOUT,default=120s"`
+type Services struct {
+	Auth AuthService
 }
 
-type postgres struct {
-	PoolMax int    `env:"PG_POOL_MAX" validate:"gte=0"`
-	URL     string `env:"PG_URL,required" validate:"url"`
-}
-
-type email struct {
-	ResendApiKey string `env:"EMAIL_RESEND_API_KEY,required" validate:"startswith=re_"`
-	EmailID      string `env:"EMAIL_ID,required" validate:"email"`
-}
-
-type log struct {
-	Level string `env:"LOG_LEVEL,required,default=ERROR"`
+// wrapper over [structutils.CopyFields] to panic if an error is returned
+//
+// we panic because the only time this method can return an error is we pass
+// the wrong arguments to it, so it is fine to panic here
+func copyFields(a, b any) {
+	err := structutils.CopyFields(a, b)
+	if err != nil {
+		panic(fmt.Errorf("util.CopyFields: unexpected error returned, %w", err))
+	}
 }
 
 // Loads configs.
@@ -67,20 +56,20 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("config: validation fail for config, %w", err)
 	}
 
-	// app
+	// -+-+- app -+-+-
 	cfg.App.Version = _APP_VERSION
 
-	// services
-	// auth
-	err = structutils.CopyFields(&cfg.Services.Auth, &DefaultAuthConfig)
-	if err != nil {
-		panic(fmt.Errorf("util.CopyFields: unexpected error returned, %w", err))
-	}
+	// -+-+- Infra -+-+-
 	// http
-	err = structutils.CopyFields(&cfg.Services.Http, &DefaultHttpConfig)
-	if err != nil {
-		panic(fmt.Errorf("util.CopyFields: unexpected error returned, %w", err))
-	}
+	copyFields(&cfg.Infra.HTTP, &DefaultHTTP)
+	// restAPI
+	copyFields(&cfg.Infra.RestAPI, &DefaultRestAPI)
+	// postgres
+	copyFields(&cfg.Infra.Postgres, &DefaultPostgres)
+	
+	// -+-+- Services -+-+-
+	// auth
+	copyFields(&cfg.Services.Auth, &DefaultAuth)
 
 	return &cfg, nil
 }
