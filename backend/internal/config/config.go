@@ -24,8 +24,8 @@ type app struct {
 }
 
 type services struct {
-	Auth authConfig
-	Http httpConfig // http requests client
+	Auth AuthConfig
+	Http HttpConfig // http requests client
 }
 
 type infrastructure struct {
@@ -62,11 +62,11 @@ func Load() (*Config, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("config parsing error: %w", err)
 	}
-	err:=validator.Validate(&cfg)
-	if err!=nil{
+	err := validator.Validate(&cfg)
+	if err != nil {
 		return nil, fmt.Errorf("config: validation fail for config, %w", err)
 	}
-	
+
 	// app
 	cfg.App.Version = _APP_VERSION
 

@@ -41,7 +41,7 @@ import "time"
 // - `PrefixResetSession`: The prefix for the password reset session ID.
 
 
-type authConfig struct {
+type AuthConfig struct {
 	JWT  JWTConfig
 	OTP  OTPConfig
 	Auth Auth
@@ -93,7 +93,7 @@ type OTPConfig struct {
 }
 
 // the default configuration values for [authConfig]
-var DefaultAuthConfig = authConfig{
+var DefaultAuthConfig = AuthConfig{
 	OTP: OTPConfig{
 		SizeTOTPKey: 20,
 		LenOTP:      6,
