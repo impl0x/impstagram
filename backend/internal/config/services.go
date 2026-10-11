@@ -4,9 +4,31 @@ import "time"
 
 // parent struct for auth config, not to be used directly in service layer, contains pkg config
 type Auth struct {
-	JWT  JWTConfig
-	OTP  OTPConfig
-	Auth AuthService
+	JWT      JWTConfig
+	OTP      OTPConfig
+	Password PasswordConfig
+	Auth     AuthService
+}
+
+// jwt config
+type JWTConfig struct {
+	Secret string `env:"AUTH_JWT_SECRET,required"`
+}
+
+// otp config
+type OTPConfig struct {
+	OTPLen      int `env:"AUTH_OTP_LEN" validate:"min=1"`
+	TOTPLen     int `env:"AUTH_TOTP_LEN" validate:"min=1"`
+	TOTPKeySize int `env:"AUTH_TOTP_KEY_SIZE" validate:"min=1"`
+}
+
+// password hashing configuration
+type PasswordConfig struct {
+	Memory      int `env:"AUTH_PASSWORD_MEMORY"`
+	Iterations  int `env:"AUTH_PASSWORD_ITERATIONS"`
+	Parallelism int `env:"AUTH_PASSWORD_PARALLELISM"`
+	SaltLength  int `env:"AUTH_PASSWORD_SALT_LENGTH"`
+	KeyLength   int `env:"AUTH_PASSWORD_KEY_LENGTH"`
 }
 
 // config values for auth service
@@ -42,24 +64,19 @@ type AuthService struct {
 	PrefixResetSession string `env:"AUTH_PREFIX_RESET_SESSION"`
 }
 
-// jwt config
-type JWTConfig struct {
-	JwtSecret string `env:"AUTH_JWT_SECRET,required"`
-}
-
-// otp config
-type OTPConfig struct {
-	LenOTP      int `env:"AUTH_LEN_OTP" validate:"min=1"`
-	LenTOTP     int `env:"AUTH_LEN_TOTP" validate:"min=1"`
-	SizeTOTPKey int `env:"AUTH_SIZE_TOTP_KEY" validate:"min=1"`
-}
-
-// the default configuration values for [authConfig]
+// the default configuration values for [AuthService]
 var DefaultAuth = Auth{
 	OTP: OTPConfig{
-		SizeTOTPKey: 20,
-		LenOTP:      6,
-		LenTOTP:     6,
+		TOTPKeySize: 20,
+		OTPLen:      6,
+		TOTPLen:     6,
+	},
+	Password: PasswordConfig{
+		Memory:      19 * 1024,
+		Iterations:  1,
+		Parallelism: 2,
+		SaltLength:  16,
+		KeyLength:   32,
 	},
 	Auth: AuthService{
 		AgeMin: 13,
