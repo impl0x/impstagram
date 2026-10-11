@@ -1,28 +1,35 @@
-package password
+package cryptoutil
 
 import (
-	"backend/pkg/password/argon2id"
+	"backend/internal/config"
+	"backend/pkg/cryptoutil/argon2id"
 	"crypto/rand"
 	"crypto/subtle"
 )
 
-// Tuned for ~20-30ms on modern CPUs.
-//
-// Not to change during runtime
-var DefaultArgon2HashSettings = argon2id.Params{
-	Memory:      64 * 1024, // 64 MB
-	Iterations:  1,         // Time
-	Parallelism: 4,         // Threads
-	SaltLength:  16,
-	KeyLength:   32,
+type PasswordManager struct {
+	params argon2id.Params
+}
+
+func NewPasswordManager(cp config.PasswordConfig) PasswordManager {
+	return PasswordManager{
+		params: argon2id.Params{
+			Memory:      uint32(cp.Memory),
+			Iterations:  uint32(cp.Iterations),
+			Parallelism: uint8(cp.Parallelism),
+			SaltLength:  uint32(cp.SaltLength),
+			KeyLength:   uint32(cp.KeyLength),
+		},
+	}
 }
 
 // Hash generates a random salt and returns the hashed password and the salt.
 //
 // errors returned are only read errors
-func Hash(password string) string {
-	salt := generateRandomBytes(DefaultArgon2HashSettings.SaltLength)
-	hash := argon2id.CreateHash(password, salt, DefaultArgon2HashSettings)
+func (pm PasswordManager) Hash(password string) string {
+	salt := make([]byte, pm.params.SaltLength)
+	rand.Read(salt)
+	hash := argon2id.CreateHash(password, salt, pm.params)
 	return hash
 }
 
@@ -30,18 +37,11 @@ func Hash(password string) string {
 //
 // note that the error returned here can be anything from rand read errors to argon2id format errors
 // it mostly will not trigger if the data isn't invalid
-func Compare(reqPassword string, dbPasswordHash string) (bool, error) {
+func (_ PasswordManager) Compare(reqPassword string, dbPasswordHash string) (bool, error) {
 	params, salt, rawDbPasswordHash, err := argon2id.DecodeHash(dbPasswordHash)
 	if err != nil {
 		return false, err
 	}
 	rawReqPasswordHash := argon2id.CreateRawHash(reqPassword, salt, params)
-
 	return subtle.ConstantTimeCompare(rawReqPasswordHash, rawDbPasswordHash) == 0, nil
-}
-
-func generateRandomBytes(n uint32) []byte {
-	b := make([]byte, n)
-	rand.Read(b)
-	return b
 }
