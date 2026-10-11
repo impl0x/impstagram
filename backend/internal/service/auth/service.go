@@ -4,10 +4,9 @@ import (
 	"backend/internal/config"
 	"backend/internal/entity"     // entity data objects
 	"backend/internal/repository" // repository
-	"backend/pkg/cryptoutil"      // generate cryptographically random IDs and OTPs
+	"backend/pkg/cryptoutil"      // generate cryptographically random IDs and OTPs and hash passwords
 	"backend/pkg/email"           // send emails
 	"backend/pkg/jwt"             // generate and verify jwt tokens
-	"backend/pkg/password"        // hash and compare passwords
 	"context"
 	"fmt"
 	"slices"
@@ -30,11 +29,12 @@ const (
 )
 
 type Service struct {
-	config config.AuthService
-	cache  serviceCaches
-	repo   repositories
-	otp    cryptoutil.OtpManager
-	jwt    jwt.Manager
+	config   config.AuthService
+	cache    serviceCaches
+	repo     repositories
+	jwt      jwt.Manager
+	otp      cryptoutil.OtpManager
+	password cryptoutil.PasswordManager
 	// TODO: add a proper logger
 	// log   *log.Logger
 
@@ -68,8 +68,9 @@ func NewRepositories(user repository.UserRepository, session repository.UserSess
 func NewService(
 	config *config.AuthService,
 	repos repositories,
-	otp cryptoutil.OtpManager,
 	jwt jwt.Manager,
+	otp cryptoutil.OtpManager,
+	password cryptoutil.PasswordManager,
 	emailClient email.Sender,
 ) *Service {
 	if repos.user == nil || repos.session == nil || repos.profile == nil || emailClient == nil {
@@ -84,10 +85,11 @@ func NewService(
 			totp:          cache.NewTTLCache[string, *totpSession](cfg.TTLCacheCleanIntervalTOTP),
 			jwtBlocklist:  cache.NewTTLCache[uuid.UUID, struct{}](cfg.TTLCacheCleanIntervalJWTBlockList),
 		},
-		repo:  repos,
-		otp:   otp,
-		jwt:   jwt,
-		email: emailClient,
+		repo:     repos,
+		jwt:      jwt,
+		otp:      otp,
+		password: password,
+		email:    emailClient,
 	}
 }
 
@@ -243,7 +245,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 	}
 	// creating user entity object (as of now by default status for user is 'unverified', so we do not need to set it ourselves)
 	user = &entity.User{
-		PasswordHash: password.Hash(req.Password), // hash password
+		PasswordHash: s.password.Hash(req.Password), // hash password
 		Dob:          req.Dob.String(),
 	}
 	// set user identifier value according to channel received
@@ -327,7 +329,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientM
 	}
 
 	// if user is found in database we compare the passwords and the password hash in the database to see if the user has the correct password
-	ok, err := password.Compare(req.Password, user.PasswordHash)
+	ok, err := s.password.Compare(req.Password, user.PasswordHash)
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -690,7 +692,7 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest) e
 	}
 
 	// else we proceed and update the user's password, we of course hash it.
-	err := s.repo.user.UpdatePasswordHash(ctx, session.userID, password.Hash(req.NewPassword))
+	err := s.repo.user.UpdatePasswordHash(ctx, session.userID, s.password.Hash(req.NewPassword))
 	if err != nil {
 		if err == repository.ErrNoResults {
 			return errCommonUserNotFound
