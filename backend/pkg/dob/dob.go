@@ -29,6 +29,8 @@ var (
 	ErrImpossible      = errors.New("dob: dob is impossible")
 )
 
+var possibleMaxMonthDays = [12]int{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+
 // format: year-month-day, YYYY-MM-DD. Strict.
 //
 // example: 2000-12-30, 2005-01-03
@@ -56,7 +58,12 @@ func Parse(s string) (Dob, error) {
 		return Dob{}, ErrImpossible
 	}
 	d, err := strconv.Atoi(s[8:])
-	if d > 31 || d <= 0 {
+	// if days more than max possible day of a month
+	if d > possibleMaxMonthDays[m-1] || d <= 0 {
+		return Dob{}, ErrImpossible
+	}
+	// if feb and non leap and day==29
+	if m == 2 && y%4 != 0 && d == 29 {
 		return Dob{}, ErrImpossible
 	}
 	return Dob{y, m, d}, nil
