@@ -190,14 +190,14 @@ func newUserSession(userID, jwtID uuid.UUID, refreshToken string, md entity.Clie
 	if md.IPAddress != "" {
 		session.IPAddress = &md.IPAddress
 	}
-	if md.UserAgent.OSName != "" {
-		session.OSName = &md.UserAgent.OSName
+	if md.OSName != "" {
+		session.OSName = &md.OSName
 	}
-	if md.UserAgent.BrowserName != "" {
-		session.BrowserName = &md.UserAgent.BrowserName
+	if md.BrowserName != "" {
+		session.BrowserName = &md.BrowserName
 	}
-	if md.UserAgent.DeviceType != "" {
-		session.DeviceType = &md.UserAgent.DeviceType
+	if md.DeviceType != "" {
+		session.DeviceType = &md.DeviceType
 	}
 	return session
 }
