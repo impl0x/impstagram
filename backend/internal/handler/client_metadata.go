@@ -2,8 +2,10 @@ package handler
 
 import (
 	"backend/internal/entity"
-	"backend/pkg/useragent"
+
 	"net/http"
+
+	"github.com/mileusna/useragent"
 )
 
 // Function to return the IP address of the client
@@ -15,10 +17,10 @@ func GetIpFromRequest(r *http.Request) string {
 func GetClientMetadata(r *http.Request) entity.ClientMetadata {
 	ua := useragent.Parse(r.UserAgent())
 	return entity.ClientMetadata{
-		IPAddress: GetIpFromRequest(r),
-		OSName: ua.OSName,
-		BrowserName: ua.BrowserName,
-		DeviceType: ua.DeviceType,
-		IsBot: ua.IsBot,
+		IPAddress:   GetIpFromRequest(r),
+		OSName:      ua.OS,
+		BrowserName: ua.Name,
+		DeviceType:  ua.Device,
+		IsBot:       ua.Bot,
 	}
 }
