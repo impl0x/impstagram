@@ -2,12 +2,11 @@ package auth
 
 import (
 	"backend/internal/entity"
+	"backend/internal/handler"
 	"backend/internal/service/auth"
-	"backend/internal/util"
 	"backend/pkg/apperr"
 	"backend/pkg/dob"
 	"backend/pkg/response"
-	"backend/pkg/useragent"
 	"net/http"
 
 	"github.com/impl0x/mo"
@@ -163,10 +162,7 @@ func (h Handler) Login(c *mo.Context) error {
 	result, err := h.Service.Login(
 		c.Request().Context(),
 		req.service(ch, v),
-		entity.ClientMetadata{
-			IPAddress: util.GetIpFromRequest(c.Request()), // assumes the function has the correct implementation of ip retrieval depending upon environment and reverse proxy configurations
-			UserAgent: useragent.Parse(c.Request().UserAgent()),
-		},
+		handler.GetClientMetadata(c.Request()),
 	)
 	if err != nil {
 		return err
@@ -247,10 +243,7 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 	result, err := h.Service.VerifyOTP(
 		c.Request().Context(),
 		req.service(),
-		entity.ClientMetadata{
-			IPAddress: util.GetIpFromRequest(c.Request()), // assumes the function has the correct implementation of ip retrieval depending upon environment and reverse proxy configurations
-			UserAgent: useragent.Parse(c.Request().UserAgent()),
-		},
+		handler.GetClientMetadata(c.Request()),
 	)
 	if err != nil {
 		if result.RemainingAttempts != 0 { // it means this field was populated so we need to add that field in the error struct.
