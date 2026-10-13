@@ -92,6 +92,7 @@ func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*e
 }
 
 // ? -----+-----+----- Update -----+-----+-----
+
 func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val any) error {
 	sql, args, err := pg.Builder.
 		Update(database.TableUserSessions).
@@ -109,10 +110,6 @@ func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val
 		return handlePgxError(pgx.ErrNoRows)
 	}
 	return nil
-}
-
-func (pg UserSessions) UpdateStatus(ctx context.Context, id uuid.UUID, status entity.AccountStatus) error {
-	return pg.update(ctx, id, "status", status)
 }
 
 func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUID, tokenHash string, expiry time.Time) error {
@@ -137,7 +134,7 @@ func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUI
 
 // ? -----+-----+----- Delete -----+-----+-----
 
-func (pg UserSessions) Delete(ctx context.Context, col string, val any) error {
+func (pg UserSessions) delete(ctx context.Context, col string, val any) error {
 	sql, args, err := pg.Builder.
 		Delete(database.TableUserSessions).
 		Where(squirrel.Eq{col: val}).
@@ -153,4 +150,12 @@ func (pg UserSessions) Delete(ctx context.Context, col string, val any) error {
 		return handlePgxError(pgx.ErrNoRows)
 	}
 	return nil
+}
+
+func (pg UserSessions) DeleteByID(ctx context.Context, id uuid.UUID) error {
+	return pg.delete(ctx, "id", id)
+}
+
+func (pg UserSessions) DeleteByJwtID(ctx context.Context, jwtID uuid.UUID) error {
+	return pg.delete(ctx, "jwt_id", jwtID)
 }
