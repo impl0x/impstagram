@@ -589,7 +589,7 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest, md entity
 	// Switch on the purpose to do purpose related tasks
 	switch session.purpose {
 	case purposeRegistration: // if registration we need to set user status to verified in the database
-		err = s.repo.session.UpdateStatus(ctx, user.ID, entity.StatusVerified)
+		err = s.repo.user.UpdateStatus(ctx, user.ID, entity.StatusVerified)
 		if err != nil { // no need to handle for errRepoNoResults because we did that above
 			return VerifyResult{}, err
 		}
@@ -724,7 +724,7 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResul
 	// Check if the session has expired
 	if userSesh.ExpiresAt.Before(time.Now()) {
 		// Deleting the user session if it is expired, the user will have to create a new session again by logging in.
-		err = s.repo.session.Delete(ctx, "id", userSesh.ID)
+		err = s.repo.session.DeleteByID(ctx, userSesh.ID)
 		if err != nil {
 			return RefreshResult{}, err // db error
 		}
@@ -773,7 +773,7 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResul
 // deletes the current user session
 func (s *Service) Logout(ctx context.Context, token AccessToken) error {
 	// Remove user session from database
-	err := s.repo.session.Delete(ctx, "jwt_id", token.JwtID)
+	err := s.repo.session.DeleteByJwtID(ctx, token.JwtID)
 	if err != nil && err != repository.ErrNoResults { // ignore no results
 		return err // db error
 	}
