@@ -18,8 +18,10 @@ type Config struct {
 }
 
 type App struct {
-	Name    string `env:"APP_NAME,required"`
-	Version string // to be set by the program, as version changes by each compile not by deployment
+	Name         string `env:"APP_NAME,required"`
+	Version      string // to be set by the program, as version changes by each compile not by deployment
+	LogoUrl      string `env:"APP_LOGO_URL,required"`
+	HomePageLink string `env:"APP_HOME_PAGE_LINK,required"`
 }
 
 type Log struct {
@@ -66,7 +68,7 @@ func Load() (*Config, error) {
 	copyFields(&cfg.Infra.RestAPI, &DefaultRestAPI)
 	// postgres
 	copyFields(&cfg.Infra.Postgres, &DefaultPostgres)
-	
+
 	// -+-+- Services -+-+-
 	// auth
 	copyFields(&cfg.Services.Auth, &DefaultAuth)
