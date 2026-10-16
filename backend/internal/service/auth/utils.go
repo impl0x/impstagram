@@ -5,12 +5,14 @@ import (
 	"backend/pkg/jwt"
 	"errors"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 	"uuid"
 )
 
 // ? ----+-----+----- TOKEN & JWT -----+-----+-----
-// Contains token related stuff and jwt conversion helpers
+// Contains access token related stuff and utility to convert to jwt acceptable format
 
 // data in an access token
 type AccessToken struct {
@@ -79,7 +81,7 @@ func (s *Service) IsAuthorized(token string) (AccessToken, error) {
 	if err != nil {
 		return AccessToken{}, errAuthTokenInvalidPayload
 	}
-	
+
 	// Checking if the token has expired
 	if accessToken.ExpiresAt.Before(time.Now()) {
 		return AccessToken{}, errMiddlewareAuthTokenExpired
@@ -111,4 +113,38 @@ func channelIsValidForLogin(channel entity.AuthChannel) bool {
 
 func channelIsValidForOTP(channel entity.AuthChannel) bool {
 	return channelIsValidForRegister(channel)
+}
+
+// converts [time.Duration] to a string format, only supports hours and minutes
+// and outputs in "1 hour 20 minutes" / "20 minutes" / "1 minute" / "2 hours"
+//
+// panics if duration is less than a minute or more than a day
+func timeDurationToString(d time.Duration) string {
+	if d < time.Minute {
+		panic("duration cannot be less than a minute")
+	} else if d > time.Hour*24 {
+		panic("duration cannot be more than a day")
+	}
+	var buf strings.Builder
+	buf.Grow(64) // why not.
+	h := d / time.Hour
+	if h != 0 {
+		buf.WriteString(strconv.Itoa(int(h)))
+		buf.WriteString(" hour")
+		if h != 1 {
+			buf.WriteRune('s')
+		}
+	}
+	if d%time.Hour != 0 {
+		if h != 0 {
+			buf.WriteRune(' ') // if there was hour
+		}
+		m := (d - h*time.Hour) / time.Minute
+		buf.WriteString(strconv.Itoa(int(m)))
+		buf.WriteString(" minute")
+		if m != 1 {
+			buf.WriteRune('s')
+		}
+	}
+	return buf.String()
 }
