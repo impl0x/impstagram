@@ -38,7 +38,7 @@ type Service struct {
 	// TODO: add a proper logger
 	// log   *log.Logger
 
-	email email.Sender
+	email email.Manager
 }
 
 type serviceCaches struct {
@@ -71,9 +71,9 @@ func NewService(
 	jwt jwt.Manager,
 	otp cryptoutil.OtpManager,
 	password cryptoutil.PasswordManager,
-	emailClient email.Sender,
+	email email.Manager,
 ) *Service {
-	if repos.user == nil || repos.session == nil || repos.profile == nil || emailClient == nil {
+	if repos.user == nil || repos.session == nil || repos.profile == nil {
 		panic("Service: nil parameter found in instantiation function") // we need to panic early because these variables aren't used now but later when a request arrives.
 	}
 	cfg := *config // dereferencing pointer to store as whole in struct to avoid pointer chasing 2 times in methods
@@ -89,7 +89,7 @@ func NewService(
 		jwt:      jwt,
 		otp:      otp,
 		password: password,
-		email:    emailClient,
+		email:    email,
 	}
 }
 
@@ -153,16 +153,21 @@ func (s *Service) sendOTP(channel entity.AuthChannel, purpose authPurpose, targe
 	// Send otp based on the identifier
 	switch channel {
 	case entity.ChannelEmail:
-		var emailSendRequest email.SendRequest
+		var sub email.Subject
+		var html email.HTML
+		r := s.email.Renderer.Otp(otp, timeDurationToString(s.config.ExpiryTimeOTP)) // renderer
 		switch purpose {
 		case purpose2FA:
-			emailSendRequest = email.NewSendRequest(target, email.SubjectTwoFa, email.Html2FAOTP.Format(otp))
+			sub = email.Sub2FA
+			html = r.TwoFA()
 		case purposeRegistration:
-			emailSendRequest = email.NewSendRequest(target, email.SubjectVerifyEmail, email.HtmlRegistrationVerificationOTP.Format(otp))
+			sub = email.SubVerifyEmail
+			html = r.Registration()
 		case purposeResetPass:
-			emailSendRequest = email.NewSendRequest(target, email.SubjectResetPassword, email.HtmlResetPasswordOTP.Format(otp))
+			sub = email.SubResetPassword
+			html = r.ResetPass()
 		}
-		err = s.email.Send(emailSendRequest)
+		err = s.email.SendSingle(s.email.Renderer.Subject(sub), target, html)
 	case entity.ChannelPhone:
 		// IMPORTANT
 		// we can never send otp to phone numbers as its not possible as of now to afford sms service or telegram's gateway service.
