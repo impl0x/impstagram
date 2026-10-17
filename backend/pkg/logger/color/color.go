@@ -27,28 +27,27 @@ var Red = [10]RGB{
 }
 
 var Green = [10]RGB{
-	NewHSL(0, 120, 100).ToRGB(),
-	NewHSL(0, 120, 90).ToRGB(),
-	NewHSL(0, 120, 80).ToRGB(),
-	NewHSL(0, 120, 70).ToRGB(),
-	NewHSL(0, 120, 60).ToRGB(),
-	NewHSL(0, 120, 50).ToRGB(),
-	NewHSL(0, 120, 40).ToRGB(),
-	NewHSL(0, 120, 30).ToRGB(),
-	NewHSL(0, 120, 20).ToRGB(),
-	NewHSL(0, 120, 10).ToRGB(),
+	NewHSL(120, 0, 100).ToRGB(),
+	NewHSL(120, 0, 90).ToRGB(),
+	NewHSL(120, 0, 80).ToRGB(),
+	NewHSL(120, 0, 70).ToRGB(),
+	NewHSL(120, 0, 60).ToRGB(),
+	NewHSL(120, 0, 50).ToRGB(),
+	NewHSL(120, 0, 40).ToRGB(),
+	NewHSL(120, 0, 30).ToRGB(),
+	NewHSL(120, 0, 20).ToRGB(),
+	NewHSL(120, 0, 10).ToRGB(),
 }
 
 var Blue = [10]RGB{
-	NewHSL(0, 240, 100).ToRGB(),
-	NewHSL(0, 240, 90).ToRGB(),
-	NewHSL(0, 240, 80).ToRGB(),
-	NewHSL(0, 240, 70).ToRGB(),
-	NewHSL(0, 240, 60).ToRGB(),
-	NewHSL(0, 240, 50).ToRGB(),
-	NewHSL(0, 240, 40).ToRGB(),
-	NewHSL(0, 240, 30).ToRGB(),
-	NewHSL(0, 240, 20).ToRGB(),
-	NewHSL(0, 240, 10).ToRGB(),
+	NewHSL(240, 0, 100).ToRGB(),
+	NewHSL(240, 0, 90).ToRGB(),
+	NewHSL(240, 0, 80).ToRGB(),
+	NewHSL(240, 0, 70).ToRGB(),
+	NewHSL(240, 0, 60).ToRGB(),
+	NewHSL(240, 0, 50).ToRGB(),
+	NewHSL(240, 0, 40).ToRGB(),
+	NewHSL(240, 0, 30).ToRGB(),
+	NewHSL(240, 0, 20).ToRGB(),
+	NewHSL(240, 0, 10).ToRGB(),
 }
-
