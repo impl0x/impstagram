@@ -2,33 +2,35 @@ package utils
 
 import "bytes"
 
-func WriteUint16(b *bytes.Buffer, u uint16) {
-	if u == 0 {
-		b.WriteByte('0')
-		return
-	}
-	var buf [5]byte
-	pos := 5
-
-	for u > 0 {
-		pos--
-		buf[pos] = '0' + byte(u%10)
-		u /= 10
-	}
-	b.Write(buf[pos:])
+type Integer interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
 }
 
-func WriteUint8(b *bytes.Buffer, u uint8) {
-	if u == 0 {
+func WriteInteger[T Integer](b *bytes.Buffer, n T) {
+	if n < 0 {
+		b.WriteByte('-')
+		writeUint64(b, uint64(-(n+1))+1)
+		return
+	}
+
+	writeUint64(b, uint64(n))
+}
+
+func writeUint64(b *bytes.Buffer, n uint64) {
+	var buf [20]byte // max length of max uint64
+	pos := len(buf)
+
+	if n == 0 {
 		b.WriteByte('0')
 		return
 	}
-	var buf [3]byte
-	pos := 3
-	for u > 0 {
+
+	for n > 0 {
 		pos--
-		buf[pos] = '0' + (u % 10)
-		u /= 10
+		buf[pos] = byte('0' + n%10)
+		n /= 10
 	}
+
 	b.Write(buf[pos:])
 }
