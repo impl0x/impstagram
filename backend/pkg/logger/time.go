@@ -13,11 +13,6 @@ type timeBuf struct {
 	mu          sync.Mutex
 }
 
-type strWrapper struct {
-	buf  [32]byte
-	_len int
-}
-
 // checks if y,m,d,h,mm,s are equal between t1 and t2
 func tEq(t1, t2 time.Time) bool {
 	y1, m1, d1 := t1.Date()
@@ -34,21 +29,15 @@ func (e *engine) writeTime(b *bytes.Buffer) {
 		b.WriteString(str)
 		return
 	}
-
 	// getting a buffer from the lowest pool size
-	buf := e.pools[0].Get()
-	e.config.Time.parse(now, buf)
-	str := buf.String() // allocates
+	parseTime(now, b, e.config.Time)
+	str := b.String() // allocates
 
 	// setting the lastTime to current
 	e.tb.mu.Lock()
 	e.tb.lastTime.Store(now)
 	e.tb.lastTimeStr.Store(str)
 	e.tb.mu.Unlock()
-
-	// put buffer back after resetting
-	buf.Reset() 
-	e.pools[0].Put(buf)
 }
 
 // writes the parsed time according to config values to the buffer provided,
@@ -58,11 +47,20 @@ func parseTime(t time.Time, b *bytes.Buffer, tc TimeConfig) {
 		y, m, d := t.Date()
 		if !tc.ShowFullYear {
 			y = y % 100
+			if y < 10 && tc.AddZerosForSingleDigitDate {
+				b.WriteRune('0')
+			}
 		}
 		utils.WriteInteger(b, y)
 		b.WriteString(tc.DateSep)
+		if m < 10 && tc.AddZerosForSingleDigitDate {
+			b.WriteRune('0')
+		}
 		utils.WriteInteger(b, m)
 		b.WriteString(tc.DateSep)
+		if d < 10 && tc.AddZerosForSingleDigitDate {
+			b.WriteRune('0')
+		}
 		utils.WriteInteger(b, d)
 		b.WriteString(tc.DateTimeSep)
 	}
@@ -74,10 +72,19 @@ func parseTime(t time.Time, b *bytes.Buffer, tc TimeConfig) {
 			h = h - 12
 			isPm = true
 		}
+		if h < 10 && tc.AddZerosForSingleDigitTime {
+			b.WriteRune('0')
+		}
 		utils.WriteInteger(b, h)
 		b.WriteString(tc.TimeSep)
+		if m < 10 && tc.AddZerosForSingleDigitTime {
+			b.WriteRune('0')
+		}
 		utils.WriteInteger(b, m)
 		b.WriteString(tc.TimeSep)
+		if s < 10 && tc.AddZerosForSingleDigitTime {
+			b.WriteRune('0')
+		}
 		utils.WriteInteger(b, s)
 		if is12hr {
 			if tc.AddSpaceFor12HrFormat {
