@@ -5,6 +5,10 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/impl0x/go-utils v0.8.2 h1:ea1Pv4gYKWMEXXLwNPDpLkxD9ptN125282HjSNAbf8w=
 github.com/impl0x/go-utils v0.8.2/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
+github.com/impl0x/go-utils v0.8.3 h1:lMPJzBLaWFhpNuGaYi1dyzrrqam3IA8BY4TvC6aV4dE=
+github.com/impl0x/go-utils v0.8.3/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
+github.com/impl0x/go-utils v0.8.4 h1:p8lXMXIN9y8vMc2gF9lglNkWx852kDWS2mxNsS8aPTk=
+github.com/impl0x/go-utils v0.8.4/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
 github.com/impl0x/mo v1.6.0 h1:YY6Mn19wBLncmwVeRoolGR+xXl37y7EF5rQRLW3RIQU=
 github.com/impl0x/mo v1.6.0/go.mod h1:majrKKjoE+OyYqv1ilaBQRQM2F2DG665f+cG7MaT0lk=
 github.com/impl0x/mo v1.6.1 h1:zaR6/HJ2rYKW+0sKi11+R7ywF3wMNfy4M+ArltAhDtk=
