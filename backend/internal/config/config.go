@@ -25,7 +25,26 @@ type App struct {
 }
 
 type Log struct {
-	Level string `env:"LOG_LEVEL"`
+	Level string `env:"LOG_LEVEL" validate:"oneof=TRACE DEBUG INFO WARN ERROR FATAL"`
+}
+
+func (l Log) Int() int {
+	switch l.Level {
+	case "TRACE":
+		return 0
+	case "DEBUG":
+		return 1
+	case "INFO":
+		return 2
+	case "WARN":
+		return 3
+	case "ERROR":
+		return 4
+	case "FATAL":
+		return 5
+	default:
+		panic("invalid level")
+	}
 }
 
 var DefaultLog = Log{
