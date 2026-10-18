@@ -4,16 +4,17 @@ import (
 	"backend/internal/config"
 	"backend/internal/entity"     // entity data objects
 	"backend/internal/repository" // repository
-	"backend/pkg/cryptoutil"      // generate cryptographically random IDs and OTPs and hash passwords
-	"backend/pkg/email"           // send emails
-	"backend/pkg/jwt"             // generate and verify jwt tokens
-	"context"
+	"backend/internal/service"
+	"backend/pkg/cryptoutil" // generate cryptographically random IDs and OTPs and hash passwords
+	"backend/pkg/email"      // send emails
+	"backend/pkg/jwt"        // generate and verify jwt tokens
 	"fmt"
 	"slices"
 	"time"
 	"uuid"
 
-	"github.com/impl0x/go-utils/cache" // used for ttlcache
+	"github.com/impl0x/go-utils/cache"  // ttlcache
+	"github.com/impl0x/go-utils/logger" // logging
 )
 
 // ! INFO:
@@ -29,14 +30,13 @@ const (
 )
 
 type Service struct {
+	log      logger.Logger
 	config   config.AuthService
 	cache    serviceCaches
 	repo     repositories
 	jwt      jwt.Manager
 	otp      cryptoutil.OtpManager
 	password cryptoutil.PasswordManager
-	// TODO: add a proper logger
-	// log   *log.Logger
 
 	email email.Manager
 }
@@ -50,7 +50,7 @@ type serviceCaches struct {
 
 // segregated interface because we only need one of the methods available in [repository.profileRepository]
 type profileRepository interface {
-	CheckUsername(ctx context.Context, username string) (bool, error)
+	CheckUsername(ctx service.Context, username string) (bool, error)
 }
 
 type repositories struct {
@@ -66,6 +66,7 @@ func NewRepositories(user repository.UserRepository, session repository.UserSess
 
 // Instantiates a new service instance with default rules and caches, and repositories provided in the parameters.
 func NewService(
+	log logger.Logger,
 	config *config.AuthService,
 	repos repositories,
 	jwt jwt.Manager,
@@ -77,7 +78,9 @@ func NewService(
 		panic("Service: nil parameter found in instantiation function") // we need to panic early because these variables aren't used now but later when a request arrives.
 	}
 	cfg := *config // dereferencing pointer to store as whole in struct to avoid pointer chasing 2 times in methods
+	log.Info("Auth Service: created new instance")
 	return &Service{
+		log:    log,
 		config: cfg,
 		cache: serviceCaches{
 			otp:           cache.NewTTLCache[string, *otpSession](cfg.TTLCacheCleanIntervalOTP),
@@ -147,8 +150,9 @@ func (s *Service) generateTotpSessionID() string {
 //   - target: The absolute address string (e.g., an email address or E.164 phone number)
 //
 // it returns the otp that was sent and an optional error occurs one
-func (s *Service) sendOTP(channel entity.AuthChannel, purpose authPurpose, target string) (string, error) {
+func (s *Service) sendOTP(ctx service.Context, channel entity.AuthChannel, purpose authPurpose, target string) (string, error) {
 	otp := s.otp.Generate()
+	s.log.Debug("Service: Sending OTP", "code", otp, "req", ctx.ReqId)
 	var err error
 	// Send otp based on the identifier
 	switch channel {
@@ -167,8 +171,9 @@ func (s *Service) sendOTP(channel entity.AuthChannel, purpose authPurpose, targe
 			sub = email.SubResetPassword
 			html = r.ResetPass()
 		}
-		err = s.email.SendSingle(s.email.Renderer.Subject(sub), target, html)
+		err = s.email.SendSingle(ctx, s.email.Renderer.Subject(sub), target, html)
 	case entity.ChannelPhone:
+		s.log.Error("Service: Request to send otp on phone arrived, impossible!")
 		// IMPORTANT
 		// we can never send otp to phone numbers as its not possible as of now to afford sms service or telegram's gateway service.
 		// will not change the code but anyone signing up on the backend with a phone will simply not receive an otp and will not be able to continue.
@@ -220,7 +225,7 @@ type RegisterResult struct {
 }
 
 // Registers a new user
-func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterResult, error) {
+func (s *Service) Register(ctx service.Context, req RegisterRequest) (RegisterResult, error) {
 	if !channelIsValidForRegister(req.Channel) { // basic validation to make sure we don't face unwanted panic later.
 		panic("register: invalid channel found")
 	}
@@ -267,7 +272,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (RegisterRe
 	}
 
 	// Verify the identifier. By sending an otp
-	otp, err := s.sendOTP(req.Channel, purposeRegistration, req.Value)
+	otp, err := s.sendOTP(ctx, req.Channel, purposeRegistration, req.Value)
 	if err != nil {
 		return RegisterResult{}, err
 	}
@@ -298,7 +303,7 @@ type CheckUsernameResult struct {
 	Exists bool
 }
 
-func (s *Service) CheckUsername(ctx context.Context, req CheckUsernameRequest) (CheckUsernameResult, error) {
+func (s *Service) CheckUsername(ctx service.Context, req CheckUsernameRequest) (CheckUsernameResult, error) {
 	exists, err := s.repo.profile.CheckUsername(ctx, req.Username)
 	if err != nil {
 		return CheckUsernameResult{}, err
@@ -321,7 +326,7 @@ type LoginResult struct {
 // Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint.
 //
 // rmd requestMetadata is required for userSession storage on successful login
-func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientMetadata) (LoginResult, error) {
+func (s *Service) Login(ctx service.Context, req LoginRequest, md entity.ClientMetadata) (LoginResult, error) {
 	if !channelIsValidForLogin(req.Channel) {
 		panic("login: invalid channel found")
 	}
@@ -392,7 +397,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, md entity.ClientM
 		default:
 			panic("login: invalid channel found in 2fa slice of user")
 		}
-		otp, err := s.sendOTP(primaryTwoFAChannel, purpose2FA, target)
+		otp, err := s.sendOTP(ctx, primaryTwoFAChannel, purpose2FA, target)
 		if err != nil {
 			return LoginResult{}, err
 		}
@@ -449,7 +454,7 @@ type ResendResult struct {
 }
 
 // Re sends otp an otp to the according to the provided purpose and channel
-func (s *Service) ResendOTP(ctx context.Context, req ResendOTPRequest) (ResendResult, error) {
+func (s *Service) ResendOTP(ctx service.Context, req ResendOTPRequest) (ResendResult, error) {
 	if !channelIsValidForOTP(req.Channel) {
 		panic("resend otp: invalid channel passed - " + string(req.Channel))
 	}
@@ -523,7 +528,7 @@ func (s *Service) ResendOTP(ctx context.Context, req ResendOTPRequest) (ResendRe
 	// Now we send the otp and store it in our cache and return the user a new reference id
 	refId := s.generateOTPSessionID() // new otp session id
 	expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
-	otp, err := s.sendOTP(req.Channel, purpose, req.Value)
+	otp, err := s.sendOTP(ctx, req.Channel, purpose, req.Value)
 	if err != nil {
 		return ResendResult{}, err
 	}
@@ -555,7 +560,7 @@ type VerifyResult struct {
 }
 
 // Verifies the two factor / verification / reset password OTP and generates a token pair / reset pass id for the user.
-func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest, md entity.ClientMetadata) (VerifyResult, error) {
+func (s *Service) VerifyOTP(ctx service.Context, req VerifyOTPRequest, md entity.ClientMetadata) (VerifyResult, error) {
 	// retrieve the session from the reference id in the request
 	session, expiresAt, ok := s.cache.otp.Get(req.ReferenceID)
 	if !ok { // if not found it means either the frontend is trying to reuse the same reference id after expiration or verification
@@ -650,7 +655,7 @@ type ForgotPasswordResult struct {
 }
 
 // Raises a forgot password session request which sends an verification otp to the channel provided and stores a in memory temporary session
-func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest) (ForgotPasswordResult, error) {
+func (s *Service) ForgotPassword(ctx service.Context, req ForgotPasswordRequest) (ForgotPasswordResult, error) {
 	// Find the user in the database
 	user, err := s.repo.user.GetByAuthChannel(ctx, req.Channel, req.Value)
 	if err != nil {
@@ -661,7 +666,7 @@ func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest)
 	}
 
 	// Send an otp to the channel and target our user sent us
-	otp, err := s.sendOTP(req.Channel, purposeResetPass, req.Value)
+	otp, err := s.sendOTP(ctx, req.Channel, purposeResetPass, req.Value)
 	// generate a otp session id and add it to our ttlcache
 	refID := s.generateOTPSessionID()
 	expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
@@ -685,7 +690,7 @@ func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest)
 // ? ----+-----+-----Reset password-----+-----+-----
 
 // updates a user's password
-func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest) error {
+func (s *Service) ResetPassword(ctx service.Context, req ResetPasswordRequest) error {
 	// Retrieve the reset session from the cache using the reference id from the request data
 	session, expiresAt, ok := s.cache.resetPassword.Get(req.ReferenceID)
 	if !ok {
@@ -717,7 +722,7 @@ type RefreshResult struct {
 }
 
 // refreshes the token pair with a new pair of tokens
-func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResult, error) {
+func (s *Service) Refresh(ctx service.Context, req RefreshRequest) (RefreshResult, error) {
 	// Do a db lookup with the refresh token's hash
 	userSesh, err := s.repo.session.GetByTokenHash(ctx, cryptoutil.GenerateMD5Hash(req.RefreshToken))
 	if err != nil {
@@ -776,7 +781,7 @@ func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (RefreshResul
 // ? ----+-----+-----Logout-----+-----+-----
 
 // deletes the current user session
-func (s *Service) Logout(ctx context.Context, token AccessToken) error {
+func (s *Service) Logout(ctx service.Context, token AccessToken) error {
 	// Remove user session from database
 	err := s.repo.session.DeleteByJwtID(ctx, token.JwtID)
 	if err != nil && err != repository.ErrNoResults { // ignore no results
@@ -788,7 +793,7 @@ func (s *Service) Logout(ctx context.Context, token AccessToken) error {
 }
 
 // ? ----+-----+-----Delete Account-----+-----+-----
-func (s *Service) DeleteAccount(ctx context.Context, token AccessToken) error {
+func (s *Service) DeleteAccount(ctx service.Context, token AccessToken) error {
 	err := s.repo.user.Delete(ctx, token.UserID) // assuming there is cascade such that profiles and user sessions also gets deleted.
 	if err != nil {
 		if err == repository.ErrNoResults {
@@ -804,7 +809,7 @@ func (s *Service) DeleteAccount(ctx context.Context, token AccessToken) error {
 // adds a 2FA method to the user account,
 //
 // note: totp has its separate function therefore its assumed that the channel is validated to be either email or phone only
-func (s *Service) Add2FA(ctx context.Context, token AccessToken, req Add2FARequest) error {
+func (s *Service) Add2FA(ctx service.Context, token AccessToken, req Add2FARequest) error {
 	// finding the user in the database using the user id from token
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
@@ -837,7 +842,7 @@ func (s *Service) Add2FA(ctx context.Context, token AccessToken, req Add2FAReque
 }
 
 // Removes 2fa for a user
-func (s *Service) Remove2FA(ctx context.Context, token AccessToken, req Remove2FARequest) error {
+func (s *Service) Remove2FA(ctx service.Context, token AccessToken, req Remove2FARequest) error {
 	// finding the user in the database using user id from the token
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
@@ -878,7 +883,7 @@ type TotpSetupResult struct {
 }
 
 // starts a setup for totp
-func (s *Service) TotpSetup(ctx context.Context, token AccessToken) (TotpSetupResult, error) {
+func (s *Service) TotpSetup(ctx service.Context, token AccessToken) (TotpSetupResult, error) {
 	// Find user on the database
 	user, err := s.repo.user.GetByID(ctx, token.UserID)
 	if err != nil {
@@ -922,7 +927,7 @@ type TotpVerifyResult struct {
 }
 
 // verifies the otp from totp setup and sets secret in database
-func (s *Service) TotpVerify(ctx context.Context, token AccessToken, req TotpVerifyRequest) (TotpVerifyResult, error) {
+func (s *Service) TotpVerify(ctx service.Context, token AccessToken, req TotpVerifyRequest) (TotpVerifyResult, error) {
 	// Fetching session from cache
 	session, expiresAt, ok := s.cache.totp.Get(req.ReferenceID)
 	if !ok {
