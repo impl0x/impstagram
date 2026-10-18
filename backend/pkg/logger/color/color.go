@@ -1,5 +1,7 @@
 package color
 
+import "fmt"
+
 var White = [10]RGB{
 	NewHSL(0, 0, 100).ToRGB(), // #ffffff
 	NewHSL(0, 0, 90).ToRGB(),  // ##e6e6e6
@@ -50,4 +52,12 @@ var Blue = [10]RGB{
 	NewHSL(240, 0, 30).ToRGB(),
 	NewHSL(240, 0, 20).ToRGB(),
 	NewHSL(240, 0, 10).ToRGB(),
+}
+
+func ColorString(c RGB, s string) string {
+	return fmt.Sprintf(
+		"\033[38;2;%v;%v;%vm%s\033[0m",
+		c.Red, c.Green, c.Blue,
+		s,
+	)
 }

@@ -17,57 +17,58 @@ func newTimeWriter(tc TimeConfig) timeWriter {
 	tw := timeWriter{
 		config: tc,
 		tb: timeBuf{
-			lastTime:    atomic.Pointer[time.Time]{}, // doesn't matter if we copy lock, ignore warning
-			lastTimeStr: atomic.Pointer[string]{},
+			lastSec:     atomic.Int64{}, // doesn't matter if we copy lock, ignore warning
+			lastTimeStr: atomic.Pointer[bytes.Buffer]{},
+			pool: _pool{
+				minCap:   64, // cannot use 32 as 64 is the minimum limit for a buffer, and its automatically set to that every time.
+				maxCap:   64,
+				SyncPool: utils.NewPool(func() *bytes.Buffer { return &bytes.Buffer{} }),
+			},
 		},
 	}
-	tw.tb.lastTime.Store(&time.Time{})
-	s := ""
-	tw.tb.lastTimeStr.Store(&s)
+	tw.tb.lastTimeStr.Store(&bytes.Buffer{})
 	return tw // does not matter if we copy lock, this function is inlined anyways.
 }
 
 type timeBuf struct {
-	lastTime    atomic.Pointer[time.Time]
-	lastTimeStr atomic.Pointer[string]
+	lastSec     atomic.Int64
+	lastTimeStr atomic.Pointer[bytes.Buffer]
 	mu          sync.Mutex
-}
-
-// checks if y,m,d,h,mm,s are equal between t1 and t2
-func tEq(t1, t2 time.Time) bool {
-	y1, m1, d1 := t1.Date()
-	h1, mm1, s1 := t1.Clock()
-	y2, m2, d2 := t2.Date()
-	h2, mm2, s2 := t2.Clock()
-	return y1 == y2 && m1 == m2 && d1 == d2 && h1 == h2 && mm1 == mm2 && s1 == s2
+	pool        _pool
 }
 
 func (tw *timeWriter) write(b *bytes.Buffer) {
-	now := time.Now()
-	if tEq(now, *tw.tb.lastTime.Load()) {
-		str := *tw.tb.lastTimeStr.Load()
-		b.WriteString(str)
+	nowUnix := time.Now().Unix()
+	if nowUnix == tw.tb.lastSec.Load() {
+		b.Write(tw.tb.lastTimeStr.Load().Bytes())
 		return
 	}
-	tw._storeTime(b, now)
-}
-
-//go:noinline this function is used so that "now" doesn't escape in the write call
-func (tw *timeWriter) _storeTime(b *bytes.Buffer, now time.Time) {
-	// parsing and writing the time
-	tw._parse(now, b, tw.config)
-	str := b.String() // allocates
-
-	// setting the lastTime to current
 	tw.tb.mu.Lock()
-	tw.tb.lastTime.Store(&now)
-	tw.tb.lastTimeStr.Store(&str)
-	tw.tb.mu.Unlock()
+	defer tw.tb.mu.Unlock()
+	// if some goroutine has changed it while we were waiting for the lock, double check
+	if nowUnix == tw.tb.lastSec.Load() {
+		b.Write(tw.tb.lastTimeStr.Load().Bytes())
+		return
+	}
+	// get a buffer from the pool and use it
+	buf := tw.tb.pool.Get()
+	now := time.Now()               // reason we dont use the previous time.Now call is due to allocation, on hot path it would get allocated every call
+	tw._parse(buf, now, tw.config)  // we write the time in the buffer we are going to store
+	tw.tb.lastSec.Store(now.Unix()) // store the current unix
+
+	// putting the last buffer we had back into the pool, after resetting it obviously.
+	lastBuf := tw.tb.lastTimeStr.Load()
+	lastBuf.Reset()
+	tw.tb.pool.Put(lastBuf)
+	// store the current buffer
+	tw.tb.lastTimeStr.Store(buf)
+	b.Write(buf.Bytes()) // write the current parsed time
+
 }
 
 // writes the parsed time according to config values to the buffer provided,
 // it should approximately have an available cap of about 32 bytes at max
-func (tw *timeWriter) _parse(t time.Time, b *bytes.Buffer, tc TimeConfig) {
+func (tw *timeWriter) _parse(b *bytes.Buffer, t time.Time, tc TimeConfig) {
 	if tc.ShowDate {
 		y, m, d := t.Date()
 		if !tc.ShowFullYear {

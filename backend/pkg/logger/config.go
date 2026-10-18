@@ -8,9 +8,17 @@ import (
 
 type Config struct {
 	Output io.Writer
+	Log    LogConfig
 	Time   TimeConfig
 	Color  ColorConfig
 	Others OtherConfig
+}
+
+type LogConfig struct {
+	TimeLevelSep   string // 09:24:10 PM" "INF Hello world extraKey=extraVal
+	LevelMsgSep    string // 09:24:10 PM INF" "Hello world extraKey=extraVal
+	MsgExtraSep    string // 09:24:10 PM INF Hello world" "extraKey=extraVal
+	ExtraKeyValSep string // 09:24:10 PM INF Hello world extraKey" "extraVal
 }
 
 // config for the time part of the log,
@@ -43,12 +51,12 @@ const (
 
 type ColorConfig struct {
 	Time     color.RGB
-	Levels   levelColors
+	Levels   LevelColors
 	MsgColor color.RGB
 	ExKey    color.RGB
 	ExVal    color.RGB
 }
-type levelColors struct {
+type LevelColors struct {
 	Trace color.RGB
 	Debug color.RGB
 	Info  color.RGB
@@ -57,7 +65,7 @@ type levelColors struct {
 	Fatal color.RGB
 }
 
-func (lc levelColors) fromLevel(l level) color.RGB {
+func (lc LevelColors) fromLevel(l level) color.RGB {
 	switch l {
 	case levelTrace:
 		return lc.Trace
@@ -82,6 +90,12 @@ type OtherConfig struct {
 
 var DefaultConfig = Config{
 	Output: os.Stdout,
+	Log: LogConfig{
+		TimeLevelSep:   " ",
+		LevelMsgSep:    " ",
+		MsgExtraSep:    " ",
+		ExtraKeyValSep: "=",
+	},
 	Time: TimeConfig{
 		TimeSep:                    ":",
 		DateSep:                    "-",
@@ -96,7 +110,7 @@ var DefaultConfig = Config{
 	},
 	Color: ColorConfig{
 		Time: color.White[5],
-		Levels: levelColors{
+		Levels: LevelColors{
 			Trace: color.NewRGB(128, 128, 128), // #808080
 			Debug: color.NewRGB(0, 192, 255),   // #00c0ff
 			Info:  color.NewRGB(0, 200, 0),     // #00c800
