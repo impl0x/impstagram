@@ -9,6 +9,8 @@ github.com/impl0x/go-utils v0.8.3 h1:lMPJzBLaWFhpNuGaYi1dyzrrqam3IA8BY4TvC6aV4dE
 github.com/impl0x/go-utils v0.8.3/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
 github.com/impl0x/go-utils v0.8.4 h1:p8lXMXIN9y8vMc2gF9lglNkWx852kDWS2mxNsS8aPTk=
 github.com/impl0x/go-utils v0.8.4/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
+github.com/impl0x/go-utils v0.8.5 h1:Ve0AlCK51oq29n3HZ2dKn7E4xqB+xxHGRHnuTRo6Sfs=
+github.com/impl0x/go-utils v0.8.5/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
 github.com/impl0x/mo v1.6.0 h1:YY6Mn19wBLncmwVeRoolGR+xXl37y7EF5rQRLW3RIQU=
 github.com/impl0x/mo v1.6.0/go.mod h1:majrKKjoE+OyYqv1ilaBQRQM2F2DG665f+cG7MaT0lk=
 github.com/impl0x/mo v1.6.1 h1:zaR6/HJ2rYKW+0sKi11+R7ywF3wMNfy4M+ArltAhDtk=
