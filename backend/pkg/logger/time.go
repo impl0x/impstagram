@@ -14,18 +14,17 @@ type timeWriter struct {
 }
 
 func newTimeWriter(tc TimeConfig) timeWriter {
-	var pt atomic.Pointer[time.Time]
-	pt.Store(&time.Time{})
-	var ps atomic.Pointer[string]
-	s := ""
-	ps.Store(&s)
-	return timeWriter{
+	tw := timeWriter{
 		config: tc,
 		tb: timeBuf{
-			lastTime:    pt, // doesn't matter if we copy lock, ignore warning
-			lastTimeStr: ps,
+			lastTime:    atomic.Pointer[time.Time]{}, // doesn't matter if we copy lock, ignore warning
+			lastTimeStr: atomic.Pointer[string]{},
 		},
 	}
+	tw.tb.lastTime.Store(&time.Time{})
+	s := ""
+	tw.tb.lastTimeStr.Store(&s)
+	return tw // does not matter if we copy lock, this function is inlined anyways.
 }
 
 type timeBuf struct {
