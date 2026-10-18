@@ -2,6 +2,7 @@ package email
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -31,7 +32,7 @@ type sendRequest struct {
 	HTML    string   `json:"html"`
 }
 
-func (m Manager) send(sub string, to []string, html HTML) error {
+func (m Manager) send(ctx context.Context, sub string, to []string, html HTML) error {
 	req := sendRequest{
 		From:    m.emailID,
 		To:      to,
@@ -43,7 +44,8 @@ func (m Manager) send(sub string, to []string, html HTML) error {
 		return fmt.Errorf("email: marshal email: %w", err) // should not happen
 	}
 
-	httpReq, err := http.NewRequest(
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodPost,
 		"https://api.resend.com/emails",
 		bytes.NewReader(body),
@@ -67,10 +69,10 @@ func (m Manager) send(sub string, to []string, html HTML) error {
 	return nil
 }
 
-func (m Manager) SendSingle(sub string, to string, html HTML) error {
-	return m.send(sub, []string{to}, html)
+func (m Manager) SendSingle(ctx context.Context, sub string, to string, html HTML) error {
+	return m.send(ctx, sub, []string{to}, html)
 }
 
-func (m Manager) SendMultiple(sub string, to []string, html HTML) error {
-	return m.send(sub, to, html)
+func (m Manager) SendMultiple(ctx context.Context, sub string, to []string, html HTML) error {
+	return m.send(ctx, sub, to, html)
 }
