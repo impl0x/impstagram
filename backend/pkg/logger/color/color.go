@@ -1,11 +1,11 @@
 package color
 
 var White = [10]RGB{
-	NewHSL(0, 0, 100).ToRGB(),
-	NewHSL(0, 0, 90).ToRGB(),
-	NewHSL(0, 0, 80).ToRGB(),
-	NewHSL(0, 0, 70).ToRGB(),
-	NewHSL(0, 0, 60).ToRGB(),
+	NewHSL(0, 0, 100).ToRGB(), // #ffffff
+	NewHSL(0, 0, 90).ToRGB(),  // ##e6e6e6
+	NewHSL(0, 0, 80).ToRGB(),  // ##cccccc
+	NewHSL(0, 0, 70).ToRGB(),  // ##b3b3b3
+	NewHSL(0, 0, 60).ToRGB(),  // ##999999
 	NewHSL(0, 0, 50).ToRGB(),
 	NewHSL(0, 0, 40).ToRGB(),
 	NewHSL(0, 0, 30).ToRGB(),

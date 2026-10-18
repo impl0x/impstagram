@@ -12,11 +12,11 @@ const colorEndStr = "\033[0m"
 func writeColorStart(b *bytes.Buffer, c color.RGB) {
 	b.WriteString(colorStartStr)
 	utils.WriteInteger(b, c.Red)
-	b.WriteRune(';')
+	b.WriteByte(';')
 	utils.WriteInteger(b, c.Green)
-	b.WriteRune(';')
+	b.WriteByte(';')
 	utils.WriteInteger(b, c.Blue)
-	b.WriteRune('m')
+	b.WriteByte('m')
 }
 
 func writeColorEnd(b *bytes.Buffer) {

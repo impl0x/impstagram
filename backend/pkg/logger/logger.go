@@ -1,50 +1,60 @@
 package logger
 
-import (
-	"backend/pkg/logger/utils"
-	"bytes"
-	"math"
-	"time"
-)
-
 type Logger struct {
-	Engine engine
+	level Level
+	e     *engine
 }
 
-func NewLogger() Logger {
+// uses the [DefaultConfig], if modifying anything recommended to copy
+// the default config and modify values there and pass that
+//
+// Do not pass this as a pointer,
+// this already holds a pointer to the underlying logging engine,
+// so just use this as is.
+func NewLogger(l Level) Logger {
 	return Logger{
-		*newEngine(DefaultConfig),
+		l,
+		newEngine(DefaultConfig),
 	}
 }
 
-type engine struct {
-	config Config
-	pools  [5]_pool // 5 pools, each having a max cap, 64, 128, 256, 512, inf, panics if capacity exceeds limit of any buffer in the pool
-	tb     timeBuf
+func NewLoggerWithConfig(l Level, c Config) Logger {
+	return Logger{
+		l,
+		newEngine(c),
+	}
 }
 
-var bufSizes = [5]int{64, 128, 256, 512, math.MaxInt}
+func (l Logger) Trace(m string, kv ...string) {
+	l.e.log(levelTrace, m, kv)
+}
 
-func newEngine(config Config) *engine {
-	n := func() *bytes.Buffer {
-		return &bytes.Buffer{}
+func (l Logger) Debug(m string, kv ...string) {
+	if l.level <= 1 {
+		l.e.log(levelDebug, m, kv)
 	}
-	e := engine{
-		config: config,
-		tb: timeBuf{
-			lastTime:    utils.NewAtomicValue(time.Time{}),
-			lastTimeStr: utils.NewAtomicValue(""),
-		},
+}
+func (l Logger) Info(m string, kv ...string) {
+	if l.level <= 2 {
+		l.e.log(levelInfo, m, kv)
 	}
-	for i, bs := range bufSizes {
-		e.pools[i] = _pool{
-			bs,
-			utils.NewPool(n),
+}
+func (l Logger) Warn(m string, kv ...string) {
+	if l.level <= 3 {
+		l.e.log(levelWarn, m, kv)
+	}
+}
+func (l Logger) Error(m string, kv ...string) {
+	if l.level <= 4 {
+		l.e.log(levelError, m, kv)
+	}
+}
+
+func (l Logger) Fatal(m string, kv ...string) {
+	if l.level <= 5 {
+		l.e.log(levelFatal, m, kv)
+		if l.e.config.Others.PanicAtFatal {
+			panic("fatal log")
 		}
 	}
-	return &e
-}
-
-func (e *engine) run() {
-
 }

@@ -50,9 +50,9 @@ func (h HSL) ToRGB() RGB {
 	}
 
 	return RGB{
-		Red:   uint8((r + m) * 255),
-		Green: uint8((g + m) * 255),
-		Blue:  uint8((b + m) * 255),
+		uint8((r + m) * 255),
+		uint8((g + m) * 255),
+		uint8((b + m) * 255),
 	}
 }
 
