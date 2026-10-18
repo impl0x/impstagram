@@ -7,6 +7,7 @@ import (
 )
 
 type _pool struct {
+	minCap int
 	maxCap int
 	utils.SyncPool[*bytes.Buffer]
 }
@@ -15,6 +16,9 @@ func (p *_pool) Get() *bytes.Buffer {
 	b := p.SyncPool.Get()
 	if b.Cap() > p.maxCap {
 		panic("pool get: buffer overflow, max cap - " + strconv.Itoa(p.maxCap))
+	}
+	if b.Cap()<p.minCap{
+		b.Grow(p.minCap)
 	}
 	return b
 }

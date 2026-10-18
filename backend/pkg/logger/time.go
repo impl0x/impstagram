@@ -4,6 +4,7 @@ import (
 	"backend/pkg/logger/utils"
 	"bytes"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -13,18 +14,23 @@ type timeWriter struct {
 }
 
 func newTimeWriter(tc TimeConfig) timeWriter {
+	var pt atomic.Pointer[time.Time]
+	pt.Store(&time.Time{})
+	var ps atomic.Pointer[string]
+	s := ""
+	ps.Store(&s)
 	return timeWriter{
 		config: tc,
 		tb: timeBuf{
-			lastTime:    utils.NewAtomicValue(time.Time{}),
-			lastTimeStr: utils.NewAtomicValue(""),
+			lastTime:    pt, // doesn't matter if we copy lock, ignore warning
+			lastTimeStr: ps,
 		},
 	}
 }
 
 type timeBuf struct {
-	lastTime    utils.AtomicValue[time.Time]
-	lastTimeStr utils.AtomicValue[string]
+	lastTime    atomic.Pointer[time.Time]
+	lastTimeStr atomic.Pointer[string]
 	mu          sync.Mutex
 }
 
@@ -39,19 +45,24 @@ func tEq(t1, t2 time.Time) bool {
 
 func (tw *timeWriter) write(b *bytes.Buffer) {
 	now := time.Now()
-	if tEq(now, tw.tb.lastTime.Load()) {
-		str := tw.tb.lastTimeStr.Load()
+	if tEq(now, *tw.tb.lastTime.Load()) {
+		str := *tw.tb.lastTimeStr.Load()
 		b.WriteString(str)
 		return
 	}
+	tw._storeTime(b, now)
+}
+
+//go:noinline this function is used so that "now" doesn't escape in the write call
+func (tw *timeWriter) _storeTime(b *bytes.Buffer, now time.Time) {
 	// parsing and writing the time
 	tw._parse(now, b, tw.config)
 	str := b.String() // allocates
 
 	// setting the lastTime to current
 	tw.tb.mu.Lock()
-	tw.tb.lastTime.Store(now)
-	tw.tb.lastTimeStr.Store(str)
+	tw.tb.lastTime.Store(&now)
+	tw.tb.lastTimeStr.Store(&str)
 	tw.tb.mu.Unlock()
 }
 

@@ -12,7 +12,8 @@ type engine struct {
 	timeWriter timeWriter
 }
 
-var bufSizes = [5]int{64, 128, 256, 512, math.MaxInt}
+var bufMaxSizes = [5]int{64, 128, 256, 512, math.MaxInt}
+var bufMinSizes = [5]int{32, 64, 128, 256, 256}
 
 func newEngine(config Config) *engine {
 	n := func() *bytes.Buffer {
@@ -22,9 +23,10 @@ func newEngine(config Config) *engine {
 		config:     config,
 		timeWriter: newTimeWriter(config.Time),
 	}
-	for i, bs := range bufSizes {
+	for i := range 5 {
 		e.pools[i] = _pool{
-			bs,
+			bufMinSizes[i],
+			bufMaxSizes[i],
 			utils.NewPool(n),
 		}
 	}
@@ -66,4 +68,6 @@ func (e *engine) log(l level, m string, kv []string) {
 	b.WriteByte('\n')
 
 	b.WriteTo(e.config.Output)
+	// put back
+	e.pools[4].Put(b)
 }
