@@ -324,8 +324,6 @@ type LoginResult struct {
 }
 
 // Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint.
-//
-// rmd requestMetadata is required for userSession storage on successful login
 func (s *Service) Login(ctx service.Context, req LoginRequest, md entity.ClientMetadata) (LoginResult, error) {
 	if !channelIsValidForLogin(req.Channel) {
 		panic("login: invalid channel found")
