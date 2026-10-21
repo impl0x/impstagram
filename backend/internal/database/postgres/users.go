@@ -56,7 +56,7 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 	// we dont actually care if the user sent a created_at or a updated_at because those are hardcoded here to be the current timestamp by the database.
 	cols = append(cols, "email", "phone", "password_hash", "dob", "totp_secret_key", "two_fas")
 	vals = append(vals, user.Email, user.Phone, user.PasswordHash, user.Dob, user.TotpSecretKey, user.TwoFAs)
-	
+
 	var buf strings.Builder
 	buf.Grow(totalLen) // should fit according to our calculations
 	buf.WriteString("INSERT INTO " + database.TableUsers + " (")

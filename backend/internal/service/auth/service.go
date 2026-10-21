@@ -37,7 +37,6 @@ type Service struct {
 	jwt      jwt.Manager
 	otp      cryptoutil.OtpManager
 	password cryptoutil.PasswordManager
-
 	email email.Manager
 }
 

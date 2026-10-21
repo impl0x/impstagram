@@ -2,7 +2,7 @@ package config
 
 import "time"
 
-// Contains infrastructure related configs such as database, webserver, etc. 
+// Contains infrastructure related configs such as database, webserver, etc.
 type Infrastructure struct {
 	HTTP     HTTP     // http requests client
 	RestAPI  RestAPI  // webserver
