@@ -1,11 +1,10 @@
 package email
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
 	"html/template"
-	"sync"
+	"strings"
 )
 
 const (
@@ -31,12 +30,6 @@ const (
 	otpConResetPass       = "Reset password"
 	otpSubConResetPass    = "Use this one time authorization code below to reset your password on your account."
 )
-
-var bufferPool = sync.Pool{ // pool to avoid allocations every time we render a email
-	New: func() any {
-		return &bytes.Buffer{}
-	},
-}
 
 //go:embed templates/*.html
 var templateFS embed.FS
@@ -77,16 +70,17 @@ func NewRenderer(appName, appLogoUrl, appHomePageLink string) (*Renderer, error)
 }
 
 // will panic if a invalid subject enum is used, else a valid subject string is returned
-func (r Renderer) Subject(s Subject) string {
+func (r *Renderer) Subject(s Subject) string {
 	return r.subjects[s]
 }
 
 // custom type to avoid conflict with normal string and html string
 type HTML string
 
-func (r Renderer) render(path string, data any) HTML {
-	buf := bufferPool.Get().(*bytes.Buffer)
-	err := r.templates.ExecuteTemplate(buf, path, data)
+func (r *Renderer) render(path string, data any) HTML {
+	var buf strings.Builder
+	buf.Grow(5000) // enough for a html
+	err := r.templates.ExecuteTemplate(&buf, path, data)
 	if err != nil {
 		panic(fmt.Errorf("template panic while email rendering, %w", err))
 	}
@@ -98,7 +92,7 @@ type WelcomeData struct {
 	AppHomePageLink string
 }
 
-func (r Renderer) Welcome(username, appHomePageLink string) HTML {
+func (r *Renderer) Welcome(username, appHomePageLink string) HTML {
 	return r.render(welcomePath, WelcomeData{username, appHomePageLink})
 }
 
@@ -132,9 +126,9 @@ func (w wrappedOtpData) ResetPass() HTML {
 	return w.r.render(otpPath, w.o)
 }
 
-func (r Renderer) Otp(otp, expiryTime string) wrappedOtpData {
+func (r *Renderer) Otp(otp, expiryTime string) wrappedOtpData {
 	return wrappedOtpData{
-		r: &r,
+		r: r,
 		o: otpData{
 			Otp:        otp,
 			ExpiryTime: expiryTime,
