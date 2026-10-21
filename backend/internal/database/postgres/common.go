@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -34,41 +33,38 @@ func handlePgxError(err error) error {
 	}
 }
 
-const _argBuilderDefaultCap uint8 = 16
-
-type argBuilder struct {
-	cols []string
-	vals []any
+func colWriter(b *strings.Builder, col []string) {
+	for i, c := range col {
+		b.WriteString(c)
+		if i != len(col)-1 {
+			b.WriteByte(',')
+		}
+	}
 }
-
-func newArgBuilder() argBuilder {
-	return argBuilder{
-		make([]string, 0, _argBuilderDefaultCap),
-		make([]any, 0, _argBuilderDefaultCap),
+func valWriter(b *strings.Builder, l int) {
+	for i := range l {
+		b.WriteByte('$')
+		writeUint64(b, uint64(i))
+		if i != l-1 {
+			b.WriteByte(',')
+		}
 	}
 }
 
-// grows the underlying slice to the capacity provided
-func (ag argBuilder) withCap(cap int) argBuilder {
-	return argBuilder{slices.Grow(ag.cols, cap), slices.Grow(ag.vals, cap)}
-}
+func writeUint64(b *strings.Builder, n uint64) {
+	var buf [20]byte // max length of max uint64
+	pos := len(buf)
 
-func (ag argBuilder) add(col string, val any) {
-	ag.cols = append(ag.cols, col)
-	ag.vals = append(ag.vals, val)
-}
+	if n == 0 {
+		b.WriteByte('0')
+		return
+	}
 
-func (ag argBuilder) addCols(col ...string) {
-	ag.cols = append(ag.cols, col...)
-}
-func (ag argBuilder) addVals(val ...any) {
-	ag.vals = append(ag.vals, val...)
-}
+	for n > 0 {
+		pos--
+		buf[pos] = byte('0' + n%10)
+		n /= 10
+	}
 
-func (ag argBuilder) unwrapCols() string {
-	return strings.Join(ag.cols, ", ")
-}
-
-func (ag argBuilder) getVals() []any {
-	return ag.vals
+	b.Write(buf[pos:])
 }
