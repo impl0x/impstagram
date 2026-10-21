@@ -50,7 +50,10 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 		vals = append(vals, session.DeviceType)
 		totalLen += 15
 	}
-	// ignore created_at even if provided. hardcoded to not set it via service call
+	var t time.Time
+	if session.CreatedAt != t {
+		pg.Log.Warn("DB: created_at provided in user sessions create, will not be set and is not recommended to set")
+	}
 	cols = append(cols, "jwt_id", "user_id", "token_hash", "expires_at")
 	vals = append(vals, session.JwtID, session.UserID, session.TokenHash, session.ExpiresAt)
 
