@@ -3,19 +3,21 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"log"
+	"strconv"
 	"time"
 
 	"github.com/Masterminds/squirrel"
+	"github.com/impl0x/go-utils/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Postgres struct {
 	Builder squirrel.StatementBuilderType
 	Pool    *pgxpool.Pool
+	log     logger.Logger
 }
 
-func New(url string, opts ...Option) (Postgres, error) {
+func New(url string, log logger.Logger, opts ...Option) (Postgres, error) {
 	options := defaultOptions
 	var err error
 	options.pgxpoolConfig, err = pgxpool.ParseConfig(url)
@@ -35,7 +37,7 @@ func New(url string, opts ...Option) (Postgres, error) {
 		if err == nil {
 			break
 		}
-		log.Printf("Postgres is trying to connect, attempts left: %d", options.connAttempts)
+		log.Info("Postgres is trying to connect, attempts left: " + strconv.FormatUint(uint64(options.connAttempts), 10))
 
 		time.Sleep(options.connTimeout)
 
@@ -49,6 +51,7 @@ func New(url string, opts ...Option) (Postgres, error) {
 	return Postgres{
 		squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar),
 		pool,
+		log,
 	}, nil
 }
 
