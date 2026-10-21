@@ -48,39 +48,42 @@ type serviceCaches struct {
 	jwtBlocklist  *cache.TTLCache[uuid.UUID, struct{}]
 } // some fields use pointer while others don't due to nature of modification to the struct, read only structs are passed by value.
 
-// segregated interface because we only need one of the methods available in [repository.profileRepository]
-type profileRepository interface {
-	CheckUsername(ctx service.Context, username string) (bool, error)
-}
-
+// repositories needed
 type repositories struct {
 	user    repository.UserRepository
 	session repository.UserSessionRepository
 	profile profileRepository
 }
 
+// segregated interface because we only need one of the methods available in [repository.profileRepository]
+type profileRepository interface {
+	CheckUsername(ctx service.Context, username string) (bool, error)
+}
+
 // wrapper to pass repositories into [NewService] easier
 func NewRepositories(user repository.UserRepository, session repository.UserSessionRepository, profile profileRepository) repositories {
+	if user == nil || session == nil || profile == nil {
+		panic("Service: nil repository passed")
+	}
 	return repositories{user, session, profile}
 }
 
+type Dependencies struct {
+	log      logger.Logger
+	config   *config.AuthService
+	repos    repositories
+	jwt      jwt.Manager
+	otp      cryptoutil.OtpManager
+	password cryptoutil.PasswordManager
+	email    email.Manager
+}
+
 // Instantiates a new service instance with default rules and caches, and repositories provided in the parameters.
-func NewService(
-	log logger.Logger,
-	config *config.AuthService,
-	repos repositories,
-	jwt jwt.Manager,
-	otp cryptoutil.OtpManager,
-	password cryptoutil.PasswordManager,
-	email email.Manager,
-) *Service {
-	if repos.user == nil || repos.session == nil || repos.profile == nil {
-		panic("Service: nil parameter found in instantiation function") // we need to panic early because these variables aren't used now but later when a request arrives.
-	}
-	cfg := *config // dereferencing pointer to store as whole in struct to avoid pointer chasing 2 times in methods
-	log.Info("Auth Service: created new instance")
+func NewService(d Dependencies) *Service {
+	cfg := *d.config // dereferencing pointer to store as whole in struct to avoid pointer chasing 2 times in methods
+	d.log.Debug("Auth Service: created new instance")
 	return &Service{
-		log:    log,
+		log:    d.log,
 		config: cfg,
 		cache: serviceCaches{
 			otp:           cache.NewTTLCache[string, *otpSession](cfg.TTLCacheCleanIntervalOTP),
@@ -88,11 +91,11 @@ func NewService(
 			totp:          cache.NewTTLCache[string, *totpSession](cfg.TTLCacheCleanIntervalTOTP),
 			jwtBlocklist:  cache.NewTTLCache[uuid.UUID, struct{}](cfg.TTLCacheCleanIntervalJWTBlockList),
 		},
-		repo:     repos,
-		jwt:      jwt,
-		otp:      otp,
-		password: password,
-		email:    email,
+		repo:     d.repos,
+		jwt:      d.jwt,
+		otp:      d.otp,
+		password: d.password,
+		email:    d.email,
 	}
 }
 
