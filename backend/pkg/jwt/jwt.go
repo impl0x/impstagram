@@ -21,7 +21,7 @@ var (
 )
 
 type Manager struct {
-	SecretKey string
+	secretKey string
 }
 
 // returns a new jwt manager using the secret key provided,
@@ -40,7 +40,7 @@ func (j Manager) GenerateToken(claims *Claims) (string, error) {
 	}
 	payloadB64 := base64.RawURLEncoding.EncodeToString(payloadBytes)
 
-	mac := hmac.New(sha256.New, []byte(j.SecretKey))
+	mac := hmac.New(sha256.New, []byte(j.secretKey))
 	mac.Write([]byte(payloadB64))
 	signature := mac.Sum(nil)
 
@@ -66,7 +66,7 @@ func (j Manager) VerifyToken(token string, target *Claims) error {
 		return ErrInvalidJWTToken
 	}
 
-	mac := hmac.New(sha256.New, []byte(j.SecretKey))
+	mac := hmac.New(sha256.New, []byte(j.secretKey))
 	mac.Write([]byte(parts[0]))
 	signature := mac.Sum(nil)
 
