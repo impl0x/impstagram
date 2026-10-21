@@ -5,10 +5,10 @@ import (
 	"backend/internal/entity"
 	"backend/pkg/postgres"
 	"context"
-	"fmt"
+	"strings"
+	"time"
 	"uuid"
 
-	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -26,31 +26,49 @@ func NewProfiles(pg postgres.Postgres) Profiles {
 // ? -----+-----+----- Create -----+-----+-----
 
 func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
-	if profile == nil {
-		panic("profile is nil")
-	}
-	ag := newArgBuilder()
+	cols := make([]string, 0, 7)
+	vals := make([]any, 0, 7)
+	totalLen := 51
 	if profile.DisplayName != nil {
-		ag.add("display_name", profile.DisplayName)
+		cols = append(cols, "display_name")
+		vals = append(vals, profile.DisplayName)
+		totalLen += 16
 	}
 	if profile.AvatarUrl != nil {
-		ag.add("avatar_url", profile.AvatarUrl)
+		cols = append(cols, "avatar_url")
+		vals = append(vals, profile.AvatarUrl)
+		totalLen += 14
 	}
 	if profile.Bio != nil {
-		ag.add("bio", profile.Bio)
+		cols = append(cols, "bio")
+		vals = append(vals, profile.Bio)
+		totalLen += 7
+	}
+	var t time.Time
+	if profile.UpdatedAt != t {
+		cols = append(cols, "updated_at")
+		vals = append(vals, profile.UpdatedAt)
+		totalLen += 14
+		pg.Log.Warn("DB: Providing updated_at in create profile is not good, let the database create that by default for you")
+	}
+	if !profile.IsPrivate {
+		cols = append(cols, "is_private")
+		vals = append(vals, profile.IsPrivate)
+		totalLen += 14
 	}
 	// ignore created_at even if provided. hardcoded to not set it via service call
-	ag.addCols("user_id", "username", "is_private", "updated_at")
-	ag.addVals(profile.UserID, profile.Username, profile.IsPrivate, profile.UpdatedAt)
-	sql, args, err := pg.Builder.
-		Insert(ag.unwrapCols()).
-		Into(database.TableProfiles).
-		Values(ag.getVals()...).
-		ToSql()
-	if err != nil {
-		return fmt.Errorf("ProfilesRepo - create - pg.Builder: %w", err)
-	}
-	_, err = pg.Pool.Exec(ctx, sql, args...)
+	cols = append(cols, "user_id", "username")
+	vals = append(vals, profile.UserID, profile.Username)
+
+	var buf strings.Builder
+	buf.Grow(totalLen)
+	buf.WriteString("INSERT INTO " + database.TableUsers + " (")
+	colWriter(&buf, cols)
+	buf.WriteString(") VALUES (")
+	valWriter(&buf, len(vals))
+	buf.WriteString(")")
+
+	_, err := pg.Pool.Exec(ctx, buf.String(), vals...)
 	if err != nil {
 		handlePgxError(err)
 	}
@@ -60,16 +78,8 @@ func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 // ? -----+-----+----- Get -----+-----+-----
 
 func (pg Profiles) get(ctx context.Context, by string, value any) (*entity.Profile, error) {
-	sql, args, err := pg.Builder.
-		Select("user_id, username, display_name, avatar_url, is_private, bio, updated_at").
-		From(database.TableProfiles).
-		Where(squirrel.Eq{by: value}).
-		ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("ProfilesRepo - get - pg.Builder: %w", err)
-	}
 	var profile entity.Profile
-	err = pg.Pool.QueryRow(ctx, sql, args...).
+	err := pg.Pool.QueryRow(ctx, "SELECT user_id, username, display_name, avatar_url, is_private, bio, updated_at FROM "+database.TableUsers+" WHERE $1 = $2", by, value).
 		Scan(
 			&profile.UserID,
 			&profile.Username,
@@ -95,16 +105,8 @@ func (pg Profiles) GetByUsername(ctx context.Context, username string) (*entity.
 // ? -----+-----+----- Extra -----+-----+-----
 
 func (pg Profiles) CheckUsername(ctx context.Context, username string) (bool, error) {
-	sql, args, err := pg.Builder.
-		Select("user_id").
-		From(database.TableProfiles).
-		Where(squirrel.Eq{"username": username}).
-		ToSql()
-	if err != nil {
-		return false, fmt.Errorf("ProfilesRepo - check username - pg.Builder: %w", err)
-	}
 	var id uuid.UUID
-	err = pg.Pool.QueryRow(ctx, sql, args...).Scan(&id)
+	err := pg.Pool.QueryRow(ctx, "SELECT user_id FROM "+database.TableProfiles+" WHERE username = $1", username).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil

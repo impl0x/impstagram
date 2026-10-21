@@ -5,11 +5,10 @@ import (
 	"backend/internal/entity"
 	"backend/pkg/postgres"
 	"context"
-	"fmt"
+	"strings"
 	"time"
 	"uuid"
 
-	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -27,25 +26,43 @@ func NewUserSessions(pg postgres.Postgres) UserSessions {
 // ? -----+-----+----- Create -----+-----+-----
 
 func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) error {
-	if session == nil {
-		panic("session is nil")
-	}
-	ag := newArgBuilder()
+	totalLen := 85
+	cols := make([]string, 0, 9)
+	vals := make([]any, 0, 9)
 	if session.ID != uuid.Nil() {
-		ag.add("id", session.ID)
+		cols = append(cols, "id")
+		vals = append(vals, session.ID)
+		totalLen += 6
+		pg.Log.Warn("DB: Providing ID in create user session is not good, let the database create that by default for you.")
+	}
+	if session.OSName != nil {
+		cols = append(cols, "os_name")
+		vals = append(vals, session.OSName)
+		totalLen += 11
+	}
+	if session.BrowserName != nil {
+		cols = append(cols, "browser_name")
+		vals = append(vals, session.BrowserName)
+		totalLen += 16
+	}
+	if session.DeviceType != nil {
+		cols = append(cols, "device_type")
+		vals = append(vals, session.DeviceType)
+		totalLen += 15
 	}
 	// ignore created_at even if provided. hardcoded to not set it via service call
-	ag.addCols("jwt_id", "user_id", "token_hash", "os_name", "browser_name", "device_type", "expires_at")
-	ag.addVals(session.JwtID, session.UserID, session.TokenHash, session.OSName, session.BrowserName, session.DeviceType, session.ExpiresAt)
-	sql, args, err := pg.Builder.
-		Insert(ag.unwrapCols()).
-		Into(database.TableUserSessions).
-		Values(ag.getVals()...).
-		ToSql()
-	if err != nil {
-		return fmt.Errorf("UserSessionRepo - create - pg.Builder: %w", err)
-	}
-	_, err = pg.Pool.Exec(ctx, sql, args...)
+	cols = append(cols, "jwt_id", "user_id", "token_hash", "expires_at")
+	vals = append(vals, session.JwtID, session.UserID, session.TokenHash, session.ExpiresAt)
+
+	var buf strings.Builder
+	buf.Grow(totalLen)
+	buf.WriteString("INSERT INTO " + database.TableUserSessions + " (")
+	colWriter(&buf, cols)
+	buf.WriteString(") VALUES (")
+	valWriter(&buf, len(vals))
+	buf.WriteByte(')')
+
+	_, err := pg.Pool.Exec(ctx, buf.String(), vals...)
 	if err != nil {
 		handlePgxError(err)
 	}
@@ -55,16 +72,13 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 // ? -----+-----+----- Get -----+-----+-----
 
 func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.UserSession, error) {
-	sql, args, err := pg.Builder.
-		Select("id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at").
-		From(database.TableUserSessions).
-		Where(squirrel.Eq{by: value}).
-		ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("UserSessionRepo - get - pg.Builder: %w", err)
-	}
 	var session entity.UserSession
-	err = pg.Pool.QueryRow(ctx, sql, args...).
+	err := pg.Pool.QueryRow(
+		ctx,
+		"SELECT id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at FROM "+
+			database.TableUserSessions+
+			" WHERE $1 = $2", by, value,
+	).
 		Scan(
 			&session.ID,
 			&session.JwtID,
@@ -94,15 +108,7 @@ func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*e
 // ? -----+-----+----- Update -----+-----+-----
 
 func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val any) error {
-	sql, args, err := pg.Builder.
-		Update(database.TableUserSessions).
-		Set(col, val).
-		Where(squirrel.Eq{"id": id}).
-		ToSql()
-	if err != nil {
-		return fmt.Errorf("UserSessionRepo - Update - pg.Builder")
-	}
-	cmdTag, err := pg.Pool.Exec(ctx, sql, args...)
+	cmdTag, err := pg.Pool.Exec(ctx, "UPDATE "+database.TableUserSessions+" SET $1 = $2 WHERE id = $3", col, val, id)
 	if err != nil {
 		return handlePgxError(err)
 	}
@@ -113,16 +119,11 @@ func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val
 }
 
 func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUID, tokenHash string, expiry time.Time) error {
-	sql, args, err := pg.Builder.
-		Update(database.TableUserSessions).
-		Set("token_hash", tokenHash).
-		Set("expires_at", expiry).
-		Where(squirrel.Eq{"id": id}).
-		ToSql()
-	if err != nil {
-		return fmt.Errorf("UserSessionRepo - Update - pg.Builder")
-	}
-	cmdTag, err := pg.Pool.Exec(ctx, sql, args...)
+	cmdTag, err := pg.Pool.Exec(
+		ctx,
+		"UPDATE "+database.TableUserSessions+" SET token_hash = $1, expires_at = $2 WHERE id = $3",
+		tokenHash, expiry, id,
+	)
 	if err != nil {
 		return handlePgxError(err)
 	}
@@ -135,14 +136,7 @@ func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUI
 // ? -----+-----+----- Delete -----+-----+-----
 
 func (pg UserSessions) delete(ctx context.Context, col string, val any) error {
-	sql, args, err := pg.Builder.
-		Delete(database.TableUserSessions).
-		Where(squirrel.Eq{col: val}).
-		ToSql()
-	if err != nil {
-		return fmt.Errorf("UserSessionRepo - Delete - pg.Builder")
-	}
-	cmdTag, err := pg.Pool.Exec(ctx, sql, args...)
+	cmdTag, err := pg.Pool.Exec(ctx, "DELETE FROM "+database.TableUserSessions+" WHERE $1 = $2", col, val)
 	if err != nil {
 		return handlePgxError(err)
 	}
