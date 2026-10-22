@@ -1,4 +1,4 @@
-package handler
+package restapi
 
 import (
 	"backend/internal/entity"

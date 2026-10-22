@@ -2,7 +2,7 @@ package auth
 
 import (
 	"backend/internal/entity"
-	"backend/internal/handler"
+	"backend/internal/restapi"
 	"backend/internal/service/auth"
 	"backend/pkg/apperr"
 	"backend/pkg/dob"
@@ -23,10 +23,10 @@ import (
 
 type Handler struct {
 	Service    *auth.Service
-	GetContext handler.ContextGenerator
+	GetContext restapi.ContextGenerator
 }
 
-func NewHandler(s *auth.Service, cg handler.ContextGenerator) Handler {
+func NewHandler(s *auth.Service, cg restapi.ContextGenerator) Handler {
 	return Handler{s, cg}
 }
 
@@ -163,7 +163,7 @@ func (h Handler) Login(c *mo.Context) error {
 	result, err := h.Service.Login(
 		h.GetContext(c.Request()),
 		req.service(ch, v),
-		handler.GetClientMetadata(c.Request()),
+		restapi.GetClientMetadata(c.Request()),
 	)
 	if err != nil {
 		return err
@@ -244,7 +244,7 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 	result, err := h.Service.VerifyOTP(
 		h.GetContext(c.Request()),
 		req.service(),
-		handler.GetClientMetadata(c.Request()),
+		restapi.GetClientMetadata(c.Request()),
 	)
 	if err != nil {
 		if result.RemainingAttempts != 0 { // it means this field was populated so we need to add that field in the error struct.
