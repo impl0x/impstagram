@@ -8,6 +8,12 @@ import (
 	"github.com/impl0x/mo"
 )
 
+type Handler struct{}
+
+func NewHandler() Handler {
+	return Handler{}
+}
+
 // Registers all the paths for validation group,
 // it is recommended to use this function instead of registering paths one by one yourself.
 //
@@ -16,9 +22,9 @@ import (
 //   - GET - /username/rules
 //   - POST - /dob
 //   - GET - /dob/rules
-func RegisterPaths(g mo.Grouped) {
-	g.POST("/username", Username)
-	g.GET("/username/rules", UsernameRules)
+func (h Handler) RegisterPaths(g mo.Grouped) {
+	g.POST("/username", h.Username)
+	g.GET("/username/rules", h.UsernameRules)
 }
 
 // wrapper for validation endpoint handlers
@@ -61,24 +67,24 @@ func ruleHandler(name string, rules []string) mo.HandlerFunc {
 
 // Validates a username
 //   - POST - [strValue]
-func Username(c *mo.Context) error {
+func (h Handler) Username(c *mo.Context) error {
 	return validateStrHandler(validation.Username)(c)
 }
 
 // Returns the rules for username validation
 //   - GET
-func UsernameRules(c *mo.Context) error {
+func (h Handler) UsernameRules(c *mo.Context) error {
 	return ruleHandler("username", validation.UsernameRules)(c)
 }
 
 // Validates a dob
 //   - POST - [strValue]
-func Dob(c *mo.Context) error {
+func (h Handler) Dob(c *mo.Context) error {
 	return validateStrHandler(validation.Dob)(c)
 }
 
 // Returns the rules for dob validation
 //   - GET
-func DobRules(c *mo.Context) error {
+func (h Handler) DobRules(c *mo.Context) error {
 	return ruleHandler("dob", validation.DobRules)(c)
 }
