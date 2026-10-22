@@ -156,6 +156,10 @@ func (pg Users) update(ctx context.Context, id uuid.UUID, col string, val any) e
 	return nil
 }
 
+func (pg Users) UpdateStatus(ctx context.Context, id uuid.UUID, status entity.AccountStatus) error {
+	return pg.update(ctx, id, "status", status)
+}
+
 func (pg Users) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error {
 	return pg.update(ctx, id, "password_hash", hash)
 }
