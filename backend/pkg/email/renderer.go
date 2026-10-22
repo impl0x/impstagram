@@ -49,6 +49,7 @@ type data struct {
 	AppHomePageLink string
 }
 
+// Returns a new email renderer using embedded html files, if parsing file system fails then error is returned
 func NewRenderer(appName, appLogoUrl, appHomePageLink string) (*Renderer, error) {
 	t, err := template.ParseFS(templateFS, templateDir+"/*.html")
 	if err != nil {

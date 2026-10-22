@@ -1,6 +1,7 @@
 package email
 
 import (
+	"backend/internal/config"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -16,10 +17,10 @@ type Manager struct {
 	Renderer   *Renderer
 }
 
-func NewManager(apiKey, emailID string, httpClient *http.Client, renderer *Renderer) Manager {
+func NewManager(c config.Email, httpClient *http.Client, renderer *Renderer) Manager {
 	return Manager{
-		apiKey:     apiKey,
-		emailID:    emailID,
+		apiKey:     c.ResendApiKey,
+		emailID:    c.EmailID,
 		httpClient: httpClient,
 		Renderer:   renderer,
 	}
