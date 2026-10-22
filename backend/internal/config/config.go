@@ -52,7 +52,7 @@ var DefaultLog = Log{
 }
 
 type Services struct {
-	Auth AuthService
+	Auth Auth
 }
 
 // wrapper over [structutils.CopyFields] to panic if an error is returned

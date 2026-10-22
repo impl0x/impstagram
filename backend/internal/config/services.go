@@ -2,12 +2,12 @@ package config
 
 import "time"
 
-// parent struct for auth config, not to be used directly in service layer, contains pkg config
+// parent struct for auth config, not to be used directly in service layer, contains pkg config as-well directly related to auth
 type Auth struct {
 	JWT      JWTConfig
 	OTP      OTPConfig
 	Password PasswordConfig
-	Auth     AuthService
+	Service  AuthService
 }
 
 // jwt config
@@ -78,7 +78,7 @@ var DefaultAuth = Auth{
 		SaltLength:  16,
 		KeyLength:   32,
 	},
-	Auth: AuthService{
+	Service: AuthService{
 		AgeMin: 13,
 		AgeMax: 120,
 

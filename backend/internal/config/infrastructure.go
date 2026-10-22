@@ -21,7 +21,7 @@ type HTTP struct {
 	MaxIdleConnsPerHost   int           `env:"HTTP_MAX_IDLE_CONNS_PER_HOST" validate:"min=1"`
 	MaxConnsPerHost       int           `env:"HTTP_MAX_CONNS_PER_HOST" validate:"min=1"`
 	IdleConnTimeout       time.Duration `env:"HTTP_IDLE_CONN_TIMEOUT"`
-	ForceAttemptHTTP2     bool          `env:"HTTP_FORCE_ATTEMPT_HTTP2" validate:"min=1"`
+	ForceAttemptHTTP2     bool          `env:"HTTP_FORCE_ATTEMPT_HTTP2"`
 	Timeout               time.Duration `env:"HTTP_TIMEOUT"`
 }
 
@@ -55,7 +55,7 @@ var DefaultRestAPI = RestAPI{
 }
 
 type Postgres struct {
-	PoolMax int    `env:"PG_POOL_MAX" validate:"gte=0"`
+	PoolMax uint32 `env:"PG_POOL_MAX"`
 	URL     string `env:"PG_URL,required" validate:"url"`
 }
 
