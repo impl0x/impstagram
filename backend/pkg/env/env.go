@@ -84,7 +84,7 @@ func parse(v reflect.Value) error {
 
 		if !ok {
 			if isRequired {
-				return errors.New("env: required variable not found in environment, field: " + ct.Name)
+				return errors.New("env: required variable not found in environment, name: " + envName)
 			}
 			envVal = defaultValue
 		}
@@ -111,6 +111,10 @@ func setValueFromString(v reflect.Value, strVal string) error {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		var t time.Duration
 		if v.Type() == reflect.TypeOf(t) {
+			if strVal==""{
+				v.SetInt(0)
+				return nil
+			}
 			t, err := time.ParseDuration(strVal)
 			if err != nil {
 				return fmt.Errorf("invalid time.Duration value, %w", err)
