@@ -11,14 +11,14 @@ type PasswordManager struct {
 	params argon2id.Params
 }
 
-func NewPasswordManager(cp config.PasswordConfig) PasswordManager {
+func NewPasswordManager(c config.PasswordConfig) PasswordManager {
 	return PasswordManager{
 		params: argon2id.Params{
-			Memory:      uint32(cp.Memory),
-			Iterations:  uint32(cp.Iterations),
-			Parallelism: uint8(cp.Parallelism),
-			SaltLength:  uint32(cp.SaltLength),
-			KeyLength:   uint32(cp.KeyLength),
+			Memory:      uint32(c.Memory),
+			Iterations:  uint32(c.Iterations),
+			Parallelism: uint8(c.Parallelism),
+			SaltLength:  uint32(c.SaltLength),
+			KeyLength:   uint32(c.KeyLength),
 		},
 	}
 }

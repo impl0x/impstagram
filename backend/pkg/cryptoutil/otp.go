@@ -1,6 +1,7 @@
 package cryptoutil
 
 import (
+	"backend/internal/config"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
@@ -25,15 +26,15 @@ type OtpManager struct {
 	}
 }
 
-func NewOtpGenerator(serviceName string, otpLength, totpLen, totpKeyLen int) OtpManager {
+func NewOtpGenerator(serviceName string, c config.OTPConfig) OtpManager {
 	return OtpManager{
 		serviceName: serviceName,
-		otpLimit:    big.NewInt(int64(math.Pow(10, float64(otpLength)))),
-		otpLen:      otpLength,
+		otpLimit:    big.NewInt(int64(math.Pow(10, float64(c.OTPLen)))),
+		otpLen:      c.OTPLen,
 		totp: struct {
 			length        int
 			secretKeySize int
-		}{totpLen, totpKeyLen},
+		}{c.TOTPLen, c.TOTPKeySize},
 	}
 }
 
