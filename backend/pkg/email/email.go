@@ -76,7 +76,7 @@ func (m Manager) send(ctx context.Context, sub string, to []string, html HTML) e
 }
 
 func (m Manager) SendSingle(ctx context.Context, sub string, to string, html HTML) error {
-	// return m.send(ctx, sub, []string{to}, html)
+	// return m.send(ctx, sub, []string{to}, html) // disabled for debug
 	return nil
 }
 
