@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"backend/internal/restapi"
 	"backend/pkg/apperr"
 	"backend/pkg/response"
 	"strings"
@@ -8,12 +9,7 @@ import (
 	"github.com/impl0x/mo"
 )
 
-const keyAuthToken = "at"
-
-var (
-	errMwHeaderMissing   = apperr.NewUnauthorized(response.CodeUnauthorized, "Authorization header missing or empty")
-	errMwUnsupportedAuth = apperr.NewUnauthorized(response.CodeUnauthorized, "Authorization type is unsupported or not provided")
-)
+const keyAuthToken restapi.ContextKey = "at"
 
 // Checks for authorization header and expects a valid JWT,
 // if satisfied stores it in the [mo.Context] with the key [KeyAuthToken],
@@ -21,14 +17,16 @@ var (
 //
 // calls the service method [auth.IsAuthorized] to check the token validity
 func (h Handler) Middleware(next mo.HandlerFunc) mo.HandlerFunc {
+	errHeaderMissing := apperr.NewUnauthorized(response.CodeUnauthorized, "Authorization header missing or empty")
+	errUnsupportedAuth := apperr.NewUnauthorized(response.CodeUnauthorized, "Authorization type is unsupported or not provided")
 	return func(c *mo.Context) error {
 		token := c.Request().Header.Get("authorization")
 		if token == "" {
-			return errMwHeaderMissing
+			return errHeaderMissing
 		}
 		parts := strings.Split(token, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			return errMwUnsupportedAuth
+			return errUnsupportedAuth
 		}
 		jwt, err := h.Service.IsAuthorized(token)
 		if err != nil {
