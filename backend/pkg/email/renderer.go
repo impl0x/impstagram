@@ -9,15 +9,16 @@ import (
 
 const (
 	templateDir = "templates"
-	welcomePath = templateDir + "/welcome.html"
-	otpPath     = templateDir + "/otp.html"
+	welcomePath = "welcome.html"
+	otpPath     = "otp.html"
 )
 
 type Subject int
 
 // enum subjects for emails, the exact string is found in the constructor for Renderer [NewRenderer]
 const (
-	SubVerifyEmail Subject = iota
+	SubWelcome Subject = iota
+	SubVerifyEmail
 	Sub2FA
 	SubResetPassword
 )
@@ -35,12 +36,12 @@ const (
 var templateFS embed.FS
 
 type Renderer struct {
-	templates template.Template
+	templates *template.Template
 	data      data
 	subjects  subjects
 }
 
-type subjects [3]string // contains the email subject strings, will increase the array length once there are more subjects
+type subjects [4]string // contains the email subject strings, will increase the array length once there are more subjects
 
 // reusable data that is decided at runtime
 type data struct {
@@ -56,14 +57,15 @@ func NewRenderer(appName, appLogoUrl, appHomePageLink string) (*Renderer, error)
 		return nil, err
 	}
 	return &Renderer{
-		templates: *t,
+		templates: t,
 		data: data{
 			AppName:         appName,
 			AppLogoUrl:      appLogoUrl,
 			AppHomePageLink: appHomePageLink,
 		},
-		subjects: subjects{
-			"Login verification code for " + appName, // the [Subject] enums are the index for this slice
+		subjects: subjects{ // the [Subject] enums are the index for this slice
+			"Welcome to " + appName,
+			"Login verification code for " + appName,
 			"Verify your email for " + appName,
 			"Reset your password for " + appName,
 		},
@@ -89,15 +91,19 @@ func (r *Renderer) render(path string, data any) HTML {
 }
 
 type WelcomeData struct {
+	AppName         string
+	AppLogoUrl      string
 	Username        string
 	AppHomePageLink string
 }
 
-func (r *Renderer) Welcome(username, appHomePageLink string) HTML {
-	return r.render(welcomePath, WelcomeData{username, appHomePageLink})
+func (r *Renderer) Welcome(username string) HTML {
+	return r.render(welcomePath, WelcomeData{r.data.AppName, r.data.AppLogoUrl, username, r.data.AppHomePageLink})
 }
 
 type otpData struct {
+	AppName    string
+	AppLogoUrl string
 	Content    string
 	SubContent string
 	Otp        string
@@ -131,6 +137,8 @@ func (r *Renderer) Otp(otp, expiryTime string) wrappedOtpData {
 	return wrappedOtpData{
 		r: r,
 		o: otpData{
+			AppName:    r.data.AppName,
+			AppLogoUrl: r.data.AppLogoUrl,
 			Otp:        otp,
 			ExpiryTime: expiryTime,
 		},
