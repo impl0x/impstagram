@@ -2,8 +2,6 @@ package restapi
 
 import (
 	"backend/internal/entity"
-	"backend/internal/service"
-	"math/rand/v2"
 
 	"net/http"
 
@@ -24,21 +22,5 @@ func GetClientMetadata(r *http.Request) entity.ClientMetadata {
 		BrowserName: ua.Name,
 		DeviceType:  ua.Device,
 		IsBot:       ua.Bot,
-	}
-}
-
-type ContextGenerator func(r *http.Request) service.Context
-
-func DefaultContextGenerator() ContextGenerator {
-	return func(r *http.Request) service.Context {
-		const hex = "0123456789abcdef"
-		var id [16]byte
-		for i := range id {
-			id[i] = hex[rand.IntN(16)]
-		}
-		return service.Context{
-			ReqId:   string(id[:]),
-			Context: r.Context(),
-		}
 	}
 }
