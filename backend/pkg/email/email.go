@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -65,13 +66,18 @@ func (m Manager) send(ctx context.Context, sub string, to []string, html HTML) e
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("email: resend returned unexpected status %s", resp.Status)
+		body, err := io.ReadAll(resp.Body) // only read body if api return error
+		if err != nil {
+			return fmt.Errorf("email: resend returned unexpected status - %s, body could not be read, %w", resp.Status, err)
+		}
+		return fmt.Errorf("email: resend returned unexpected status - %s, body - %s", resp.Status, string(body))
 	}
 	return nil
 }
 
 func (m Manager) SendSingle(ctx context.Context, sub string, to string, html HTML) error {
-	return m.send(ctx, sub, []string{to}, html)
+	// return m.send(ctx, sub, []string{to}, html)
+	return nil
 }
 
 func (m Manager) SendMultiple(ctx context.Context, sub string, to []string, html HTML) error {
