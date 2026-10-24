@@ -9,7 +9,6 @@ import (
 	"backend/pkg/email"      // send emails
 	"backend/pkg/jwt"        // generate and verify jwt tokens
 	"context"
-	"fmt"
 	"slices"
 	"time"
 	"uuid"
@@ -181,29 +180,20 @@ func (s *Service) sendOTP(ctx service.Context, channel entity.AuthChannel, purpo
 	return otp, nil
 }
 
-// helper function to create a new user session entity using client metadata and other required parameters.
-//
-// by default hashes the refresh token using [cryptoutil.GenerateMD5Hash]
-func newUserSession(userID, jwtID uuid.UUID, refreshToken string, md entity.ClientMetadata) *entity.UserSession {
-	session := &entity.UserSession{
-		JwtID:     jwtID,
-		UserID:    userID,
-		TokenHash: cryptoutil.GenerateMD5Hash(refreshToken),
-	}
-	// populating struct fields according to what's populated in client metadata struct
+// helper function to populate user session entity using client metadata
+func populateUserSessionWithClientMetadata(s *entity.UserSession, md entity.ClientMetadata) {
 	if md.IPAddress != "" {
-		session.IPAddress = &md.IPAddress
+		s.IPAddress = &md.IPAddress
 	}
 	if md.OSName != "" {
-		session.OSName = &md.OSName
+		s.OSName = &md.OSName
 	}
 	if md.BrowserName != "" {
-		session.BrowserName = &md.BrowserName
+		s.BrowserName = &md.BrowserName
 	}
 	if md.DeviceType != "" {
-		session.DeviceType = &md.DeviceType
+		s.DeviceType = &md.DeviceType
 	}
-	return session
 }
 
 // ! ----x-----x-----NORMAL METHODS-----x-----x-----
@@ -423,19 +413,25 @@ func (s *Service) Login(ctx service.Context, req LoginRequest, md entity.ClientM
 
 	// generate tokens
 	jwtID := uuid.New()
-	accessToken, err := s.jwt.GenerateToken(
+	accessToken := s.jwt.GenerateToken(
 		newAccessToken( // generating a new access token struct and taking its payload version with json compatible tags
 			user.ID,
 			jwtID,
 			s.config.ExpiryTimeAccessToken,
 		).Claims(),
 	)
-	if err != nil {
-		return LoginResult{}, fmt.Errorf("service.auth.login - failed to generate jwt: %w", err)
-	}
+
 	refreshToken := s.generateRefreshToken()
 	// Add a new user session to the database
-	err = s.repo.Session.Create(ctx, newUserSession(user.ID, jwtID, refreshToken, md))
+	session := &entity.UserSession{
+		JwtID:     jwtID,
+		UserID:    user.ID,
+		TokenHash: cryptoutil.GenerateMD5Hash(refreshToken),
+		ExpiresAt: time.Now().Add(s.config.ExpiryTimeRefreshToken),
+	}
+	populateUserSessionWithClientMetadata(session, md)
+	err = s.repo.Session.Create(ctx, session)
+
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -622,20 +618,24 @@ func (s *Service) VerifyOTP(ctx service.Context, req VerifyOTPRequest, md entity
 
 	// generate new tokens and return them to the user for future usage
 	jwtID := uuid.New()
-	accessToken, err := s.jwt.GenerateToken(
+	accessToken := s.jwt.GenerateToken(
 		newAccessToken(
 			user.ID,
 			jwtID,
 			s.config.ExpiryTimeAccessToken,
 		).Claims(),
 	)
-	if err != nil {
-		return VerifyResult{}, fmt.Errorf("service.auth.verify otp - failed to generate jwt: %w", err)
-	}
+
 	refreshToken := s.generateRefreshToken()
+	newSession := &entity.UserSession{
+		JwtID:     jwtID,
+		UserID:    user.ID,
+		TokenHash: cryptoutil.GenerateMD5Hash(refreshToken),
+		ExpiresAt: time.Now().Add(s.config.ExpiryTimeRefreshToken),
+	}
 
 	// Add a new user session to the database
-	err = s.repo.Session.Create(ctx, newUserSession(user.ID, jwtID, refreshToken, md))
+	err = s.repo.Session.Create(ctx, newSession)
 
 	if err != nil {
 		return VerifyResult{}, err
@@ -743,16 +743,13 @@ func (s *Service) Refresh(ctx service.Context, req RefreshRequest) (RefreshResul
 
 	// if everything is good we generate both new tokens, we do not have to regenerate and re update the jwt id as its unnecessary.
 	// it is a fixed value which is linked with the user session in database
-	accessToken, err := s.jwt.GenerateToken(
+	accessToken := s.jwt.GenerateToken(
 		newAccessToken(
 			userSesh.UserID,
 			userSesh.JwtID,
 			s.config.ExpiryTimeAccessToken,
 		).Claims(),
 	)
-	if err != nil {
-		return RefreshResult{}, fmt.Errorf("service.auth.refresh - failed to generate jwt: %w", err)
-	}
 	refreshToken := s.generateRefreshToken()
 
 	// update the session with the new refresh token and also update the expires at field to the max capacity again.
