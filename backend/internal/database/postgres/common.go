@@ -1,15 +1,54 @@
 package postgres
 
 import (
+	"backend/internal/config"
 	"backend/internal/repository"
+	"backend/pkg/postgres"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/impl0x/go-utils/logger"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type Postgres struct {
+	Users        Users
+	UserSessions UserSessions
+	Profiles     Profiles
+}
+
+func NewPostgres(c config.Postgres, log logger.Logger) (Postgres, error) {
+	pg, err := postgres.New(
+		c.URL,
+		log,
+		postgres.WithMaxPoolSize(c.PoolMax),
+		postgres.WithPgxpoolConfig(func(c *pgxpool.Config) { c.AfterConnect = afterConnect }),
+	)
+	if err != nil {
+		return Postgres{}, err
+	}
+
+	return Postgres{
+		Users{pg},
+		UserSessions{pg},
+		Profiles{pg},
+	}, nil
+}
+
+// calls the table specific after connect functions
+func afterConnect(ctx context.Context, conn *pgx.Conn) error {
+	// not returning the func call directly because in future we might
+	// add more after connect functions, so letting the pattern stay
+	err := afterConnectUsers(ctx, conn)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // returns pgx errors mapped to repository errors and handles unknown errors as well
 func handlePgxError(err error) error {
@@ -24,7 +63,8 @@ func handlePgxError(err error) error {
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
 		return err
 	case errors.As(err, &pgErr):
-		if pgErr.Code == "23505" { // unique violation
+		switch pgErr.Code {
+		case "23505":
 			return repository.ErrAlreadyExists
 		}
 		return fmt.Errorf("postgres: sql error, %w, Code: %s", err, pgErr.Code) // we let the error bubble to the handler where it will eventually be turned into a internal error and be logged
@@ -44,7 +84,7 @@ func colWriter(b *strings.Builder, col []string) {
 func valWriter(b *strings.Builder, l int) {
 	for i := range l {
 		b.WriteByte('$')
-		writeUint64(b, uint64(i))
+		writeUint64(b, uint64(i+1))
 		if i != l-1 {
 			b.WriteByte(',')
 		}
