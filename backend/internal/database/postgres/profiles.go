@@ -5,6 +5,7 @@ import (
 	"backend/internal/entity"
 	"backend/pkg/postgres"
 	"context"
+	"fmt"
 	"strings"
 	"time"
 	"uuid"
@@ -17,10 +18,6 @@ import (
 
 type Profiles struct {
 	postgres.Postgres
-}
-
-func NewProfiles(pg postgres.Postgres) Profiles {
-	return Profiles{pg}
 }
 
 // ? -----+-----+----- Create -----+-----+-----
@@ -46,10 +43,10 @@ func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 	}
 	var t time.Time
 	if profile.UpdatedAt != t {
+		pg.Log.Warn("DB: Providing updated_at in create profile is not good, let the database create that by default for you")
 		cols = append(cols, "updated_at")
 		vals = append(vals, profile.UpdatedAt)
 		totalLen += 14
-		pg.Log.Warn("DB: Providing updated_at in create profile is not good, let the database create that by default for you")
 	}
 	if !profile.IsPrivate {
 		cols = append(cols, "is_private")
@@ -70,7 +67,7 @@ func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 
 	_, err := pg.Pool.Exec(ctx, buf.String(), vals...)
 	if err != nil {
-		handlePgxError(err)
+		handlePgxError(fmt.Errorf("profiles create, %w", err))
 	}
 	return nil
 }
@@ -78,8 +75,13 @@ func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 // ? -----+-----+----- Get -----+-----+-----
 
 func (pg Profiles) get(ctx context.Context, by string, value any) (*entity.Profile, error) {
+	var buf strings.Builder
+	buf.Grow(102 + len(by))
+	buf.WriteString("SELECT user_id, username, display_name, avatar_url, is_private, bio, updated_at FROM " + database.TableUsers + " WHERE ")
+	buf.WriteString(by)
+	buf.WriteString(" = $1")
 	var profile entity.Profile
-	err := pg.Pool.QueryRow(ctx, "SELECT user_id, username, display_name, avatar_url, is_private, bio, updated_at FROM "+database.TableUsers+" WHERE $1 = $2", by, value).
+	err := pg.Pool.QueryRow(ctx, buf.String(), value).
 		Scan(
 			&profile.UserID,
 			&profile.Username,
@@ -90,7 +92,7 @@ func (pg Profiles) get(ctx context.Context, by string, value any) (*entity.Profi
 			&profile.UpdatedAt,
 		)
 	if err != nil {
-		return nil, handlePgxError(err)
+		return nil, handlePgxError(fmt.Errorf("profiles get by %s, %w", by, err))
 	}
 	return &profile, nil
 }
@@ -111,7 +113,7 @@ func (pg Profiles) CheckUsername(ctx context.Context, username string) (bool, er
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}
-		return false, err
+		return false, fmt.Errorf("profiles check username, %w", err)
 	}
 	return true, nil
 }
