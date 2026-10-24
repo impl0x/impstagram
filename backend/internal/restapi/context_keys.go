@@ -3,5 +3,6 @@ package restapi
 type ContextKey = string
 
 const (
-	KeyRequestID ContextKey = "id"
+	KeyRequestID ContextKey = "req"
+	KeyStartTime ContextKey = "time"
 )
