@@ -11,41 +11,51 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
+	"slices"
 	"strings"
 )
 
-var (
-	ErrInvalidJsonPayload = errors.New("jwt: invalid json payload")
-)
-
 type Manager struct {
-	secretKey string
+	secretKey []byte
 }
 
 // returns a new jwt manager using the secret key provided,
 // by default only generates hmac sha256 tokens without a header
 func NewManager(secretKey string) Manager {
-	return Manager{secretKey}
+	return Manager{[]byte(secretKey)}
 }
 
-// Payload must be a json compatible struct, do not use maps. It's not efficient, use structs.
-//
-// error can only be ErrInvalidJsonPayload, which is returned if json marshalling fails
-func (j Manager) GenerateToken(claims *Claims) (string, error) {
+// Generates a new jwt token string with the claim fields populated in the [Claims] struct
+func (j Manager) GenerateToken(claims *Claims) string {
+	// marshal body
 	payloadBytes, err := json.Marshal(claims)
-	if err != nil {
-		return "", ErrInvalidJsonPayload
+	if err != nil { // should never happen till we are using a known deterministic struct
+		panic("jwt: json marshalling panic")
 	}
-	payloadB64 := base64.RawURLEncoding.EncodeToString(payloadBytes)
 
-	mac := hmac.New(sha256.New, []byte(j.secretKey))
-	mac.Write([]byte(payloadB64))
+	// encode body
+	payloadB64 := make([]byte, base64.RawURLEncoding.EncodedLen(len(payloadBytes)))
+	base64.RawURLEncoding.Encode(payloadB64, payloadBytes)
+
+	// sign body
+	mac := hmac.New(sha256.New, j.secretKey)
+	mac.Write(payloadB64)
 	signature := mac.Sum(nil)
 
-	signatureB64 := base64.RawURLEncoding.EncodeToString(signature)
-	return payloadB64 + "." + signatureB64, nil
+	// encode signature
+	signatureB64 := make([]byte, base64.RawStdEncoding.EncodedLen(len(signature)))
+	base64.RawURLEncoding.Encode(signatureB64, signature)
+
+	// join everything together for the token
+	final := make([]byte, 0, len(payloadB64)+len(signatureB64)+1)
+	final = append(final, payloadB64...)
+	final = append(final, '.')
+	final = append(final, signatureB64...)
+
+	// return the string version
+	return string(final)
 }
 
 var (
@@ -53,30 +63,52 @@ var (
 	ErrIncorrectJWTToken = errors.New("jwt: incorrect jwt token") // only returned if the signature does not match, it means the token has been tampered with
 )
 
-// If error is nil then token is valid, error can be the jwt errors listed in here or a json decode error.
+// Verifies a token by checking its format and signature
 //
-// target must be a valid json compatible struct, we decode and unmarshal the jwt payload into that struct
-//
-// validation is not done here, so validate it yourself
-//
-// only errors returned are [ErrInvalidJWTToken], [ErrIncorrectJWTToken]
-func (j Manager) VerifyToken(token string, target *Claims) error {
-	parts := strings.Split(token, ".")
-	if len(parts) != 2 {
-		return ErrInvalidJWTToken
+// error can be [ErrInvalidJWTToken] or [ErrIncorrectJWTToken],
+// read them for more information on when they are returned
+func (j Manager) VerifyToken(token string) (*Claims, error) {
+	// check format
+	idx := strings.IndexByte(token, '.')
+	if idx == 0 {
+		return nil, ErrInvalidJWTToken
 	}
 
-	mac := hmac.New(sha256.New, []byte(j.secretKey))
-	mac.Write([]byte(parts[0]))
+	// separate parts
+	bt := []byte(token)
+	bodyEncoded := bt[:idx]
+	signatureEncoded := bt[idx+1:]
+
+	// decode base64 for signature
+	signatureBytes := make([]byte, base64.RawURLEncoding.DecodedLen(len(signatureEncoded)))
+	_, err := base64.RawURLEncoding.Decode(signatureBytes, signatureEncoded)
+	if err != nil {
+		return nil, ErrInvalidJWTToken
+	}
+
+	// calculate signature
+	mac := hmac.New(sha256.New, j.secretKey)
+	mac.Write(bodyEncoded)
 	signature := mac.Sum(nil)
 
-	if string(signature) != parts[1] {
-		return ErrIncorrectJWTToken
+	// compare signature
+	if slices.Compare(signature, signatureBytes) != 0 {
+		return nil, ErrIncorrectJWTToken
 	}
 
-	err := json.Unmarshal([]byte(parts[0]), target)
+	// decode base64 for body
+	bodyJsonStr := make([]byte, base64.RawURLEncoding.DecodedLen(len(bodyEncoded)))
+	_, err = base64.RawURLEncoding.Decode(bodyJsonStr, bodyEncoded)
 	if err != nil {
-		return ErrInvalidJWTToken
+		return nil, ErrInvalidJWTToken
 	}
-	return nil
+
+	// unmarshal to struct
+	var claims Claims
+	err = json.Unmarshal(bodyJsonStr, &claims)
+	if err != nil {
+		return nil, ErrInvalidJWTToken
+	}
+
+	return &claims, nil
 }
