@@ -20,18 +20,25 @@ func (h Handler) Middleware(next mo.HandlerFunc) mo.HandlerFunc {
 	errHeaderMissing := apperr.NewUnauthorized(response.CodeUnauthorized, "Authorization header missing or empty")
 	errUnsupportedAuth := apperr.NewUnauthorized(response.CodeUnauthorized, "Authorization type is unsupported or not provided")
 	return func(c *mo.Context) error {
+		// get the auth header
 		token := c.Request().Header.Get("authorization")
 		if token == "" {
 			return errHeaderMissing
 		}
-		parts := strings.Split(token, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
+
+		// split the bearer part out and also check if its present
+		idx := strings.IndexByte(token, ' ')
+		if idx == -1 || token[:idx] != "Bearer" {
 			return errUnsupportedAuth
 		}
-		jwt, err := h.Service.IsAuthorized(token)
+
+		// call service method to check authorization with the token part
+		jwt, err := h.Service.IsAuthorized(token[idx+1:])
 		if err != nil {
 			return err
 		}
+
+		// if okay then add the token to the context store
 		c.Add(keyAuthToken, jwt)
 		return next(c)
 	}
