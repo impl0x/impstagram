@@ -108,7 +108,7 @@ func channelIsValidForRegister(channel entity.AuthChannel) bool {
 }
 
 func channelIsValidForLogin(channel entity.AuthChannel) bool {
-	return checkChannel(channel, entity.ChannelEmail, entity.ChannelPhone, entity.ChannelTOTP)
+	return checkChannel(channel, entity.ChannelEmail, entity.ChannelPhone, entity.ChannelUsername)
 }
 
 func channelIsValidForOTP(channel entity.AuthChannel) bool {
