@@ -23,21 +23,21 @@ var defaultOptions = options{
 type Option func(*options) // a function which modifies an options struct
 
 // Maximum of connections the pool is allowed to hold at a time
-func MaxPoolSize(size uint32) Option {
+func WithMaxPoolSize(size uint32) Option {
 	return func(o *options) {
 		o.maxPoolSize = size
 	}
 }
 
 // Number of attempts before the driver gives up and returns an error
-func ConnAttempts(attempts uint32) Option {
+func WithConnAttempts(attempts uint32) Option {
 	return func(o *options) {
 		o.connAttempts = attempts
 	}
 }
 
 // Sets the connection timeout value before the next attempt
-func ConnTimeout(timeout time.Duration) Option {
+func WithConnTimeout(timeout time.Duration) Option {
 	return func(o *options) {
 		o.connTimeout = timeout
 	}
@@ -45,7 +45,7 @@ func ConnTimeout(timeout time.Duration) Option {
 
 // The given function "fn" is provided a [*pgxpool.Config] which can then be written to and configured as per wish.
 // Argument [*pgxpool.Config] is always non-nil
-func PgxpoolConfig(fn func(*pgxpool.Config)) Option {
+func WithPgxpoolConfig(fn func(*pgxpool.Config)) Option {
 	return func(o *options) {
 		fn(o.pgxpoolConfig)
 	}
