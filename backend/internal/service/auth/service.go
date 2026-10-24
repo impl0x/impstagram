@@ -234,7 +234,6 @@ func (s *Service) Register(ctx service.Context, req RegisterRequest) (RegisterRe
 
 	// Finding in database
 	user, err := s.repo.User.GetByAuthChannel(ctx, req.Channel, req.Value)
-
 	if err == nil && user != nil { // if no error and db returned a user
 		// i acknowledge that user has chances of being banned/unverified, but this is intended. We want user to login and then hit those errors if they exist.
 		return RegisterResult{}, errRegisterAlreadyExistingUser
@@ -243,10 +242,14 @@ func (s *Service) Register(ctx service.Context, req RegisterRequest) (RegisterRe
 	}
 
 	// checks if the username already exists because usernames are unique/ this can also be done using database by directly inserting if the database has a unique tag for this field, but we still do it here.
-	sameUsernameUser, err := s.repo.User.GetByAuthChannel(ctx, entity.ChannelUsername, req.Username) // assuming req.Username is validated in validator
-	if sameUsernameUser != nil || err == nil {
+	sameUsernameExists, err := s.repo.Profile.CheckUsername(ctx, req.Username) // assuming req.Username is validated in validator
+	if err != nil && err != repository.ErrNoResults {
+		return RegisterResult{}, err
+	}
+	if sameUsernameExists {
 		return RegisterResult{}, errRegisterUsernameAlreadyExists
 	}
+
 	// creating user entity object (as of now by default status for user is 'unverified', so we do not need to set it ourselves)
 	user = &entity.User{
 		PasswordHash: s.password.Hash(req.Password), // hash password
@@ -263,6 +266,11 @@ func (s *Service) Register(ctx service.Context, req RegisterRequest) (RegisterRe
 	user.ID, err = s.repo.User.Create(ctx, user, req.Username)
 	if err != nil {
 		return RegisterResult{}, err
+	}
+
+	// send an welcome email if user registered via email
+	if req.Channel == entity.ChannelEmail {
+		go s.email.SendSingle(ctx, s.email.Renderer.Subject(email.SubWelcome), req.Value, s.email.Renderer.Welcome(req.Username))
 	}
 
 	// Verify the identifier. By sending an otp
@@ -320,7 +328,7 @@ type LoginResult struct {
 // Login a user in, and optionally if the user has 2fa enabled it asks for a code on the verify endpoint.
 func (s *Service) Login(ctx service.Context, req LoginRequest, md entity.ClientMetadata) (LoginResult, error) {
 	if !channelIsValidForLogin(req.Channel) {
-		panic("login: invalid channel found")
+		panic("login: invalid channel found, channel - " + string(req.Channel))
 	}
 	user, err := s.repo.User.GetByAuthChannel(ctx, req.Channel, req.Value)
 	if err != nil {
