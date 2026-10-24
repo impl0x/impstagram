@@ -73,9 +73,9 @@ var DefaultAuth = Auth{
 	},
 	Password: PasswordConfig{
 		Memory:      19 * 1024,
-		Iterations:  1,
+		Iterations:  2,
 		Parallelism: 2,
-		SaltLength:  16,
+		SaltLength:  8,
 		KeyLength:   32,
 	},
 	Service: AuthService{
