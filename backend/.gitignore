@@ -1,5 +1,2 @@
-internal/config/secrets.go
-# current doing testing in this file so its gitignored
-app/app.go
 test
 .env
