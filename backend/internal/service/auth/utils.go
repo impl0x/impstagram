@@ -67,9 +67,8 @@ func parseClaims(c *jwt.Claims) (AccessToken, error) {
 
 // takes a token string and verifies it and returns a [AccessTokenJwt] struct if valid token, else returns error
 func (s *Service) IsAuthorized(token string) (AccessToken, error) {
-	// Decode the token into a jwt payload struct
-	var claims jwt.Claims
-	err := s.jwt.VerifyToken(token, &claims)
+	// Decode the token into a jwt claims struct
+	claims, err := s.jwt.VerifyToken(token)
 
 	// Check if jwt decode fails or if the signature is incorrect
 	if err != nil {
@@ -77,8 +76,8 @@ func (s *Service) IsAuthorized(token string) (AccessToken, error) {
 	}
 
 	// Converting the json struct into a usable data type for our app
-	accessToken, err := parseClaims(&claims)
-	if err != nil {
+	accessToken, err := parseClaims(claims)
+	if err != nil { // should not trigger if server is not issuing bad tokens
 		return AccessToken{}, errAuthTokenInvalidPayload
 	}
 
