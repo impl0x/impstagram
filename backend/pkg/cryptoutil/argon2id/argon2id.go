@@ -1,14 +1,10 @@
-// this package is stolen from github.com/alexedwards/argon2id
-// reason i didn't import it because it was just a one file and i also did some modifications
-// all rights and credits to him
+// parts of this package is taken from github.com/alexedwards/argon2id
 package argon2id
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
-	"fmt"
-	"io"
+	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -47,74 +43,141 @@ type Params struct {
 	KeyLength uint32
 }
 
-func CreateRawHash(password string, salt []byte, params Params) []byte {
+type Argon2ID struct {
+	Params           Params
+	formattedHashLen int
+}
+
+func NewArgon2ID(p Params) Argon2ID {
+	l := 23
+	v := strconv.Itoa(argon2.Version)
+	l += len(v)
+	m := strconv.Itoa(int(p.Memory))
+	l += len(m)
+	i := strconv.Itoa(int(p.Iterations))
+	l += len(i)
+	pr := strconv.Itoa(int(p.Parallelism))
+	l += len(pr)
+	l += base64.RawStdEncoding.EncodedLen(int(p.SaltLength))
+	l += base64.RawStdEncoding.EncodedLen(int(p.KeyLength))
+	return Argon2ID{
+		Params:           p,
+		formattedHashLen: l,
+	}
+}
+
+func (a Argon2ID) CreateRawHash(password string, salt []byte, params Params) []byte {
 	return argon2.IDKey([]byte(password), salt, params.Iterations, params.Memory, params.Parallelism, params.KeyLength)
 }
 
-func CreateHash(password string, salt []byte, params Params) string {
-	key := argon2.IDKey([]byte(password), salt, params.Iterations, params.Memory, params.Parallelism, params.KeyLength)
+func (a Argon2ID) CreateHash(password string, salt []byte) string {
+	key := argon2.IDKey([]byte(password), salt, a.Params.Iterations, a.Params.Memory, a.Params.Parallelism, a.Params.KeyLength)
 	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
 	b64Key := base64.RawStdEncoding.EncodeToString(key)
 	// we store it in this format: $argon2id$v=19$m=65536,t=1,p=4$ZWFzeXNhbHQ$R01...NDA
 	// where, v is version, m for memory, t for time/iterations, p for parallelism/threads
-	hash := fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, params.Memory, params.Iterations, params.Parallelism, b64Salt, b64Key)
-	return hash
+	// var buf strings.Builder
+
+	var buf strings.Builder
+	buf.Grow(a.formattedHashLen)
+	buf.WriteString("$argon2id$v=")
+	buf.WriteString(strconv.Itoa(argon2.Version))
+	buf.WriteString("$m=")
+	buf.WriteString(strconv.Itoa(int(a.Params.Memory)))
+	buf.WriteString(",t=")
+	buf.WriteString(strconv.Itoa(int(a.Params.Iterations)))
+	buf.WriteString(",p=")
+	buf.WriteString(strconv.Itoa(int(a.Params.Parallelism)))
+	buf.WriteString("$")
+	buf.WriteString(b64Salt)
+	buf.WriteString("$")
+	buf.WriteString(b64Key)
+	// hash := fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, params.Memory, params.Iterations, params.Parallelism, b64Salt, b64Key)
+	return buf.String()
 }
 
-// DecodeHash expects a hash created from this package, and parses it to return the params used to
-// create it, as well as the salt and key (password hash).
-func DecodeHash(hash string) (params Params, salt, key []byte, err error) {
+// expects format example:
+//
+// $argon2id$v=19$m=19456,t=2,p=2$LPz5gLBKWtk$cZXDRxSOh1JAImjgmo2vOs+IClCyGQyS+sFM9CKYzXk
+//
+// returns params, salt, key, error
+func DecodeHash(hash string) (Params, string, string, error) {
+	if hash[0] != '$' {
+		return Params{}, "", "", ErrInvalidHash
+	}
 
-	r := strings.NewReader(hash)
+	hash = hash[1:]
+	idx := strings.IndexByte(hash, '$')
+	if hash[:idx] != "argon2id" {
+		return Params{}, "", "", ErrIncompatibleVariant
+	}
 
-	_, err = fmt.Fscanf(r, "$argon2id$")
+	hash = hash[idx+1:]
+	if hash[:2] != "v=" {
+		return Params{}, "", "", ErrInvalidHash
+	}
+
+	hash = hash[2:]
+	idx = strings.IndexByte(hash, '$')
+	versionNum, err := strconv.ParseUint(hash[:idx], 10, 32)
 	if err != nil {
-		return Params{}, nil, nil, ErrIncompatibleVariant
+		return Params{}, "", "", ErrInvalidHash
+	}
+	if versionNum != argon2.Version {
+		return Params{}, "", "", ErrIncompatibleVersion
 	}
 
-	var version int
-	_, err = fmt.Fscanf(r, "v=%d$", &version)
+	hash = hash[idx+1:]
+	if hash[:2] != "m=" {
+		return Params{}, "", "", ErrInvalidHash
+	}
+
+	hash = hash[2:]
+	idx = strings.IndexByte(hash, ',')
+	memoryNum, err := strconv.ParseUint(hash[:idx], 10, 32)
 	if err != nil {
-		return Params{}, nil, nil, err
-	}
-	if version != argon2.Version {
-		return Params{}, nil, nil, ErrIncompatibleVersion
+		return Params{}, "", "", ErrInvalidHash
 	}
 
-	params = Params{}
-	_, err = fmt.Fscanf(r, "m=%d,t=%d,p=%d$", &params.Memory, &params.Iterations, &params.Parallelism)
+	hash = hash[idx+1:]
+	if hash[:2] != "t=" {
+		return Params{}, "", "", ErrInvalidHash
+	}
+
+	hash = hash[2:]
+	idx = strings.IndexByte(hash, ',')
+	iterationsNum, err := strconv.ParseUint(hash[:idx], 10, 32)
 	if err != nil {
-		return Params{}, nil, nil, err
+		return Params{}, "", "", ErrInvalidHash
 	}
 
-	rest, err := io.ReadAll(r)
+	hash = hash[idx+1:]
+	if hash[:2] != "p=" {
+		return Params{}, "", "", ErrInvalidHash
+	}
+
+	hash = hash[2:]
+	idx = strings.IndexByte(hash, '$')
+	parallelismNum, err := strconv.ParseUint(hash[:idx], 10, 8)
 	if err != nil {
-		return Params{}, nil, nil, err
-	}
-	if bytes.ContainsAny(rest, "\r\n") { // base64 decoder ignores these
-		return Params{}, nil, nil, ErrInvalidHash
+		return Params{}, "", "", ErrInvalidHash
 	}
 
-	var i int
-	if i = bytes.IndexByte(rest, '$'); i == -1 {
-		return Params{}, nil, nil, ErrInvalidHash
+	hash = hash[idx+1:]
+	idx = strings.IndexByte(hash, '$')
+	salt := hash[:idx]
+
+	saltLen := (len(salt) * 6) / 8 // assumes un padded base64
+
+	key := hash[idx+1:]
+	keyLen := (len(key) * 6) / 8
+
+	params := Params{
+		Memory:      uint32(memoryNum),
+		Iterations:  uint32(iterationsNum),
+		Parallelism: uint8(parallelismNum),
+		SaltLength:  uint32(saltLen),
+		KeyLength:   uint32(keyLen),
 	}
-
-	b64Enc := base64.RawStdEncoding.Strict()
-
-	salt = make([]byte, b64Enc.DecodedLen(i))
-	_, err = b64Enc.Decode(salt, rest[:i])
-	if err != nil {
-		return Params{}, nil, nil, err
-	}
-	params.SaltLength = uint32(len(salt))
-
-	key = make([]byte, b64Enc.DecodedLen(len(rest)-i-1))
-	_, err = b64Enc.Decode(key, rest[i+1:])
-	if err != nil {
-		return Params{}, nil, nil, err
-	}
-	params.KeyLength = uint32(len(key))
-
 	return params, salt, key, nil
 }
