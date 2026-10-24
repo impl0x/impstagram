@@ -5,6 +5,7 @@ import (
 	"backend/internal/entity"
 	"backend/pkg/postgres"
 	"context"
+	"fmt"
 	"strings"
 	"time"
 	"uuid"
@@ -17,10 +18,6 @@ import (
 
 type UserSessions struct {
 	postgres.Postgres
-}
-
-func NewUserSessions(pg postgres.Postgres) UserSessions {
-	return UserSessions{pg}
 }
 
 // ? -----+-----+----- Create -----+-----+-----
@@ -67,7 +64,7 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 
 	_, err := pg.Pool.Exec(ctx, buf.String(), vals...)
 	if err != nil {
-		handlePgxError(err)
+		handlePgxError(fmt.Errorf("user sessions create, %w", err))
 	}
 	return nil
 }
@@ -75,13 +72,13 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 // ? -----+-----+----- Get -----+-----+-----
 
 func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.UserSession, error) {
+	var buf strings.Builder
+	buf.Grow(141 + len(by)) // should fit
+	buf.WriteString("SELECT id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at FROM " + database.TableUserSessions + " WHERE ")
+	buf.WriteString(by)
+	buf.WriteString(" = $1")
 	var session entity.UserSession
-	err := pg.Pool.QueryRow(
-		ctx,
-		"SELECT id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at FROM "+
-			database.TableUserSessions+
-			" WHERE $1 = $2", by, value,
-	).
+	err := pg.Pool.QueryRow(ctx, buf.String(), value).
 		Scan(
 			&session.ID,
 			&session.JwtID,
@@ -95,7 +92,7 @@ func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.U
 			&session.CreatedAt,
 		)
 	if err != nil {
-		return nil, handlePgxError(err)
+		return nil, handlePgxError(fmt.Errorf("user sessions get by %s, %w", by, err))
 	}
 	return &session, nil
 }
@@ -111,9 +108,15 @@ func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*e
 // ? -----+-----+----- Update -----+-----+-----
 
 func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val any) error {
-	cmdTag, err := pg.Pool.Exec(ctx, "UPDATE "+database.TableUserSessions+" SET $1 = $2 WHERE id = $3", col, val, id)
+	var buf strings.Builder
+	buf.Grow(44 + len(col))
+	buf.WriteString("UPDATE " + database.TableUserSessions + " SET ")
+	buf.WriteString(col)
+	buf.WriteString(" = $1 WHERE id = $2")
+
+	cmdTag, err := pg.Pool.Exec(ctx, buf.String(), val, id)
 	if err != nil {
-		return handlePgxError(err)
+		return handlePgxError(fmt.Errorf("user sessions update col %s, %w", col, err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)
@@ -128,7 +131,7 @@ func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUI
 		tokenHash, expiry, id,
 	)
 	if err != nil {
-		return handlePgxError(err)
+		return handlePgxError(fmt.Errorf("user sessions update token hash and expiry, %w", err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)
@@ -139,9 +142,14 @@ func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUI
 // ? -----+-----+----- Delete -----+-----+-----
 
 func (pg UserSessions) delete(ctx context.Context, col string, val any) error {
-	cmdTag, err := pg.Pool.Exec(ctx, "DELETE FROM "+database.TableUserSessions+" WHERE $1 = $2", col, val)
+	var buf strings.Builder
+	buf.Grow(37 + len(col))
+	buf.WriteString("DELETE FROM " + database.TableUserSessions + " WHERE ")
+	buf.WriteString(col)
+	buf.WriteString(" = $1")
+	cmdTag, err := pg.Pool.Exec(ctx, buf.String(), val)
 	if err != nil {
-		return handlePgxError(err)
+		return handlePgxError(fmt.Errorf("user sessions delete by %s, %w", col, err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)
