@@ -22,12 +22,11 @@ import (
 // instead use this and modify the method/path if needed.
 
 type Handler struct {
-	Service    *auth.Service
-	GetContext restapi.ContextGenerator
+	Service *auth.Service
 }
 
-func NewHandler(s *auth.Service, cg restapi.ContextGenerator) Handler {
-	return Handler{s, cg}
+func NewHandler(s *auth.Service) Handler {
+	return Handler{s}
 }
 
 // Registers all the auth paths to the handler's group,
@@ -96,7 +95,10 @@ func (h Handler) Register(c *mo.Context) error {
 		return errIdentifierNotProvided("Need an Email or Phone to register an account")
 	}
 	d := dob.MustParse(req.Dob) // assuming validator has already validated this.
-	result, err := h.Service.Register(h.GetContext(c.Request()), req.service(ch, v, d))
+	result, err := h.Service.Register(
+		restapi.ToServiceContext(c),
+		req.service(ch, v, d),
+	)
 	if err != nil {
 		return err
 	}
@@ -120,7 +122,10 @@ func (h Handler) CheckUsername(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.CheckUsername(h.GetContext(c.Request()), req.service())
+	result, err := h.Service.CheckUsername(
+		restapi.ToServiceContext(c),
+		req.service(),
+	)
 	if err != nil {
 		return err
 	}
@@ -161,7 +166,7 @@ func (h Handler) Login(c *mo.Context) error {
 		return errIdentifierNotProvided("Need an Email/Phone/Username to login into an account")
 	}
 	result, err := h.Service.Login(
-		h.GetContext(c.Request()),
+		restapi.ToServiceContext(c),
 		req.service(ch, v),
 		restapi.GetClientMetadata(c.Request()),
 	)
@@ -216,7 +221,10 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 	} else {
 		return errIdentifierNotProvided("Need an Email/Phone/Username to send otp")
 	}
-	result, err := h.Service.ResendOTP(h.GetContext(c.Request()), req.service(ch, v))
+	result, err := h.Service.ResendOTP(
+		restapi.ToServiceContext(c),
+		req.service(ch, v),
+	)
 	if err != nil {
 		return err
 	}
@@ -242,7 +250,7 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 		return err
 	}
 	result, err := h.Service.VerifyOTP(
-		h.GetContext(c.Request()),
+		restapi.ToServiceContext(c),
 		req.service(),
 		restapi.GetClientMetadata(c.Request()),
 	)
@@ -284,7 +292,10 @@ func (h Handler) Refresh(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.Refresh(h.GetContext(c.Request()), req.service())
+	result, err := h.Service.Refresh(
+		restapi.ToServiceContext(c),
+		req.service(),
+	)
 	if err != nil {
 		return err
 	}
@@ -320,7 +331,10 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 	} else {
 		return errIdentifierNotProvided("Need an Email/Phone to send reset password")
 	}
-	result, err := h.Service.ForgotPassword(h.GetContext(c.Request()), req.service(ch, v))
+	result, err := h.Service.ForgotPassword(
+		restapi.ToServiceContext(c),
+		req.service(ch, v),
+	)
 	if err != nil {
 		return err
 	}
@@ -345,7 +359,10 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	err = h.Service.ResetPassword(h.GetContext(c.Request()), req.service())
+	err = h.Service.ResetPassword(
+		restapi.ToServiceContext(c),
+		req.service(),
+	)
 	if err != nil {
 		return err
 	}
@@ -369,7 +386,10 @@ func (h Handler) Logout(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	err = h.Service.Logout(h.GetContext(c.Request()), token)
+	err = h.Service.Logout(
+		restapi.ToServiceContext(c),
+		token,
+	)
 	if err != nil {
 		return err
 	}
@@ -383,7 +403,10 @@ func (h Handler) DeleteAccount(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	err = h.Service.DeleteAccount(h.GetContext(c.Request()), token)
+	err = h.Service.DeleteAccount(
+		restapi.ToServiceContext(c),
+		token,
+	)
 	if err != nil {
 		return err
 	}
@@ -402,7 +425,11 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	err = h.Service.Add2FA(h.GetContext(c.Request()), token, req.service())
+	err = h.Service.Add2FA(
+		restapi.ToServiceContext(c),
+		token,
+		req.service(),
+	)
 	if err != nil {
 		return err
 	}
@@ -428,7 +455,11 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	err = h.Service.Remove2FA(h.GetContext(c.Request()), token, req.service())
+	err = h.Service.Remove2FA(
+		restapi.ToServiceContext(c),
+		token,
+		req.service(),
+	)
 	if err != nil {
 		return err
 	}
@@ -449,7 +480,10 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.TotpSetup(h.GetContext(c.Request()), token)
+	result, err := h.Service.TotpSetup(
+		restapi.ToServiceContext(c),
+		token,
+	)
 	if err != nil {
 		return err
 	}
@@ -479,7 +513,11 @@ func (h Handler) totpVerify(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.TotpVerify(h.GetContext(c.Request()), token, req.service())
+	result, err := h.Service.TotpVerify(
+		restapi.ToServiceContext(c),
+		token,
+		req.service(),
+	)
 	if err != nil {
 		if result.RemainingAttempts != 0 { // if not 0 then this field was populated and we need to add that to the error struct data.
 			return c.JSON(
