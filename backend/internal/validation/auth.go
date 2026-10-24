@@ -53,9 +53,9 @@ func Username(s string) error {
 
 // Dob errors
 var (
-	errEmptyDob           = errors.New("Dob is " + dob.ErrEmpty.Error()[4:])
-	errDobIncorrectFormat = errors.New("Dob has " + dob.ErrIncorrectFormat.Error()[4:])
-	errDobNotParseable    = errors.New("Dob is " + dob.ErrNotParseable.Error()[4:])
+	errEmptyDob           = errors.New("Dob is " + dob.ErrEmpty.Error()[5:])
+	errDobIncorrectFormat = errors.New("Dob has " + dob.ErrIncorrectFormat.Error()[5:])
+	errDobNotParseable    = errors.New("Dob is " + dob.ErrNotParseable.Error()[5:])
 	errDobImpossible      = errors.New("Dob is impossible")
 )
 
