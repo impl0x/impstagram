@@ -270,7 +270,7 @@ func (s *Service) Register(ctx service.Context, req RegisterRequest) (RegisterRe
 
 	// send an welcome email if user registered via email
 	if req.Channel == entity.ChannelEmail {
-		go s.email.SendSingle(ctx, s.email.Renderer.Subject(email.SubWelcome), req.Value, s.email.Renderer.Welcome(req.Username))
+		go s.email.sender.SendSingle(ctx, s.email.renderer.Subject(render.SubWelcome), req.Value, s.email.renderer.Welcome(req.Username))
 	}
 
 	// Verify the identifier. By sending an otp
