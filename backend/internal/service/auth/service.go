@@ -73,7 +73,7 @@ type Dependencies struct {
 	Otp           cryptoutil.OtpManager
 	Password      cryptoutil.PasswordManager
 	EmailSender   email.Sender
-	EmailRenderer render.Renderer
+	EmailRenderer *render.Renderer
 }
 
 // Instantiates a new service instance with default rules and caches, and repositories provided in the parameters.
@@ -94,7 +94,7 @@ func NewService(d Dependencies) *Service {
 		password: d.Password,
 		email: _email{
 			sender:   d.EmailSender,
-			renderer: d.EmailRenderer,
+			renderer: *d.EmailRenderer,
 		},
 	}
 }
