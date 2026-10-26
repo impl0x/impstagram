@@ -7,7 +7,8 @@ import (
 	"backend/internal/service"
 	"backend/pkg/cryptoutil" // generate cryptographically random IDs and OTPs and hash passwords
 	"backend/pkg/email"      // send emails
-	"backend/pkg/jwt"        // generate and verify jwt tokens
+	"backend/pkg/email/render"
+	"backend/pkg/jwt" // generate and verify jwt tokens
 	"context"
 	"slices"
 	"time"
@@ -37,7 +38,12 @@ type Service struct {
 	jwt      jwt.Manager
 	otp      cryptoutil.OtpManager
 	password cryptoutil.PasswordManager
-	email    email.Manager
+	email    _email
+}
+
+type _email struct {
+	sender   email.Sender
+	renderer render.Renderer
 }
 
 type serviceCaches struct {
@@ -60,13 +66,14 @@ type profileRepository interface {
 }
 
 type Dependencies struct {
-	Log      logger.Logger
-	Config   config.AuthService
-	Repos    Repositories
-	Jwt      jwt.Manager
-	Otp      cryptoutil.OtpManager
-	Password cryptoutil.PasswordManager
-	Email    email.Manager
+	Log           logger.Logger
+	Config        config.AuthService
+	Repos         Repositories
+	Jwt           jwt.Manager
+	Otp           cryptoutil.OtpManager
+	Password      cryptoutil.PasswordManager
+	EmailSender   email.Sender
+	EmailRenderer render.Renderer
 }
 
 // Instantiates a new service instance with default rules and caches, and repositories provided in the parameters.
@@ -85,7 +92,10 @@ func NewService(d Dependencies) *Service {
 		jwt:      d.Jwt,
 		otp:      d.Otp,
 		password: d.Password,
-		email:    d.Email,
+		email: _email{
+			sender:   d.EmailSender,
+			renderer: d.EmailRenderer,
+		},
 	}
 }
 
@@ -150,21 +160,21 @@ func (s *Service) sendOTP(ctx service.Context, channel entity.AuthChannel, purpo
 	// Send otp based on the identifier
 	switch channel {
 	case entity.ChannelEmail:
-		var sub email.Subject
-		var html email.HTML
-		r := s.email.Renderer.Otp(otp, timeDurationToString(s.config.ExpiryTimeOTP)) // renderer
+		var sub render.Subject
+		var html string
+		r := s.email.renderer.Otp(otp, timeDurationToString(s.config.ExpiryTimeOTP)) // renderer
 		switch purpose {
 		case purpose2FA:
-			sub = email.Sub2FA
+			sub = render.Sub2FA
 			html = r.TwoFA()
 		case purposeRegistration:
-			sub = email.SubVerifyEmail
+			sub = render.SubVerifyEmail
 			html = r.Registration()
 		case purposeResetPass:
-			sub = email.SubResetPassword
+			sub = render.SubResetPassword
 			html = r.ResetPass()
 		}
-		err = s.email.SendSingle(ctx, s.email.Renderer.Subject(sub), target, html)
+		err = s.email.sender.SendSingle(ctx, s.email.renderer.Subject(sub), target, html)
 	case entity.ChannelPhone:
 		s.log.Error("Service: Request to send otp on phone arrived, impossible!")
 		// IMPORTANT
