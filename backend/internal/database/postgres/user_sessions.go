@@ -23,7 +23,7 @@ type UserSessions struct {
 // ? -----+-----+----- Create -----+-----+-----
 
 func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) error {
-	totalLen := 85
+	totalLen := 72 + len(database.TableUserSessions)
 	cols := make([]string, 0, 9)
 	vals := make([]any, 0, 9)
 	if session.ID != uuid.Nil() {
@@ -73,7 +73,7 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 
 func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.UserSession, error) {
 	var buf strings.Builder
-	buf.Grow(141 + len(by)) // should fit
+	buf.Grow(128 + len(database.TableUserSessions) + len(by))
 	buf.WriteString("SELECT id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at FROM " + database.TableUserSessions + " WHERE ")
 	buf.WriteString(by)
 	buf.WriteString(" = $1")
@@ -109,7 +109,7 @@ func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*e
 
 func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val any) error {
 	var buf strings.Builder
-	buf.Grow(44 + len(col))
+	buf.Grow(31 + len(database.TableUserSessions) + len(col))
 	buf.WriteString("UPDATE " + database.TableUserSessions + " SET ")
 	buf.WriteString(col)
 	buf.WriteString(" = $1 WHERE id = $2")
@@ -143,7 +143,7 @@ func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUI
 
 func (pg UserSessions) delete(ctx context.Context, col string, val any) error {
 	var buf strings.Builder
-	buf.Grow(37 + len(col))
+	buf.Grow(24 + len(database.TableUserSessions) + len(col))
 	buf.WriteString("DELETE FROM " + database.TableUserSessions + " WHERE ")
 	buf.WriteString(col)
 	buf.WriteString(" = $1")

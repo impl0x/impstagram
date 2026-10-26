@@ -53,7 +53,7 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 	}
 	defer tx.Rollback(ctx)
 
-	totalLen := 113 // calculated number of bytes
+	totalLen := 108 + len(database.TableUsers) // calculated number of bytes
 	cols := make([]string, 0, 8)
 	vals := make([]any, 0, 8)
 	// if provided a ID then don't rely on the database to make one again, use the id given
@@ -104,7 +104,7 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 // wrapper for get methods
 func (pg Users) get(ctx context.Context, by string, value any) (*entity.User, error) {
 	var buf strings.Builder
-	buf.Grow(130 + len(by))
+	buf.Grow(125 + len(database.TableUsers) + len(by))
 	buf.WriteString("SELECT id, email, phone, password_hash, dob::text, status, totp_secret_key, two_fas, created_at, updated_at FROM " + database.TableUsers + " WHERE ")
 	buf.WriteString(by)
 	buf.WriteString(" = $1")
@@ -172,7 +172,7 @@ func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel
 // wrapper for update methods
 func (pg Users) update(ctx context.Context, id uuid.UUID, col string, val any) error {
 	var buf strings.Builder
-	buf.Grow(36 + len(col))
+	buf.Grow(31 + len(database.TableUsers) + len(col))
 	buf.WriteString("UPDATE " + database.TableUsers + " SET ")
 	buf.WriteString(col)
 	buf.WriteString(" = $1 WHERE id = $2")
