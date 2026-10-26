@@ -1,4 +1,4 @@
-package email
+package render
 
 import (
 	"embed"
@@ -12,6 +12,8 @@ const (
 	welcomePath = "welcome.html"
 	otpPath     = "otp.html"
 )
+
+type HTML = string
 
 type Subject int
 
@@ -72,22 +74,21 @@ func NewRenderer(appName, appLogoUrl, appHomePageLink string) (*Renderer, error)
 	}, nil
 }
 
-// will panic if a invalid subject enum is used, else a valid subject string is returned
+// returns a subject string using the enum type [Subject]
+//  
+// will panic if a invalid subject enum is used
 func (r *Renderer) Subject(s Subject) string {
 	return r.subjects[s]
 }
 
-// custom type to avoid conflict with normal string and html string
-type HTML string
-
 func (r *Renderer) render(path string, data any) HTML {
 	var buf strings.Builder
-	buf.Grow(5000) // enough for a html
+	buf.Grow(5000) // enough for a html, change when adding bigger html files
 	err := r.templates.ExecuteTemplate(&buf, path, data)
 	if err != nil {
 		panic(fmt.Errorf("template panic while email rendering, %w", err))
 	}
-	return HTML(buf.String())
+	return buf.String()
 }
 
 type WelcomeData struct {
@@ -97,6 +98,7 @@ type WelcomeData struct {
 	AppHomePageLink string
 }
 
+// renders a html using the welcome template
 func (r *Renderer) Welcome(username string) HTML {
 	return r.render(welcomePath, WelcomeData{r.data.AppName, r.data.AppLogoUrl, username, r.data.AppHomePageLink})
 }
@@ -115,26 +117,26 @@ type wrappedOtpData struct {
 	o otpData
 }
 
-func (w wrappedOtpData) Registration() HTML {
+func (w *wrappedOtpData) Registration() HTML {
 	w.o.Content = otpConRegistration
 	w.o.SubContent = otpSubConRegistration
 	return w.r.render(otpPath, w.o)
 }
 
-func (w wrappedOtpData) TwoFA() HTML {
+func (w *wrappedOtpData) TwoFA() HTML {
 	w.o.Content = otpCon2FA
 	w.o.SubContent = otpSubCon2FA
 	return w.r.render(otpPath, w.o)
 }
 
-func (w wrappedOtpData) ResetPass() HTML {
+func (w *wrappedOtpData) ResetPass() HTML {
 	w.o.Content = otpConResetPass
 	w.o.SubContent = otpSubConResetPass
 	return w.r.render(otpPath, w.o)
 }
 
-func (r *Renderer) Otp(otp, expiryTime string) wrappedOtpData {
-	return wrappedOtpData{
+func (r *Renderer) Otp(otp, expiryTime string) *wrappedOtpData {
+	return &wrappedOtpData{
 		r: r,
 		o: otpData{
 			AppName:    r.data.AppName,
