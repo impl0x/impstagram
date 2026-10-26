@@ -25,7 +25,7 @@ type Profiles struct {
 func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 	cols := make([]string, 0, 7)
 	vals := make([]any, 0, 7)
-	totalLen := 51
+	totalLen := 43 + len(database.TableProfiles)
 	if profile.DisplayName != nil {
 		cols = append(cols, "display_name")
 		vals = append(vals, profile.DisplayName)
@@ -76,7 +76,7 @@ func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 
 func (pg Profiles) get(ctx context.Context, by string, value any) (*entity.Profile, error) {
 	var buf strings.Builder
-	buf.Grow(102 + len(by))
+	buf.Grow(97 + len(database.TableProfiles) + len(by))
 	buf.WriteString("SELECT user_id, username, display_name, avatar_url, is_private, bio, updated_at FROM " + database.TableUsers + " WHERE ")
 	buf.WriteString(by)
 	buf.WriteString(" = $1")
@@ -102,6 +102,45 @@ func (pg Profiles) GetByUserID(ctx context.Context, id uuid.UUID) (*entity.Profi
 }
 func (pg Profiles) GetByUsername(ctx context.Context, username string) (*entity.Profile, error) {
 	return pg.get(ctx, "username", username)
+}
+
+// ? -----+-----+----- Update -----+-----+-----
+
+func (pg Profiles) update(ctx context.Context, id uuid.UUID, col string, val any) error {
+	var buf strings.Builder
+	buf.Grow(48 + len(database.TableProfiles) + len(col))
+	buf.WriteString("UPDATE " + database.TableProfiles + " SET ")
+	buf.WriteString(col)
+	buf.WriteString(" = $1, updated_at = $2 WHERE id = $3")
+
+	cmdTag, err := pg.Pool.Exec(ctx, buf.String(), val, time.Now(), id)
+	if err != nil {
+		return handlePgxError(fmt.Errorf("user sessions update col %s, %w", col, err))
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return handlePgxError(pgx.ErrNoRows)
+	}
+	return nil
+}
+
+func (pg Profiles) UpdateUsername(ctx context.Context, id uuid.UUID, username string) error {
+	return pg.update(ctx, id, "username", username)
+}
+
+func (pg Profiles) UpdateDisplayName(ctx context.Context, id uuid.UUID, displayName string) error {
+	return pg.update(ctx, id, "display_name", displayName)
+}
+
+func (pg Profiles) UpdateAvatarUrl(ctx context.Context, id uuid.UUID, url string) error {
+	return pg.update(ctx, id, "avatar_url", url)
+}
+
+func (pg Profiles) UpdateIsPrivate(ctx context.Context, id uuid.UUID, isPrivate bool) error {
+	return pg.update(ctx, id, "is_private", isPrivate)
+}
+
+func (pg Profiles) UpdateBio(ctx context.Context, id uuid.UUID, bio string) error {
+	return pg.update(ctx, id, "bio", bio)
 }
 
 // ? -----+-----+----- Extra -----+-----+-----
