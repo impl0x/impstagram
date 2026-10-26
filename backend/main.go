@@ -9,7 +9,7 @@ import (
 func main() {
 	err := startApp()
 	if err != nil {
-		println("Could not start app", err.Error())
+		println("Could not start app,", err.Error())
 	}
 }
 
@@ -21,7 +21,7 @@ func startApp() error {
 	}
 
 	// create new app
-	a, err := app.NewApp(cfg)
+	a, err := app.New(cfg)
 	if err != nil {
 		return fmt.Errorf("Error instantiating new app, %w", err)
 	}

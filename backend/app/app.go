@@ -180,7 +180,8 @@ func newMoApi(log logger.Logger, h handlers) *mo.Mo {
 	return m
 }
 
-func NewApp(cfg *config.Config) (*App, error) {
+// Creates a new app with the configuration provided
+func New(cfg *config.Config) (*App, error) {
 	// logger
 	log := logger.New(logger.Level(cfg.Log.Int()), logger.WithOutputBatchingOFF)
 
