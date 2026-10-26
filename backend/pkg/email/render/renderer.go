@@ -75,7 +75,7 @@ func NewRenderer(appName, appLogoUrl, appHomePageLink string) (*Renderer, error)
 }
 
 // returns a subject string using the enum type [Subject]
-//  
+//
 // will panic if a invalid subject enum is used
 func (r *Renderer) Subject(s Subject) string {
 	return r.subjects[s]
@@ -90,6 +90,8 @@ func (r *Renderer) render(path string, data any) HTML {
 	}
 	return buf.String()
 }
+
+// ? ---- email rendering related methods ----
 
 type WelcomeData struct {
 	AppName         string
@@ -110,6 +112,18 @@ type otpData struct {
 	SubContent string
 	Otp        string
 	ExpiryTime string
+}
+
+func (r *Renderer) Otp(otp, expiryTime string) *wrappedOtpData {
+	return &wrappedOtpData{
+		r: r,
+		o: otpData{
+			AppName:    r.data.AppName,
+			AppLogoUrl: r.data.AppLogoUrl,
+			Otp:        otp,
+			ExpiryTime: expiryTime,
+		},
+	}
 }
 
 type wrappedOtpData struct {
@@ -133,16 +147,4 @@ func (w *wrappedOtpData) ResetPass() HTML {
 	w.o.Content = otpConResetPass
 	w.o.SubContent = otpSubConResetPass
 	return w.r.render(otpPath, w.o)
-}
-
-func (r *Renderer) Otp(otp, expiryTime string) *wrappedOtpData {
-	return &wrappedOtpData{
-		r: r,
-		o: otpData{
-			AppName:    r.data.AppName,
-			AppLogoUrl: r.data.AppLogoUrl,
-			Otp:        otp,
-			ExpiryTime: expiryTime,
-		},
-	}
 }
