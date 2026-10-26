@@ -3,7 +3,6 @@ package app
 import (
 	"backend/internal/config"
 	"backend/internal/database/postgres"
-	dbpostgres "backend/internal/database/postgres"
 	"backend/internal/repository"
 	"backend/internal/restapi"
 	authhandler "backend/internal/restapi/handler/auth"
@@ -13,6 +12,8 @@ import (
 	"backend/internal/validation"
 	"backend/pkg/cryptoutil"
 	"backend/pkg/email"
+	"backend/pkg/email/render"
+	"backend/pkg/email/resend"
 	"backend/pkg/jwt"
 	"fmt"
 	"net"
@@ -28,54 +29,58 @@ type App struct {
 	log    logger.Logger
 }
 
+// api handlers
 type handlers struct {
 	auth        authhandler.Handler
 	validations validationhandler.Handler
 }
 
+// all services
 type services struct {
 	auth *authservice.Service
 }
 
+// repositories used by the services
 type repositories struct {
 	user        repository.UserRepository
 	userSession repository.UserSessionRepository
 	profile     repository.ProfileRepository
 }
 
+// all extra utility packages used by services
 type pkgs struct {
-	otp      cryptoutil.OtpManager
-	password cryptoutil.PasswordManager
-	jwt      jwt.Manager
-	email    email.Manager
-	postgres postgres.Postgres
+	otp           cryptoutil.OtpManager
+	password      cryptoutil.PasswordManager
+	jwt           jwt.Manager
+	emailSender   email.Sender
+	emailRenderer *render.Renderer
+	postgres      postgres.Postgres
 }
 
-// extra initialization functions
-
+// returns a new configured http client
 func newHTTP(cfg config.HTTP) *http.Client {
 	dialer := &net.Dialer{
 		Timeout:   cfg.DialerTimeout,
 		KeepAlive: cfg.DialerKeepAlive,
 	}
-	transport := &http.Transport{
-		DialContext:           dialer.DialContext,
-		TLSHandshakeTimeout:   cfg.TLSHandshakeTimeout,
-		ResponseHeaderTimeout: cfg.ResponseHeaderTimeout,
-		ExpectContinueTimeout: cfg.ExpectContinueTimeout,
-
-		MaxIdleConns:        cfg.MaxIdleConns,
-		MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost,
-		MaxConnsPerHost:     cfg.MaxConnsPerHost,
-		IdleConnTimeout:     cfg.IdleConnTimeout,
-		ForceAttemptHTTP2:   cfg.ForceAttemptHTTP2,
-	}
 	return &http.Client{
-		Transport: transport,
-		Timeout:   cfg.Timeout,
+		Transport: &http.Transport{
+			DialContext:           dialer.DialContext,
+			TLSHandshakeTimeout:   cfg.TLSHandshakeTimeout,
+			ResponseHeaderTimeout: cfg.ResponseHeaderTimeout,
+			ExpectContinueTimeout: cfg.ExpectContinueTimeout,
+
+			MaxIdleConns:        cfg.MaxIdleConns,
+			MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost,
+			MaxConnsPerHost:     cfg.MaxConnsPerHost,
+			IdleConnTimeout:     cfg.IdleConnTimeout,
+			ForceAttemptHTTP2:   cfg.ForceAttemptHTTP2,
+		},
+		Timeout: cfg.Timeout,
 	}
 }
 
+// returns a new configured http server
 func newHTTPServer(cfg config.RestAPI) *http.Server {
 	return &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -86,94 +91,125 @@ func newHTTPServer(cfg config.RestAPI) *http.Server {
 	}
 }
 
-func NewApp() (*App, error) {
-	// config
-	conf, err := config.Load()
-	if err != nil {
-		return nil, fmt.Errorf("App: Config load error, %w", err)
-	}
-
-	// logger
-	log := logger.New(logger.Level(conf.Log.Int()), logger.WithOutputBatchingOFF)
-
-	// Infra - http, email, postgres
-	httpClient := newHTTP(conf.Infra.HTTP)
-	emailRenderer, err := email.NewRenderer(conf.App.Name, conf.App.LogoUrl, conf.App.HomePageLink)
-	emailManager := email.NewManager(conf.Infra.Email, httpClient, emailRenderer)
-	if err != nil {
-		return nil, fmt.Errorf("App: Email renderer fail, %w", err)
-	}
-	pg, err := dbpostgres.NewPostgres(conf.Infra.Postgres, log)
+// returns all packages with their configured values
+func newPkgs(cfg *config.Config, log logger.Logger) (*pkgs, error) {
+	// create database connection
+	pg, err := postgres.New(cfg.Infra.Postgres, log)
 	if err != nil {
 		return nil, fmt.Errorf("App: Could not instantiate postgres, %w", err)
 	}
-
-	// pkgs
-	p := pkgs{
-		otp:      cryptoutil.NewOtpGenerator(conf.App.Name, conf.Services.Auth.OTP),
-		password: cryptoutil.NewPasswordManager(config.DefaultAuth.Password),
-		jwt:      jwt.NewManager(conf.Services.Auth.JWT.Secret),
-		email:    emailManager,
-		postgres: pg,
+	// create email renderer
+	emailRenderer, err := render.New(cfg.App.Name, cfg.App.LogoUrl, cfg.App.HomePageLink)
+	if err != nil {
+		return nil, fmt.Errorf("App: Email renderer fail, %w", err)
 	}
+	// create a email sender, for that we are using the Resend API as of now
+	httpClient := newHTTP(cfg.Infra.HTTP)
+	emailSender := resend.New(httpClient, cfg.Infra.Email.EmailID, cfg.Infra.Email.ResendApiKey)
+	return &pkgs{
+		otp:           cryptoutil.NewOtpGenerator(cfg.App.Name, cfg.Services.Auth.OTP),
+		password:      cryptoutil.NewPasswordManager(config.DefaultAuth.Password),
+		jwt:           jwt.NewManager(cfg.Services.Auth.JWT.Secret),
+		emailSender:   emailSender,
+		emailRenderer: emailRenderer,
+		postgres:      pg,
+	}, nil
+}
 
-	// repositories
-	d := repositories{
+// returns repositories made using postgres implementations
+func newRepositoriesFromPostgres(pg postgres.Postgres) repositories {
+	return repositories{
 		user:        pg.Users,
 		userSession: pg.UserSessions,
 		profile:     pg.Profiles,
 	}
+}
 
-	// services
-	s := services{
+// returns services injected with their respective configs, repositories, packages and logger.
+func newServices(cfg config.Services, log logger.Logger, r repositories, p *pkgs) services {
+	return services{
 		auth: authservice.NewService(authservice.Dependencies{
 			Log:    log,
-			Config: conf.Services.Auth.Service,
+			Config: cfg.Auth.Service,
 			Repos: authservice.Repositories{
-				User:    d.user,
-				Session: d.userSession,
-				Profile: d.profile,
+				User:    r.user,
+				Session: r.userSession,
+				Profile: r.profile,
 			},
-			Jwt:      p.jwt,
-			Otp:      p.otp,
-			Password: p.password,
-			Email:    p.email,
+			Jwt:           p.jwt,
+			Otp:           p.otp,
+			Password:      p.password,
+			EmailSender:   p.emailSender,
+			EmailRenderer: p.emailRenderer,
 		}),
 	}
+}
 
-	h := handlers{
+// returns handlers injected with services
+func newHandlers(s services) handlers {
+	return handlers{
 		auth:        authhandler.NewHandler(s.auth),
 		validations: validationhandler.NewHandler(),
 	}
+}
+
+// returns a configured Mo api and registers paths, middlewares, etc for handlers
+func newMoApi(log logger.Logger, h handlers) *mo.Mo {
+	// create new Mo instance
+	m := mo.New()
+
+	// add error handler
+	m.HTTPErrorHandler = restapi.ErrorHandler(log)
+
+	// add pre and post middlewares
+	m.AddPreMiddleware(middleware.AddRequestID(cryptoutil.GeneratePseudoHexToken64Bit))
+	m.AddPreMiddleware(middleware.AddStartTime())
+	m.AddPostMiddleware(middleware.RequestLogger(log))
+
+	// add middlewares
+	m.Use(middleware.Recover(true, log))
+
+	// extra configurations
+	m.Config.PrintStartMsg = false
+
+	// register groups and paths for handlers
+	v1 := m.Group("/v1")
+	h.auth.RegisterPaths(v1.Group("/auth"))
+	h.validations.RegisterPaths(v1.Group("/validation"))
+
+	return m
+}
+
+func NewApp(cfg *config.Config) (*App, error) {
+	// logger
+	log := logger.New(logger.Level(cfg.Log.Int()), logger.WithOutputBatchingOFF)
+
+	// pkgs
+	p, err := newPkgs(cfg, log)
+	if err != nil {
+		return nil, err
+	}
+
+	// repositories
+	r := newRepositoriesFromPostgres(p.postgres)
+
+	// services
+	s := newServices(cfg.Services, log, r, p)
+
+	// handlers
+	h := newHandlers(s)
 
 	// validations
 	validation.AddValidations()
 
-	// api
-	m := mo.New()
-	{
-		// add middlewares and other stuff
-		m.HTTPErrorHandler = restapi.ErrorHandler(log)
-		m.AddPreMiddleware(middleware.AddRequestID(cryptoutil.GeneratePseudoHexToken64Bit))
-		m.AddPreMiddleware(middleware.AddStartTime())
-		m.AddPostMiddleware(middleware.RequestLogger(log))
-		m.Use(middleware.Recover(true, log))
-		m.Config.PrintStartMsg = false
-	}
-
-	{
-		// register groups and paths
-		v1 := m.Group("/v1")
-		h.auth.RegisterPaths(v1.Group("/auth"))
-		h.validations.RegisterPaths(v1.Group("/validation"))
-	}
+	// api - using mo package as http api framework
+	api := newMoApi(log, h)
 
 	// server
-	server := newHTTPServer(conf.Infra.RestAPI)
+	server := newHTTPServer(cfg.Infra.RestAPI)
 
-	log.Debug("New App successfully created")
 	return &App{
-		api:    m,
+		api:    api,
 		server: server,
 		log:    log,
 	}, nil
