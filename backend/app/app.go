@@ -3,13 +3,8 @@ package app
 import (
 	"backend/internal/config"
 	"backend/internal/database/postgres"
-	"backend/internal/repository"
-	"backend/internal/restapi"
-	authhandler "backend/internal/restapi/handler/auth"
-	validationhandler "backend/internal/restapi/handler/validation"
-	"backend/internal/restapi/middleware"
+
 	authservice "backend/internal/service/auth"
-	"backend/internal/validation"
 	"backend/pkg/cryptoutil"
 	"backend/pkg/email"
 	"backend/pkg/email/render"
@@ -20,31 +15,15 @@ import (
 	"net/http"
 
 	"github.com/impl0x/go-utils/logger"
-	"github.com/impl0x/mo"
 )
 
 type App struct {
-	api    *mo.Mo
-	server *http.Server
-	log    logger.Logger
-}
-
-// api handlers
-type handlers struct {
-	auth        authhandler.Handler
-	validations validationhandler.Handler
+	t transport
 }
 
 // all services
 type services struct {
 	auth *authservice.Service
-}
-
-// repositories used by the services
-type repositories struct {
-	user        repository.UserRepository
-	userSession repository.UserSessionRepository
-	profile     repository.ProfileRepository
 }
 
 // all extra utility packages used by services
@@ -58,7 +37,7 @@ type pkgs struct {
 }
 
 // returns a new configured http client
-func newHTTP(cfg config.HTTP) *http.Client {
+func newHttpClient(cfg config.HttpClient) *http.Client {
 	dialer := &net.Dialer{
 		Timeout:   cfg.DialerTimeout,
 		KeepAlive: cfg.DialerKeepAlive,
@@ -81,7 +60,7 @@ func newHTTP(cfg config.HTTP) *http.Client {
 }
 
 // returns a new configured http server
-func newHTTPServer(cfg config.RestAPI) *http.Server {
+func newHttpServer(cfg config.HttpServer) *http.Server {
 	return &http.Server{
 		Addr:              ":" + cfg.Port,
 		ReadTimeout:       cfg.ReadTimeout,
@@ -104,7 +83,7 @@ func newPkgs(cfg *config.Config, log logger.Logger) (*pkgs, error) {
 		return nil, fmt.Errorf("App: Email renderer fail, %w", err)
 	}
 	// create a email sender, for that we are using the Resend API as of now
-	httpClient := newHTTP(cfg.Infra.HTTP)
+	httpClient := newHttpClient(cfg.Infra.HttpClient)
 	emailSender := resend.New(httpClient, cfg.Infra.Email.EmailID, cfg.Infra.Email.ResendApiKey)
 	return &pkgs{
 		otp:           cryptoutil.NewOtpGenerator(cfg.App.Name, cfg.Services.Auth.OTP),
@@ -145,41 +124,6 @@ func newServices(cfg config.Services, log logger.Logger, r repositories, p *pkgs
 	}
 }
 
-// returns handlers injected with services
-func newHandlers(s services) handlers {
-	return handlers{
-		auth:        authhandler.NewHandler(s.auth),
-		validations: validationhandler.NewHandler(),
-	}
-}
-
-// returns a configured Mo api and registers paths, middlewares, etc for handlers
-func newMoApi(log logger.Logger, h handlers) *mo.Mo {
-	// create new Mo instance
-	m := mo.New()
-
-	// add error handler
-	m.HTTPErrorHandler = restapi.ErrorHandler(log)
-
-	// add pre and post middlewares
-	m.AddPreMiddleware(middleware.AddRequestID(cryptoutil.GeneratePseudoHexToken64Bit))
-	m.AddPreMiddleware(middleware.AddStartTime())
-	m.AddPostMiddleware(middleware.RequestLogger(log))
-
-	// add middlewares
-	m.Use(middleware.Recover(true, log))
-
-	// extra configurations
-	m.Config.PrintStartMsg = false
-
-	// register groups and paths for handlers
-	v1 := m.Group("/v1")
-	h.auth.RegisterPaths(v1.Group("/auth"))
-	h.validations.RegisterPaths(v1.Group("/validation"))
-
-	return m
-}
-
 // Creates a new app with the configuration provided
 func New(cfg *config.Config) (*App, error) {
 	// logger
@@ -197,26 +141,14 @@ func New(cfg *config.Config) (*App, error) {
 	// services
 	s := newServices(cfg.Services, log, r, p)
 
-	// handlers
-	h := newHandlers(s)
-
-	// validations
-	validation.AddValidations()
-
-	// api - using mo package as http api framework
-	api := newMoApi(log, h)
-
-	// server
-	server := newHTTPServer(cfg.Infra.RestAPI)
+	// transport
+	t := newHttpTransport(log, s, cfg.Infra.HttpServer)
 
 	return &App{
-		api:    api,
-		server: server,
-		log:    log,
+		t: t,
 	}, nil
 }
 
 func (a *App) Run() error {
-	a.log.Info("App running on address " + a.server.Addr)
-	return a.api.StartServer(a.server)
+	return a.t.start()
 }
