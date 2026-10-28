@@ -4,28 +4,28 @@ import "time"
 
 // Contains infrastructure related configs such as database, webserver, etc.
 type Infrastructure struct {
-	HTTP     HTTP     // http requests client
-	RestAPI  RestAPI  // webserver
-	Postgres Postgres // database
-	Email    Email    // email sender
+	HttpClient HttpClient // http requests client
+	HttpServer HttpServer // http server api
+	Postgres   Postgres   // database
+	Email      Email      // email sender
 }
 
 // http client config for sending requests
-type HTTP struct {
-	DialerTimeout         time.Duration `env:"HTTP_DIALER_TIMEOUT"`
-	DialerKeepAlive       time.Duration `env:"HTTP_DIALER_KEEP_ALIVE"`
-	TLSHandshakeTimeout   time.Duration `env:"HTTP_TLS_HANDSHAKE_TIMEOUT"`
-	ResponseHeaderTimeout time.Duration `env:"HTTP_RESPONSE_HEADER_TIMEOUT"`
-	ExpectContinueTimeout time.Duration `env:"HTTP_EXPECT_CONTINUE_TIMEOUT"`
-	MaxIdleConns          int           `env:"HTTP_MAX_IDLE_CONNS" validate:"min=1"`
-	MaxIdleConnsPerHost   int           `env:"HTTP_MAX_IDLE_CONNS_PER_HOST" validate:"min=1"`
-	MaxConnsPerHost       int           `env:"HTTP_MAX_CONNS_PER_HOST" validate:"min=1"`
-	IdleConnTimeout       time.Duration `env:"HTTP_IDLE_CONN_TIMEOUT"`
-	ForceAttemptHTTP2     bool          `env:"HTTP_FORCE_ATTEMPT_HTTP2"`
-	Timeout               time.Duration `env:"HTTP_TIMEOUT"`
+type HttpClient struct {
+	DialerTimeout         time.Duration `env:"HTTP_CLIENT_DIALER_TIMEOUT"`
+	DialerKeepAlive       time.Duration `env:"HTTP_CLIENT_DIALER_KEEP_ALIVE"`
+	TLSHandshakeTimeout   time.Duration `env:"HTTP_CLIENT_TLS_HANDSHAKE_TIMEOUT"`
+	ResponseHeaderTimeout time.Duration `env:"HTTP_CLIENT_RESPONSE_HEADER_TIMEOUT"`
+	ExpectContinueTimeout time.Duration `env:"HTTP_CLIENT_EXPECT_CONTINUE_TIMEOUT"`
+	MaxIdleConns          int           `env:"HTTP_CLIENT_MAX_IDLE_CONNS" validate:"min=1"`
+	MaxIdleConnsPerHost   int           `env:"HTTP_CLIENT_MAX_IDLE_CONNS_PER_HOST" validate:"min=1"`
+	MaxConnsPerHost       int           `env:"HTTP_CLIENT_MAX_CONNS_PER_HOST" validate:"min=1"`
+	IdleConnTimeout       time.Duration `env:"HTTP_CLIENT_IDLE_CONN_TIMEOUT"`
+	ForceAttemptHTTP2     bool          `env:"HTTP_CLIENT_FORCE_ATTEMPT_HTTP2"`
+	Timeout               time.Duration `env:"HTTP_CLIENT_TIMEOUT"`
 }
 
-var DefaultHTTP = HTTP{
+var DefaultHttpClient = HttpClient{
 	DialerTimeout:         5 * time.Second,  // Time to establish a TCP connection
 	DialerKeepAlive:       30 * time.Second, // Keep TCP connection alive
 	TLSHandshakeTimeout:   5 * time.Second,  // Max time waiting for TLS handshake
@@ -39,15 +39,15 @@ var DefaultHTTP = HTTP{
 	Timeout:               10 * time.Second, // Hard maximum timeout for the entire request-response life cycle
 }
 
-type RestAPI struct {
-	Port              string        `env:"REST_API_PORT,required"`
-	ReadTimeout       time.Duration `env:"REST_API_READ_TIMEOUT"`
-	ReadHeaderTimeout time.Duration `env:"REST_API_READ_HEADER_TIMEOUT"`
-	WriteTimeout      time.Duration `env:"REST_API_WRITE_TIMEOUT"`
-	IdleTimeout       time.Duration `env:"REST_API_IDLE_TIMEOUT"`
+type HttpServer struct {
+	Port              string        `env:"HTTP_SERVER_PORT,required"`
+	ReadTimeout       time.Duration `env:"HTTP_SERVER_READ_TIMEOUT"`
+	ReadHeaderTimeout time.Duration `env:"HTTP_SERVER_READ_HEADER_TIMEOUT"`
+	WriteTimeout      time.Duration `env:"HTTP_SERVER_WRITE_TIMEOUT"`
+	IdleTimeout       time.Duration `env:"HTTP_SERVER_IDLE_TIMEOUT"`
 }
 
-var DefaultRestAPI = RestAPI{
+var DefaultHttpServer = HttpServer{
 	ReadTimeout:       5 * time.Second,
 	ReadHeaderTimeout: 2 * time.Second,
 	WriteTimeout:      10 * time.Second,
