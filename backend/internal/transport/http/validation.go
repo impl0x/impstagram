@@ -1,6 +1,10 @@
-package validation
+package httpserver
 
-import "github.com/impl0x/mo/validator/v3"
+import (
+	"backend/internal/validation"
+
+	"github.com/impl0x/mo/validator/v3"
+)
 
 type tagName = string
 
@@ -11,8 +15,8 @@ const DobTag tagName = "dob"
 //
 // Run this if using custom validations in the models
 func AddValidations() {
-	validator.AddCustomValidation(UsernameTag, wrap(Username))
-	validator.AddCustomValidation(DobTag, wrap(Dob))
+	validator.AddCustomValidation(UsernameTag, wrap(validation.Username))
+	validator.AddCustomValidation(DobTag, wrap(validation.Dob))
 }
 
 // wraps a normal validation function without parameter to a [validator.CustomValidatorFunc] type
