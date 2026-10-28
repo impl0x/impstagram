@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"backend/internal/restapi"
+	httpserver "backend/internal/transport/http"
 	"time"
 
 	"github.com/impl0x/mo"
@@ -12,7 +12,7 @@ import (
 // uses context key [restapi.KeyStartTime]
 func AddStartTime() mo.PrePostMiddleware {
 	return func(c *mo.Context) {
-		c.Add(restapi.KeyStartTime, time.Now())
+		c.Add(httpserver.KeyStartTime, time.Now())
 	}
 }
 
@@ -23,6 +23,6 @@ func AddStartTime() mo.PrePostMiddleware {
 // uses context key [restapi.KeyRequestID]
 func AddRequestID(generator func() string) mo.PrePostMiddleware {
 	return func(c *mo.Context) {
-		c.Add(restapi.KeyRequestID, generator())
+		c.Add(httpserver.KeyRequestID, generator())
 	}
 }

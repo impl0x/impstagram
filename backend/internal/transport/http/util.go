@@ -1,4 +1,4 @@
-package restapi
+package httpserver
 
 import (
 	"backend/internal/service"

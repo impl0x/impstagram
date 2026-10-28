@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"backend/internal/restapi"
+	httpserver "backend/internal/transport/http"
 	"strconv"
 	"time"
 
@@ -21,8 +21,8 @@ func RequestLogger(log logger.Logger) mo.PrePostMiddleware {
 			r.Method,
 			"status", strconv.Itoa(c.Response().StatusCode()),
 			"addr", r.RemoteAddr,
-			"req", c.GetTypedMust[string](restapi.KeyRequestID),
-			"time taken", time.Since(c.GetTypedMust[time.Time](restapi.KeyStartTime)).String(),
+			"req", c.GetTypedMust[string](httpserver.KeyRequestID),
+			"time taken", time.Since(c.GetTypedMust[time.Time](httpserver.KeyStartTime)).String(),
 		)
 	}
 }

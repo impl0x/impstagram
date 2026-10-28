@@ -1,4 +1,4 @@
-package restapi
+package httpserver
 
 type ContextKey = string
 

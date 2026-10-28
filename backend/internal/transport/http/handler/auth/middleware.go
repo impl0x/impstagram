@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"backend/internal/restapi"
+	httpserver "backend/internal/transport/http"
 	"backend/pkg/apperr"
 	"backend/pkg/response"
 	"strings"
@@ -9,7 +9,7 @@ import (
 	"github.com/impl0x/mo"
 )
 
-const keyAuthToken restapi.ContextKey = "at"
+const keyAuthToken httpserver.ContextKey = "at"
 
 // Checks for authorization header and expects a valid JWT,
 // if satisfied stores it in the [mo.Context] with the key [KeyAuthToken],

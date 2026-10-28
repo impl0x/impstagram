@@ -2,8 +2,8 @@ package auth
 
 import (
 	"backend/internal/entity"
-	"backend/internal/restapi"
 	"backend/internal/service/auth"
+	httpserver "backend/internal/transport/http"
 	"backend/pkg/apperr"
 	"backend/pkg/dob"
 	"backend/pkg/response"
@@ -96,7 +96,7 @@ func (h Handler) Register(c *mo.Context) error {
 	}
 	d := dob.MustParse(req.Dob) // assuming validator has already validated this.
 	result, err := h.Service.Register(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		req.service(ch, v, d),
 	)
 	if err != nil {
@@ -123,7 +123,7 @@ func (h Handler) CheckUsername(c *mo.Context) error {
 		return err
 	}
 	result, err := h.Service.CheckUsername(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		req.service(),
 	)
 	if err != nil {
@@ -166,9 +166,9 @@ func (h Handler) Login(c *mo.Context) error {
 		return errIdentifierNotProvided("Need an Email/Phone/Username to login into an account")
 	}
 	result, err := h.Service.Login(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		req.service(ch, v),
-		restapi.GetClientMetadata(c.Request()),
+		httpserver.GetClientMetadata(c.Request()),
 	)
 	if err != nil {
 		return err
@@ -222,7 +222,7 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 		return errIdentifierNotProvided("Need an Email/Phone/Username to send otp")
 	}
 	result, err := h.Service.ResendOTP(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		req.service(ch, v),
 	)
 	if err != nil {
@@ -250,9 +250,9 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 		return err
 	}
 	result, err := h.Service.VerifyOTP(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		req.service(),
-		restapi.GetClientMetadata(c.Request()),
+		httpserver.GetClientMetadata(c.Request()),
 	)
 	if err != nil {
 		if result.RemainingAttempts != 0 { // it means this field was populated so we need to add that field in the error struct.
@@ -293,7 +293,7 @@ func (h Handler) Refresh(c *mo.Context) error {
 		return err
 	}
 	result, err := h.Service.Refresh(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		req.service(),
 	)
 	if err != nil {
@@ -332,7 +332,7 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 		return errIdentifierNotProvided("Need an Email/Phone to send reset password")
 	}
 	result, err := h.Service.ForgotPassword(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		req.service(ch, v),
 	)
 	if err != nil {
@@ -360,7 +360,7 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 		return err
 	}
 	err = h.Service.ResetPassword(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		req.service(),
 	)
 	if err != nil {
@@ -387,7 +387,7 @@ func (h Handler) Logout(c *mo.Context) error {
 		return err
 	}
 	err = h.Service.Logout(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		token,
 	)
 	if err != nil {
@@ -404,7 +404,7 @@ func (h Handler) DeleteAccount(c *mo.Context) error {
 		return err
 	}
 	err = h.Service.DeleteAccount(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		token,
 	)
 	if err != nil {
@@ -426,7 +426,7 @@ func (h Handler) Add2FA(c *mo.Context) error {
 		return err
 	}
 	err = h.Service.Add2FA(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		token,
 		req.service(),
 	)
@@ -456,7 +456,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 		return err
 	}
 	err = h.Service.Remove2FA(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		token,
 		req.service(),
 	)
@@ -481,7 +481,7 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 		return err
 	}
 	result, err := h.Service.TotpSetup(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		token,
 	)
 	if err != nil {
@@ -514,7 +514,7 @@ func (h Handler) totpVerify(c *mo.Context) error {
 		return err
 	}
 	result, err := h.Service.TotpVerify(
-		restapi.ToServiceContext(c),
+		httpserver.ToServiceContext(c),
 		token,
 		req.service(),
 	)

@@ -1,4 +1,4 @@
-package restapi
+package httpserver
 
 // this file is mostly copied from the default error handler present in mo.
 import (
