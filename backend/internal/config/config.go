@@ -82,9 +82,8 @@ func Load() (*Config, error) {
 
 	// -+-+- Infra -+-+-
 	// http
-	copyFields(&cfg.Infra.HTTP, &DefaultHTTP)
-	// restAPI
-	copyFields(&cfg.Infra.RestAPI, &DefaultRestAPI)
+	copyFields(&cfg.Infra.HttpClient, &DefaultHttpClient)
+	copyFields(&cfg.Infra.HttpServer, &DefaultHttpServer)
 	// postgres
 	copyFields(&cfg.Infra.Postgres, &DefaultPostgres)
 
