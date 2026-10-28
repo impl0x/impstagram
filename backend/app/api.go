@@ -1,9 +1,11 @@
 package app
 
 import (
+	"backend/internal/config"
 	"backend/internal/restapi"
 	"backend/internal/restapi/middleware"
 	"backend/pkg/cryptoutil"
+	"net/http"
 
 	"github.com/impl0x/go-utils/logger"
 	"github.com/impl0x/mo"
@@ -13,12 +15,13 @@ type api interface {
 	start() error
 }
 
-type moRestApi struct{
-	
+type moHttpApi struct {
+	server *http.Server
+	mo     *mo.Mo
 }
 
 // returns a configured Mo api and registers paths, middlewares, etc for handlers
-func newMoRestApi(log logger.Logger, h handlers) *mo.Mo {
+func newMoHttpApi(log logger.Logger, h handlers, cfg config.HttpServer) moHttpApi {
 	// create new Mo instance
 	m := mo.New()
 
@@ -41,5 +44,14 @@ func newMoRestApi(log logger.Logger, h handlers) *mo.Mo {
 	h.auth.RegisterPaths(v1.Group("/auth"))
 	h.validations.RegisterPaths(v1.Group("/validation"))
 
-	return m
+	a := moHttpApi{
+		server: newHTTPServer(cfg),
+		mo:     m,
+	}
+
+	return a
+}
+
+func (h moHttpApi) start() error {
+	return h.mo.StartServer(h.server)
 }
