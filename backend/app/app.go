@@ -95,15 +95,6 @@ func newPkgs(cfg *config.Config, log logger.Logger) (*pkgs, error) {
 	}, nil
 }
 
-// returns repositories made using postgres implementations
-func newRepositoriesFromPostgres(pg postgres.Postgres) repositories {
-	return repositories{
-		user:        pg.Users,
-		userSession: pg.UserSessions,
-		profile:     pg.Profiles,
-	}
-}
-
 // returns services injected with their respective configs, repositories, packages and logger.
 func newServices(cfg config.Services, log logger.Logger, r repositories, p *pkgs) services {
 	return services{
