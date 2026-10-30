@@ -37,7 +37,7 @@ func (pm PasswordManager) Hash(password string) string {
 
 // Compares the two passwords, i.e. the request password and the password hash stored in the database
 //
-// note that the error returned here can be anything from rand read errors to argon2id format errors
+// note that the error returned here can be argon2id format errors
 // it mostly will not trigger if the data isn't invalid
 func (pm PasswordManager) Compare(reqPassword string, dbPasswordHash string) (bool, error) {
 	params, salt, rawDbPasswordHash, err := argon2id.DecodeHash(dbPasswordHash)
