@@ -28,8 +28,8 @@ func NewNotFound(code Code, message string) AppErr {
 	return New(KindNotFound, code, message)
 }
 
-func NewValidation(code Code, message string) AppErr {
-	return New(KindValidation, code, message)
+func NewValidation(message string) AppErr {
+	return New(KindValidation, CodeValidationError, message)
 }
 
 func NewUnauthorized(code Code, message string) AppErr {
