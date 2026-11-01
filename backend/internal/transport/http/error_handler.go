@@ -8,10 +8,10 @@ import (
 	"encoding/json"
 	"encoding/json/jsontext"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"reflect"
+	"strconv"
 
 	"github.com/impl0x/go-utils/logger"
 	"github.com/impl0x/mo"
@@ -82,7 +82,7 @@ func ErrorHandler(log logger.Logger) mo.HTTPErrorHandler {
 		case errors.As(err, &jsonSyntaxErr):
 			c.JSON(http.StatusUnprocessableEntity, response.Error(
 				apperr.CodeJSONInvalid,
-				fmt.Sprintf("JSON syntax error at offset %d", jsonSyntaxErr.ByteOffset),
+				"JSON syntax error at offset "+strconv.Itoa(int(jsonSyntaxErr.ByteOffset)),
 			))
 		case errors.As(err, &jsonUnmarshalErr):
 			c.JSON(http.StatusBadRequest, response.Error(
