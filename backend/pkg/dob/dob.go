@@ -12,15 +12,6 @@ type Dob struct {
 	Day   int
 }
 
-// same as parse but panics if parsing fails
-func MustParse(dobString string) Dob {
-	d, err := Parse(dobString)
-	if err != nil {
-		panic("dob: fail to parse dob string")
-	}
-	return d
-}
-
 // Dob errors
 var (
 	ErrEmpty           = errors.New("dob: empty")
@@ -67,7 +58,16 @@ func Parse(s string) (Dob, error) {
 		return Dob{}, ErrImpossible
 	}
 	return Dob{y, m, d}, nil
+}
 
+// Assumes string s is validated previously,
+// and does not check for errors,
+// it will panic if string indexing fails
+func MustParse(s string) Dob {
+	y, _ := strconv.Atoi(s[:4])
+	m, _ := strconv.Atoi(s[5:7])
+	d, _ := strconv.Atoi(s[8:])
+	return Dob{y, m, d}
 }
 
 // Calculates age from dob instance
