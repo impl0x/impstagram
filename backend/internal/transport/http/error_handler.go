@@ -50,7 +50,7 @@ func ErrorHandler(log logger.Logger) mo.HTTPErrorHandler {
 		case err == nil: // if no error was returned it means handlers probably returned a nil without writing a response
 			c.NoContent(http.StatusNoContent)
 		case errors.As(err, &appErr):
-			c.JSON(response.HttpStatuscodeFromAppErrKind(appErr.Kind), response.FromAppErr(appErr, nil))
+			c.JSON(AppErrToHttp(appErr, nil))
 		case errors.Is(err, context.Canceled):
 		case errors.Is(err, context.DeadlineExceeded):
 			c.JSON(http.StatusGatewayTimeout, response.Error(apperr.CodeTimeout, "Request timed out"))
