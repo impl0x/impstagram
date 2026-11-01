@@ -146,3 +146,15 @@ func (r totpVerifyRequest) service() auth.TotpVerifyRequest {
 		OTP:         r.OTP,
 	}
 }
+
+type changePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required,min=8,max=20"`
+	NewPassword     string `json:"new_password" validate:"required,min=8,max=20"`
+}
+
+func (r changePasswordRequest) service() auth.ChangePasswordRequest {
+	return auth.ChangePasswordRequest{
+		CurrentPassword: r.CurrentPassword,
+		NewPassword:     r.NewPassword,
+	}
+}
