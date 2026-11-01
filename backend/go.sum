@@ -13,6 +13,8 @@ github.com/impl0x/go-utils v0.8.10 h1:1pyCbX0MDMyEiPTucr1sXvq3DbHASgYYXB2H93E5ag
 github.com/impl0x/go-utils v0.8.10/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
 github.com/impl0x/go-utils v0.8.11 h1:HiA10qbwnceMJo5kFbGBo9ldYbLh1DsEpQ2NHZMn4vo=
 github.com/impl0x/go-utils v0.8.11/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
+github.com/impl0x/go-utils v0.8.12 h1:OZ5lKO60u/PucgcRN0btRz5SQ+ao0qCUBB0mygfGnJ4=
+github.com/impl0x/go-utils v0.8.12/go.mod h1:IAjUXNwN+Syl/rdBdkMDBqsnytRsYPhModQqXO39zdw=
 github.com/impl0x/mo v1.6.5 h1:aCeEARqmOpUVAo2Gl9LoSw6/GyojyNf/D+4XZHM6iik=
 github.com/impl0x/mo v1.6.5/go.mod h1:majrKKjoE+OyYqv1ilaBQRQM2F2DG665f+cG7MaT0lk=
 github.com/impl0x/mo v1.6.7 h1:xMMBgvcs6t+h7K4f5vze7GLcszluqvQNFkebeB39m1k=
