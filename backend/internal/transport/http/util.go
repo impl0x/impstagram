@@ -25,8 +25,14 @@ func AppErrToHttp(err apperr.AppErr, data any) (int, response.Response) {
 	return response.HttpStatuscodeFromAppErrKind(err.Kind), response.FromAppErr(err, data)
 }
 
-// Sends a c.JSON with optional data added to the app error response struct
-// if error type is not apperr.AppErr then the error is returned directly
+// if err is of type [apperr.AppErr] then converts it to [response.Response]
+// struct using the method [response.FromAppErr] and adds the extra data to
+// the response struct and sends a http json response with it, statuscode is
+// derived using [response.HttpStatuscodeFromAppErrKind].
+//
+// if err is not of that type then it is returned directly.
+// this is meant to be a wrapper function over this functionality to
+// not keep rewriting the same snippet of code
 func SendJSONWithAppErrMaybe(c *mo.Context, err error, data any) error {
 	e, ok := err.(apperr.AppErr)
 	if !ok {
