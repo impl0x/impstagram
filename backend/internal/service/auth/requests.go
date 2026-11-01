@@ -60,3 +60,8 @@ type TotpVerifyRequest struct {
 	ReferenceID string
 	OTP         string
 }
+
+type ChangePasswordRequest struct {
+	CurrentPassword string
+	NewPassword     string
+}

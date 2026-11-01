@@ -972,3 +972,23 @@ func (s *Service) TotpVerify(ctx service.Context, token AccessToken, req TotpVer
 	}
 	return TotpVerifyResult{}, nil
 }
+
+// changes the users password
+func (s *Service) ChangePassword(ctx service.Context, token AccessToken, req ChangePasswordRequest) error {
+	user, err := s.repo.User.GetByID(ctx, token.UserID)
+	if err != nil {
+		return err
+	}
+	isPwSame, err := s.password.Compare(req.CurrentPassword, user.PasswordHash)
+	if err != nil {
+		return err
+	}
+	if !isPwSame {
+		return errChangePasswordWrongCurrentPassword
+	}
+	err = s.repo.User.UpdatePassword(ctx, s.password.Hash(req.NewPassword))
+	if err != nil {
+		return err
+	}
+	return nil
+}

@@ -2,7 +2,6 @@ package auth
 
 import (
 	"backend/pkg/apperr"
-	"backend/pkg/response"
 	"errors"
 )
 
@@ -17,24 +16,22 @@ import (
 
 // Common codes, prefix: common
 const (
-	codeCommonUserNotFound      response.Code = "USER_NOT_FOUND"
-	codeCommonSessionExpired    response.Code = "SESSION_EXPIRED"
-	codeCommonAttemptsExhausted response.Code = "ATTEMPTS_EXHAUSTED"
-	codeCommonTokenInvalid      response.Code = "TOKEN_INVALID"
-	codeCommonTokenExpired      response.Code = "TOKEN_EXPIRED"
+	codeCommonSessionExpired apperr.Code = "SESSION_EXPIRED"
+	codeCommonTokenInvalid   apperr.Code = "TOKEN_INVALID"
+	codeCommonTokenExpired   apperr.Code = "TOKEN_EXPIRED"
 )
 
 // Common errors, prefix: common
 var (
 	errCommonUserNotFound = apperr.NewNotFound(
-		codeCommonUserNotFound,
+		"USER_NOT_FOUND",
 		"User not found",
 	)
 	errCommonUnauthorized = apperr.NewUnauthorized(
-		response.CodeUnauthorized,
+		apperr.CodeUnauthorized,
 		"Unauthorized user",
 	)
-	errCommonAttemptsExhausted = apperr.NewUnauthorized(
+	errCommonAttemptsExhausted = apperr.NewForbidden(
 		"ATTEMPTS_EXHAUSTED",
 		"No attempts remaining",
 	)
@@ -44,7 +41,7 @@ var (
 var (
 	errAuthTokenInvalidPayload     = errors.New("auth.Middleware: Auth token has invalid payload")
 	errMiddlewareAuthHeaderMissing = apperr.NewUnauthorized(
-		response.CodeUnauthorized,
+		apperr.CodeUnauthorized,
 		"Authorization header missing or empty",
 	)
 	errMiddlewareAuthTokenInvalid = apperr.NewUnauthorized(
@@ -114,7 +111,7 @@ var (
 // Reset password errors, prefix: Reset
 var (
 	errResetSessionNotFound = apperr.NewNotFound(
-		response.CodeNotFound,
+		apperr.CodeNotFound,
 		"Session not found, please try to raise a reset password request again",
 	)
 	errResetSessionExpired = apperr.NewUnauthorized(
@@ -126,7 +123,7 @@ var (
 // Verify otp errors, prefix: Verify
 var (
 	errVerifyRefIDNotFound = apperr.NewNotFound(
-		response.CodeNotFound,
+		apperr.CodeNotFound,
 		"Reference ID for this verify request not found, please request a new otp again",
 	)
 	errVerifyOTPExpired = apperr.NewUnauthorized(
@@ -166,7 +163,7 @@ var (
 // Remove 2FA errors, prefix: Remove2FA
 var (
 	errRemove2FAChannelNotFound = apperr.NewNotFound(
-		response.CodeNotFound,
+		apperr.CodeNotFound,
 		"The channel is not present in the user's 2fa to be removed",
 	)
 	errRemove2FANotEnabled = apperr.NewForbidden(
@@ -186,7 +183,7 @@ var (
 // Totp verify errors, prefix: TotpVerify
 var (
 	errTotpVerifySessionNotFound = apperr.NewNotFound(
-		response.CodeNotFound,
+		apperr.CodeNotFound,
 		"Session not found, please try to raise a TOTP setup request again",
 	)
 	errTotpVerifySessionExpired = apperr.NewUnauthorized(
@@ -196,5 +193,13 @@ var (
 	errTotpVerifyTOTPIncorrect = apperr.NewForbidden(
 		"TOTP_INCORRECT",
 		"Incorrect OTP",
+	)
+)
+
+// Change password errors, prefix: ChangePassword
+var (
+	errChangePasswordWrongCurrentPassword = apperr.NewUnauthorized(
+		"WRONG_CURRENT_PASSWORD",
+		"The password provided is incorrect, please try again",
 	)
 )
