@@ -1,8 +1,9 @@
 package validations
 
 import (
+	"backend/internal/transport/http/response"
 	"backend/internal/validation"
-	"backend/pkg/response"
+	"backend/pkg/apperr"
 	"net/http"
 
 	"github.com/impl0x/mo"
@@ -40,7 +41,7 @@ func validateStrHandler(fn func(string) error) mo.HandlerFunc {
 			return c.JSON(
 				http.StatusBadRequest,
 				response.Error(
-					response.CodeValidationError,
+					apperr.CodeValidationError,
 					err.Error(),
 				),
 			)
@@ -55,7 +56,7 @@ func ruleHandler(name string, rules []string) mo.HandlerFunc {
 		return c.JSON(
 			http.StatusOK,
 			response.Success(
-				response.CodeOk,
+				apperr.CodeOk,
 				"Following are the rules for "+name+" validation",
 				struct {
 					Rules []string `json:"rules"`
