@@ -986,7 +986,7 @@ func (s *Service) ChangePassword(ctx service.Context, token AccessToken, req Cha
 	if !isPwSame {
 		return errChangePasswordWrongCurrentPassword
 	}
-	err = s.repo.User.UpdatePassword(ctx, s.password.Hash(req.NewPassword))
+	err = s.repo.User.UpdatePasswordHash(ctx, token.UserID, s.password.Hash(req.NewPassword))
 	if err != nil {
 		return err
 	}
