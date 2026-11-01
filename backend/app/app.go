@@ -118,7 +118,7 @@ func newServices(cfg config.Services, log logger.Logger, r repositories, p *pkgs
 // Creates a new app with the configuration provided
 func New(cfg *config.Config) (*App, error) {
 	// logger
-	log := logger.New(logger.Level(cfg.Log.Int()), logger.WithOutputBatchingOFF)
+	log := logger.New(logger.Level(cfg.Log.Int()))
 
 	// pkgs
 	p, err := newPkgs(cfg, log)
