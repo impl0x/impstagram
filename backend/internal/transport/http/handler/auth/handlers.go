@@ -4,9 +4,9 @@ import (
 	"backend/internal/entity"
 	"backend/internal/service/auth"
 	httpserver "backend/internal/transport/http"
+	"backend/internal/transport/http/response"
 	"backend/pkg/apperr"
 	"backend/pkg/dob"
-	"backend/pkg/response"
 	"net/http"
 
 	"github.com/impl0x/mo"
@@ -63,7 +63,8 @@ func (h Handler) RegisterPaths(g mo.Grouped) {
 	g.PUT("/2fa", h.Add2FA, h.Middleware)
 	g.DELETE("/2fa", h.Remove2FA, h.Middleware)
 	g.POST("/2fa/totp/setup", h.TotpSetup, h.Middleware)
-	g.POST("/2fa/totp/verify", h.totpVerify, h.Middleware)
+	g.POST("/2fa/totp/verify", h.TotpVerify, h.Middleware)
+	g.POST("/change/password", h.ChangePassword, h.Middleware)
 }
 
 // ! some info:
@@ -116,6 +117,8 @@ func (h Handler) Register(c *mo.Context) error {
 	)
 }
 
+// Checks if a username is taken or not, also validates it
+//   - POST - [checkUsernameRequest]
 func (h Handler) CheckUsername(c *mo.Context) error {
 	var req checkUsernameRequest
 	err := c.DecodeAndValidateBody(&req)
@@ -256,12 +259,12 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 	)
 	if err != nil {
 		if result.RemainingAttempts != 0 { // it means this field was populated so we need to add that field in the error struct.
-			return c.JSON(
-				err.(apperr.AppErr).ToHttp( // service always returns a AppErr
-					struct {
-						AttemptsRemaining int `json:"attempts_remaining"`
-					}{result.RemainingAttempts},
-				),
+			return httpserver.SendJSONWithAppErrMaybe(
+				c,
+				err,
+				struct {
+					AttemptsRemaining int `json:"attempts_remaining"`
+				}{result.RemainingAttempts},
 			)
 		}
 		return err
@@ -341,7 +344,7 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 	return c.JSON(
 		http.StatusOK,
 		response.Success(
-			response.CodeOk,
+			apperr.CodeOk,
 			"An OTP has been sent to your "+string(ch),
 			struct {
 				ReferenceID string `json:"reference_id"`
@@ -369,7 +372,7 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 	return c.JSON(
 		http.StatusOK,
 		response.Success(
-			response.CodeOk,
+			apperr.CodeOk,
 			"Password reset successfully",
 			nil,
 		),
@@ -382,11 +385,8 @@ func (h Handler) ResetPassword(c *mo.Context) error {
 // deletes the user session
 //   - POST - empty
 func (h Handler) Logout(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
-	if err != nil {
-		return err
-	}
-	err = h.Service.Logout(
+	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
+	err := h.Service.Logout(
 		httpserver.ToServiceContext(c),
 		token,
 	)
@@ -399,11 +399,8 @@ func (h Handler) Logout(c *mo.Context) error {
 // deletes the account, profile and all user sessions
 //   - DELETE - empty
 func (h Handler) DeleteAccount(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
-	if err != nil {
-		return err
-	}
-	err = h.Service.DeleteAccount(
+	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
+	err := h.Service.DeleteAccount(
 		httpserver.ToServiceContext(c),
 		token,
 	)
@@ -421,10 +418,7 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
-	if err != nil {
-		return err
-	}
+	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
 	err = h.Service.Add2FA(
 		httpserver.ToServiceContext(c),
 		token,
@@ -436,7 +430,7 @@ func (h Handler) Add2FA(c *mo.Context) error {
 	return c.JSON(
 		http.StatusOK,
 		response.Success(
-			response.CodeOk,
+			apperr.CodeOk,
 			"Added 2FA for this channel successfully",
 			nil,
 		),
@@ -451,10 +445,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
-	if err != nil {
-		return err
-	}
+	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
 	err = h.Service.Remove2FA(
 		httpserver.ToServiceContext(c),
 		token,
@@ -466,7 +457,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 	return c.JSON(
 		http.StatusOK,
 		response.Success(
-			response.CodeOk,
+			apperr.CodeOk,
 			"Removed 2FA for this channel successfully",
 			nil,
 		),
@@ -476,10 +467,7 @@ func (h Handler) Remove2FA(c *mo.Context) error {
 // starts a setup session for totp setup
 //   - POST - empty
 func (h Handler) TotpSetup(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
-	if err != nil {
-		return err
-	}
+	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
 	result, err := h.Service.TotpSetup(
 		httpserver.ToServiceContext(c),
 		token,
@@ -490,7 +478,7 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 	return c.JSON(
 		http.StatusOK,
 		response.Success(
-			response.CodeOk,
+			apperr.CodeOk,
 			"Setup initiated",
 			struct {
 				ReferenceId string `json:"reference_id"`
@@ -503,13 +491,10 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 
 // verifies a totp session and adds it to the user's 2fas
 //   - POST - [totpVerifyRequest]
-func (h Handler) totpVerify(c *mo.Context) error {
-	token, err := c.GetTyped[auth.AccessToken](keyAuthToken)
-	if err != nil {
-		return err
-	}
+func (h Handler) TotpVerify(c *mo.Context) error {
+	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
 	var req totpVerifyRequest
-	err = c.DecodeAndValidateBody(&req)
+	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
 	}
@@ -520,14 +505,30 @@ func (h Handler) totpVerify(c *mo.Context) error {
 	)
 	if err != nil {
 		if result.RemainingAttempts != 0 { // if not 0 then this field was populated and we need to add that to the error struct data.
-			return c.JSON(
-				err.(apperr.AppErr).ToHttp(
-					struct {
-						AttemptsRemaining int `json:"attempts_remaining"`
-					}{result.RemainingAttempts},
-				),
+			return httpserver.SendJSONWithAppErrMaybe(
+				c,
+				err,
+				struct {
+					AttemptsRemaining int `json:"attempts_remaining"`
+				}{result.RemainingAttempts},
 			)
 		}
+		return err
+	}
+	return c.NoContent(http.StatusAccepted)
+}
+
+// changes password
+//   - POST - [changePasswordRequest]
+func (h Handler) ChangePassword(c *mo.Context) error {
+	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
+	var req changePasswordRequest
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
+		return err
+	}
+	err = h.Service.ChangePassword(httpserver.ToServiceContext(c), token, req.service())
+	if err != nil {
 		return err
 	}
 	return c.NoContent(http.StatusAccepted)
