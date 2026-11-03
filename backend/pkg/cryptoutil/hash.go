@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 )
 
+type Hasher func(string) string
+
 func GenerateMD5Hash(data string) string {
 	m := md5.New()
 	m.Write([]byte(data))
