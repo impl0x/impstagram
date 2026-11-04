@@ -2,7 +2,6 @@ package auth
 
 import (
 	httpserver "backend/internal/transport/http"
-	"backend/pkg/apperr"
 	"strings"
 
 	"github.com/impl0x/mo"
@@ -16,8 +15,6 @@ const keyAuthToken httpserver.ContextKey = "at"
 //
 // calls the service method [auth.IsAuthorized] to check the token validity
 func (h Handler) Middleware(next mo.HandlerFunc) mo.HandlerFunc {
-	errHeaderMissing := apperr.NewUnauthorized(apperr.CodeUnauthorized, "Authorization header missing or empty")
-	errUnsupportedAuth := apperr.NewUnauthorized(apperr.CodeUnauthorized, "Authorization type is unsupported or not provided")
 	return func(c *mo.Context) error {
 		// get the auth header
 		token := c.Request().Header.Get("authorization")

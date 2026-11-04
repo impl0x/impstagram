@@ -15,6 +15,9 @@ const (
 )
 
 var (
+	errHeaderMissing   = apperr.NewUnauthorized(apperr.CodeUnauthorized, "Authorization header missing or empty")
+	errUnsupportedAuth = apperr.NewUnauthorized(apperr.CodeUnauthorized, "Authorization type is unsupported or not provided")
+
 	// extra strings will be joined with a ". "
 	errIdentifierNotProvided = func(extra ...string) apperr.AppErr {
 		str := "Identifier not provided"
