@@ -30,6 +30,9 @@ const TagName = "env"
 // the format must be followed to some extent where the first element must always
 // be the name of the environment variable and the following 2nd and 3rd element
 // can be "required" or "default=..." interchangeably
+//
+// note: pointers can ONLY be to other structs, not to variables,
+// nil setting is not supported as of now
 func Parse(a any) error {
 	rv := reflect.ValueOf(a)
 	if rv.Kind() == reflect.Pointer {
@@ -53,10 +56,16 @@ func parse(v reflect.Value) error {
 		}
 		cv := v.Field(i)
 		kind := ct.Type.Kind()
-		if kind == reflect.Struct {
+		switch kind {
+		case reflect.Struct:
 			err := parse(cv)
 			if err != nil {
 				return err
+			}
+		case reflect.Pointer:
+			v = v.Elem()
+			if v.Kind() != reflect.Struct {
+				return errors.New("env: Pointer to non struct object, nil setting is unsupported as of now")
 			}
 		}
 		tag := ct.Tag.Get(TagName)
@@ -111,7 +120,7 @@ func setValueFromString(v reflect.Value, strVal string) error {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		var t time.Duration
 		if v.Type() == reflect.TypeOf(t) {
-			if strVal==""{
+			if strVal == "" {
 				v.SetInt(0)
 				return nil
 			}
