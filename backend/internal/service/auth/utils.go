@@ -68,7 +68,7 @@ func parseClaims(c *jwt.Claims) (AccessToken, error) {
 // takes a token string and verifies it and returns a [AccessTokenJwt] struct if valid token, else returns error
 func (s *Service) IsAuthorized(token string) (AccessToken, error) {
 	// Decode the token into a jwt claims struct
-	claims, err := s.jwt.VerifyToken(token)
+	claims, err := s.token.jwt.VerifyToken(token)
 
 	// Check if jwt decode fails or if the signature is incorrect
 	if err != nil {
@@ -131,18 +131,18 @@ func timeDurationToString(d time.Duration) string {
 		buf.WriteString(strconv.Itoa(int(h)))
 		buf.WriteString(" hour")
 		if h != 1 {
-			buf.WriteRune('s')
+			buf.WriteByte('s')
 		}
 	}
 	if d%time.Hour != 0 {
 		if h != 0 {
-			buf.WriteRune(' ') // if there was hour
+			buf.WriteByte(' ') // if there was hour
 		}
 		m := (d - h*time.Hour) / time.Minute
 		buf.WriteString(strconv.Itoa(int(m)))
 		buf.WriteString(" minute")
 		if m != 1 {
-			buf.WriteRune('s')
+			buf.WriteByte('s')
 		}
 	}
 	return buf.String()
