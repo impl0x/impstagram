@@ -34,30 +34,37 @@ type PasswordConfig struct {
 // config values for auth service
 type AuthService struct {
 	// age limits
+
 	AgeMin int `env:"AUTH_AGE_MIN" validate:"min=1"`
 	AgeMax int `env:"AUTH_AGE_MAX" validate:"min=120"`
 
 	// attempt limits
+
 	AttemptsOTP        int `env:"AUTH_ATTEMPTS_OTP" validate:"min=0"`
 	AttemptsTOTPVerify int `en:"AUTH_ATTEMPTS_TOTP_VERIFY" validate:"min=0"`
 
 	// expiry times
+
 	ExpiryTimeOTP           time.Duration `env:"AUTH_EXPIRY_TIME_OTP"`
+	ExpiryTimeTOTPSetup     time.Duration `env:"AUTH_EXPIRY_TIME_TOTP_SETUP"`
 	ExpiryTimeAccessToken   time.Duration `env:"AUTH_EXPIRY_TIME_ACCESS_TOKEN"`
 	ExpiryTimeRefreshToken  time.Duration `env:"AUTH_EXPIRY_TIME_REFRESH_TOKEN"`
 	ExpiryTimeResetPassword time.Duration `env:"AUTH_EXPIRY_TIME_RESET_PASSWORD"`
 
 	// cache.TTLCache clean intervals
+
 	TTLCacheCleanIntervalOTP          time.Duration `env:"AUTH_TTLCACHE_CLEAN_INTERVAL_OTP"`
 	TTLCacheCleanIntervalTOTP         time.Duration `env:"AUTH_TTLCACHE_CLEAN_INTERVAL_TOTP"`
 	TTLCacheCleanIntervalReset        time.Duration `env:"AUTH_TTLCACHE_CLEAN_INTERVAL_RESET"`
 	TTLCacheCleanIntervalJWTBlockList time.Duration `env:"AUTH_TTLCACHE_CLEAN_INTERVAL_JWT_BLOCKLIST"`
 
 	// byte sizes
+
 	SizeSessionID    int `env:"AUTH_SIZE_SESSION_ID" validate:"min=1"`
 	SizeRefreshToken int `env:"AUTH_SIZE_REFRESH_TOKEN" validate:"min=1"`
 
 	// session id prefixes
+
 	PrefixRefreshToken string `env:"AUTH_PREFIX_REFRESH_TOKEN"`
 	PrefixOTPSession   string `env:"AUTH_PREFIX_OTP_SESSION"`
 	PrefixTOTPSession  string `env:"AUTH_PREFIX_TOTP_SESSION"`
@@ -86,6 +93,7 @@ var DefaultAuth = Auth{
 		AttemptsTOTPVerify: 5,
 
 		ExpiryTimeOTP:           10 * time.Minute,
+		ExpiryTimeTOTPSetup:     30 * time.Minute,
 		ExpiryTimeAccessToken:   30 * time.Minute,
 		ExpiryTimeRefreshToken:  7 * 24 * time.Hour,
 		ExpiryTimeResetPassword: 30 * time.Minute,
@@ -93,7 +101,7 @@ var DefaultAuth = Auth{
 		TTLCacheCleanIntervalOTP:          10 * time.Minute,
 		TTLCacheCleanIntervalTOTP:         10 * time.Minute,
 		TTLCacheCleanIntervalReset:        10 * time.Minute,
-		TTLCacheCleanIntervalJWTBlockList: 15 * time.Minute,
+		TTLCacheCleanIntervalJWTBlockList: 15 * time.Minute, // half the time of access time expiry token
 
 		SizeSessionID:    24,
 		SizeRefreshToken: 32,
