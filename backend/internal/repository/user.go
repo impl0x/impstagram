@@ -30,7 +30,10 @@ type UserRepository interface {
 	UpdateTwoFAs(ctx context.Context, id uuid.UUID, twoFAs []entity.AuthChannel) error
 	// Updates the totp secret key field and appends [entity.ChannelTOTP] in 2fa slice
 	UpdateAddTotp(ctx context.Context, id uuid.UUID, secretKey string) error
-
+	// Updates the email
+	UpdateEmail(ctx context.Context, id uuid.UUID, email string) error
+	// Updates the email
+	UpdatePhone(ctx context.Context, id uuid.UUID, phone string) error
 	// ? -----+-----+----- Delete -----+-----+-----
 
 	// Deletes a user by ID
