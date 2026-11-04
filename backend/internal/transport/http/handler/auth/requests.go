@@ -82,7 +82,7 @@ func (r forgotPasswordRequest) service(c entity.AuthChannel, v string) auth.Forg
 }
 
 type resetPasswordRequest struct {
-	ReferenceID string `json:"reference_id" validate:"required,startswith=pwd_"`
+	ReferenceID string `json:"reference_id" validate:"required"`
 	NewPassword string `json:"new_password" validate:"required,min=8,max=20"`
 }
 
@@ -94,8 +94,8 @@ func (r resetPasswordRequest) service() auth.ResetPasswordRequest {
 }
 
 type verifyOTPRequest struct {
-	ReferenceID string `json:"reference_id" validate:"required,startswith=otp_"`
-	OTP         string `json:"otp" validate:"required,numeric,len=6"`
+	ReferenceID string `json:"reference_id" validate:"required"`
+	OTP         string `json:"otp" validate:"required,numeric"`
 }
 
 func (r verifyOTPRequest) service() auth.VerifyOTPRequest {
@@ -121,7 +121,7 @@ type add2FARequest struct {
 
 func (r add2FARequest) service() auth.Add2FARequest {
 	return auth.Add2FARequest{
-		Channel: r.Channel,
+		Channel: entity.AuthChannel(r.Channel),
 	}
 }
 
@@ -131,13 +131,13 @@ type remove2FARequest struct {
 
 func (r remove2FARequest) service() auth.Remove2FARequest {
 	return auth.Remove2FARequest{
-		Channel: r.Channel,
+		Channel: entity.AuthChannel(r.Channel),
 	}
 }
 
 type totpVerifyRequest struct {
-	ReferenceID string `json:"reference_id" validate:"required,startswith=totp_"`
-	OTP         string `json:"otp" validate:"required,numeric,len=6"`
+	ReferenceID string `json:"reference_id" validate:"required"`
+	OTP         string `json:"otp" validate:"required,numeric"`
 }
 
 func (r totpVerifyRequest) service() auth.TotpVerifyRequest {
@@ -156,5 +156,27 @@ func (r changePasswordRequest) service() auth.ChangePasswordRequest {
 	return auth.ChangePasswordRequest{
 		CurrentPassword: r.CurrentPassword,
 		NewPassword:     r.NewPassword,
+	}
+}
+
+type changeEmailRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+func (r changeEmailRequest) service() auth.ChangeIdentifierRequest {
+	return auth.ChangeIdentifierRequest{
+		Channel: entity.ChannelEmail,
+		Value:   r.Email,
+	}
+}
+
+type changePhoneRequest struct {
+	Phone string `json:"phone" validate:"required,e.164"`
+}
+
+func (r changePhoneRequest) service() auth.ChangeIdentifierRequest {
+	return auth.ChangeIdentifierRequest{
+		Channel: entity.ChannelPhone,
+		Value:   r.Phone,
 	}
 }

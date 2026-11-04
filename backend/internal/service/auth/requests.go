@@ -49,11 +49,11 @@ type RefreshRequest struct {
 }
 
 type Add2FARequest struct {
-	Channel string
+	Channel entity.AuthChannel // only in "email" / "phone"
 }
 
 type Remove2FARequest struct {
-	Channel string
+	Channel entity.AuthChannel // only in "email" / "phone" / "totp"
 }
 
 type TotpVerifyRequest struct {
@@ -64,4 +64,9 @@ type TotpVerifyRequest struct {
 type ChangePasswordRequest struct {
 	CurrentPassword string
 	NewPassword     string
+}
+
+type ChangeIdentifierRequest struct {
+	Channel entity.AuthChannel // only in "email" / "phone"
+	Value   string
 }
