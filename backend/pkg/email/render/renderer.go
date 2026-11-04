@@ -23,6 +23,7 @@ const (
 	SubVerifyEmail
 	Sub2FA
 	SubResetPassword
+	SubChangeEmail
 )
 
 const (
@@ -32,6 +33,8 @@ const (
 	otpSubConRegistration = "Use the verification code below to continue with your account."
 	otpConResetPass       = "Reset password"
 	otpSubConResetPass    = "Use this one time authorization code below to reset your password on your account."
+	otpConChangeEmail     = "Change email"
+	otpSubConChangeEmail  = "Use this one time verification code to verify the email change for your account"
 )
 
 //go:embed templates/*.html
@@ -43,7 +46,7 @@ type Renderer struct {
 	subjects  subjects
 }
 
-type subjects [4]string // contains the email subject strings, will increase the array length once there are more subjects
+type subjects [5]string // contains the email subject strings, will increase the array length once there are more subjects
 
 // reusable data that is decided at runtime
 type data struct {
@@ -70,6 +73,7 @@ func New(appName, appLogoUrl, appHomePageLink string) (*Renderer, error) {
 			"Login verification code for " + appName,
 			"Verify your email for " + appName,
 			"Reset your password for " + appName,
+			"Verify your email change for " + appName,
 		},
 	}, nil
 }
@@ -146,5 +150,11 @@ func (w *wrappedOtpData) TwoFA() HTML {
 func (w *wrappedOtpData) ResetPass() HTML {
 	w.o.Content = otpConResetPass
 	w.o.SubContent = otpSubConResetPass
+	return w.r.render(otpPath, w.o)
+}
+
+func (w *wrappedOtpData) ChangeEmail() HTML {
+	w.o.Content = otpConChangeEmail
+	w.o.SubContent = otpSubConChangeEmail
 	return w.r.render(otpPath, w.o)
 }
