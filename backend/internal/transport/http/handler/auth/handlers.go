@@ -34,7 +34,9 @@ func NewHandler(s *auth.Service) Handler {
 //
 // Public paths:
 //   - POST - /register
+//   - POST - /register/verify-otp
 //   - POST - /login
+//   - POST - /login/verify-otp
 //   - POST - /resend-otp
 //   - POST - /verify-otp
 //   - POST - /refresh
@@ -48,12 +50,13 @@ func NewHandler(s *auth.Service) Handler {
 //   - DELETE - /2fa
 //   - POST - 	/2fa/totp/setup
 //   - POST - 	/2fa/totp/verify
+//   - POST - /change/password
 func (h Handler) RegisterPaths(g mo.Grouped) {
-	g.POST("/register", h.Register)
 	g.POST("/check/username", h.CheckUsername)
+	g.POST("/register", h.Register)
 	g.POST("/login", h.Login)
-	g.POST("/resend-otp", h.ResendOTP)
 	g.POST("/verify-otp", h.VerifyOTP)
+	g.POST("/resend-otp", h.ResendOTP)
 	g.POST("/refresh", h.Refresh)
 	g.POST("/forgot-password", h.ForgotPassword)
 	g.POST("/reset-password", h.ResetPassword)
@@ -65,6 +68,8 @@ func (h Handler) RegisterPaths(g mo.Grouped) {
 	g.POST("/2fa/totp/setup", h.TotpSetup, h.Middleware)
 	g.POST("/2fa/totp/verify", h.TotpVerify, h.Middleware)
 	g.POST("/change/password", h.ChangePassword, h.Middleware)
+	g.POST("/change/email", h.ChangeEmail, h.Middleware)
+	g.POST("/change/phone", h.ChangePhone, h.Middleware)
 }
 
 // ! some info:
@@ -74,6 +79,35 @@ func (h Handler) RegisterPaths(g mo.Grouped) {
 
 // ? ----+-----+-----Public paths-----+-----+-----
 // All paths below are publicly accessible without a auth token requirement
+
+// Checks if a username is taken or not, also validates it
+//   - POST - [checkUsernameRequest]
+func (h Handler) CheckUsername(c *mo.Context) error {
+	var req checkUsernameRequest
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
+		return err
+	}
+	result, err := h.Service.CheckUsername(
+		httpserver.ToServiceContext(c),
+		req.service(),
+	)
+	if err != nil {
+		return err
+	}
+	var statusCode int
+	if result.Exists {
+		statusCode = http.StatusConflict
+	} else {
+		statusCode = http.StatusOK
+	}
+	return c.JSON(
+		statusCode,
+		struct {
+			Taken bool `json:"taken"`
+		}{result.Exists},
+	)
+}
 
 // Registers a new user
 //   - POST - [registerRequest]
@@ -114,35 +148,6 @@ func (h Handler) Register(c *mo.Context) error {
 				ExpiresAt   int64  `json:"expires_at"`
 			}{result.ReferenceID, result.ExpiresAt.Unix()},
 		),
-	)
-}
-
-// Checks if a username is taken or not, also validates it
-//   - POST - [checkUsernameRequest]
-func (h Handler) CheckUsername(c *mo.Context) error {
-	var req checkUsernameRequest
-	err := c.DecodeAndValidateBody(&req)
-	if err != nil {
-		return err
-	}
-	result, err := h.Service.CheckUsername(
-		httpserver.ToServiceContext(c),
-		req.service(),
-	)
-	if err != nil {
-		return err
-	}
-	var statusCode int
-	if result.Exists {
-		statusCode = http.StatusConflict
-	} else {
-		statusCode = http.StatusOK
-	}
-	return c.JSON(
-		statusCode,
-		struct {
-			Taken bool `json:"taken"`
-		}{result.Exists},
 	)
 }
 
@@ -202,6 +207,41 @@ func (h Handler) Login(c *mo.Context) error {
 	)
 }
 
+// Verifies a otp for authentication
+//   - POST - [verifyOTPRequest]
+func (h Handler) VerifyOTP(c *mo.Context) error {
+	var req verifyOTPRequest
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
+		return err
+	}
+	result, err := h.Service.VerifyOTPForNewAuthentication(
+		httpserver.ToServiceContext(c),
+		req.service(),
+		httpserver.GetClientMetadata(c.Request()),
+	)
+	if err != nil {
+		if result.RemainingAttempts != 0 { // it means this was populated, so we need to add it to the error data and send it now
+			return httpserver.SendJSONWithAppErrMaybe(
+				c,
+				err,
+				struct {
+					AttemptsRemaining uint `json:"attempts_remaining"`
+				}{result.RemainingAttempts},
+			)
+		}
+		return err
+	}
+	return c.JSON(
+		http.StatusAccepted,
+		struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+		}{result.AccessToken, result.RefreshToken},
+	)
+
+}
+
 // resend otp for any purpose
 //   - POST - [resendOTPRequest]
 func (h Handler) ResendOTP(c *mo.Context) error {
@@ -241,49 +281,6 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 				ExpiresAt   int64  `json:"expires_at"`
 			}{result.ReferenceID, result.ExpiresAt.Unix()},
 		),
-	)
-}
-
-// verifies the otp for any purpose
-//   - POST - [verifyOTPRequest]
-func (h Handler) VerifyOTP(c *mo.Context) error {
-	var req verifyOTPRequest
-	err := c.DecodeAndValidateBody(&req)
-	if err != nil {
-		return err
-	}
-	result, err := h.Service.VerifyOTP(
-		httpserver.ToServiceContext(c),
-		req.service(),
-		httpserver.GetClientMetadata(c.Request()),
-	)
-	if err != nil {
-		if result.RemainingAttempts != 0 { // it means this field was populated so we need to add that field in the error struct.
-			return httpserver.SendJSONWithAppErrMaybe(
-				c,
-				err,
-				struct {
-					AttemptsRemaining int `json:"attempts_remaining"`
-				}{result.RemainingAttempts},
-			)
-		}
-		return err
-	}
-	if result.IsResetRequest {
-		return c.JSON(
-			http.StatusAccepted,
-			struct {
-				ReferenceID string `json:"reference_id"`
-				ExpiresAt   int64  `json:"expires_at"`
-			}{result.ReferenceID, result.ExpiresAt.Unix()},
-		)
-	}
-	return c.JSON(
-		http.StatusOK,
-		struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
-		}{result.AccessToken, result.RefreshToken},
 	)
 }
 
@@ -528,6 +525,34 @@ func (h Handler) ChangePassword(c *mo.Context) error {
 		return err
 	}
 	err = h.Service.ChangePassword(httpserver.ToServiceContext(c), token, req.service())
+	if err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusAccepted)
+}
+
+func (h Handler) ChangeEmail(c *mo.Context) error {
+	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
+	var req changeEmailRequest
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
+		return err
+	}
+	err = h.Service.ChangeIdentifier(httpserver.ToServiceContext(c), token, req.service())
+	if err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusAccepted)
+}
+
+func (h Handler) ChangePhone(c *mo.Context) error {
+	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
+	var req changePhoneRequest
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
+		return err
+	}
+	err = h.Service.ChangeIdentifier(httpserver.ToServiceContext(c), token, req.service())
 	if err != nil {
 		return err
 	}
