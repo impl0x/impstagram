@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"backend/internal/repository"
 	"backend/pkg/apperr"
 	"errors"
 )
@@ -13,6 +14,16 @@ import (
 // examples, where Name is the var name for the code/name
 // eg: common errors have prefix of "err" + "Common" + Name
 // all categories for errors are based on the service function that it belongs to, such as middleware errors are of category middleware and have that as its prefix
+
+// if error is equal to [repository.ErrNoResults] then [errCommonUserNotFound] is returned,
+//
+// if not then e is returned without modifications.
+func handleUserNotFound(e error) error {
+	if e == repository.ErrNoResults {
+		return errCommonUserNotFound
+	}
+	return nil
+}
 
 // Common codes, prefix: common
 const (
@@ -39,6 +50,7 @@ var (
 
 // Middleware errors, prefix: Middleware
 var (
+	// internal error
 	errAuthTokenInvalidPayload     = errors.New("auth.Middleware: Auth token has invalid payload")
 	errMiddlewareAuthHeaderMissing = apperr.NewUnauthorized(
 		apperr.CodeUnauthorized,
@@ -122,7 +134,7 @@ var (
 
 // Verify otp errors, prefix: Verify
 var (
-	errVerifyRefIDNotFound = apperr.NewNotFound(
+	errVerifyOTPRefIDNotFound = apperr.NewNotFound(
 		apperr.CodeNotFound,
 		"Reference ID for this verify request not found, please request a new otp again",
 	)
@@ -133,6 +145,11 @@ var (
 	errVerifyOTPIncorrect = apperr.NewUnauthorized(
 		"OTP_INCORRECT",
 		"The OTP provided is incorrect",
+	)
+
+	errVerifyOTPIncorrectPurpose = apperr.NewForbidden(
+		"OTP_UNACCEPTABLE",
+		"This OTP can not be used for this purpose, and this OTP has been invalidated",
 	)
 )
 
