@@ -36,63 +36,63 @@ type Params struct {
 	// Recommended value is between 1 and runtime.NumCPU().
 	Parallelism uint8
 
-	// Length of the random salt. 16 bytes is recommended for password hashing.
-	SaltLength uint32
-
 	// Length of the generated key. 16 bytes or more is recommended.
 	KeyLength uint32
 }
 
+// implements [cryptoutil.PasswordHasher]
 type Argon2ID struct {
-	Params           Params
-	formattedHashLen int
+	Params             Params
+	formattedFirstPart string
+	totalStrLen        int
 }
 
-func NewArgon2ID(p Params) Argon2ID {
-	l := 23
-	v := strconv.Itoa(argon2.Version)
-	l += len(v)
-	m := strconv.Itoa(int(p.Memory))
-	l += len(m)
-	i := strconv.Itoa(int(p.Iterations))
-	l += len(i)
-	pr := strconv.Itoa(int(p.Parallelism))
-	l += len(pr)
-	l += base64.RawStdEncoding.EncodedLen(int(p.SaltLength))
+func NewArgon2ID(p Params, saltLen int) Argon2ID {
+	s := "$argon2id$v=" +
+		strconv.Itoa(argon2.Version) +
+		"$m=" +
+		strconv.Itoa(int(p.Memory)) +
+		",t=" +
+		strconv.Itoa(int(p.Iterations)) +
+		",p=" +
+		strconv.Itoa(int(p.Parallelism)) +
+		"$"
+
+	l := len(s)
+	l += base64.RawStdEncoding.EncodedLen(saltLen)
 	l += base64.RawStdEncoding.EncodedLen(int(p.KeyLength))
 	return Argon2ID{
-		Params:           p,
-		formattedHashLen: l,
+		Params:             p,
+		formattedFirstPart: s,
+		totalStrLen:        l,
 	}
 }
 
-func (a Argon2ID) CreateRawHash(password string, salt []byte, params Params) []byte {
+// creates a raw hash with salt and params provided
+func CreateRawHashWithParams(password string, salt []byte, params Params) []byte {
 	return argon2.IDKey([]byte(password), salt, params.Iterations, params.Memory, params.Parallelism, params.KeyLength)
 }
 
+// creates a raw hash without formatting
+func (a Argon2ID) CreateRawHash(password string, salt []byte) []byte {
+	return argon2.IDKey([]byte(password), salt, a.Params.Iterations, a.Params.Memory, a.Params.Parallelism, a.Params.KeyLength)
+}
+
+// creates a formatted hash with the params in struct
 func (a Argon2ID) CreateHash(password string, salt []byte) string {
-	key := argon2.IDKey([]byte(password), salt, a.Params.Iterations, a.Params.Memory, a.Params.Parallelism, a.Params.KeyLength)
+	key := a.CreateRawHash(password, salt)
 	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
 	b64Key := base64.RawStdEncoding.EncodeToString(key)
+
 	// we store it in this format: $argon2id$v=19$m=65536,t=1,p=4$ZWFzeXNhbHQ$R01...NDA
 	// where, v is version, m for memory, t for time/iterations, p for parallelism/threads
-	// var buf strings.Builder
 
 	var buf strings.Builder
-	buf.Grow(a.formattedHashLen)
-	buf.WriteString("$argon2id$v=")
-	buf.WriteString(strconv.Itoa(argon2.Version))
-	buf.WriteString("$m=")
-	buf.WriteString(strconv.Itoa(int(a.Params.Memory)))
-	buf.WriteString(",t=")
-	buf.WriteString(strconv.Itoa(int(a.Params.Iterations)))
-	buf.WriteString(",p=")
-	buf.WriteString(strconv.Itoa(int(a.Params.Parallelism)))
-	buf.WriteString("$")
+	buf.Grow(a.totalStrLen)
+	buf.WriteString(a.formattedFirstPart)
 	buf.WriteString(b64Salt)
 	buf.WriteString("$")
 	buf.WriteString(b64Key)
-	// hash := fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, params.Memory, params.Iterations, params.Parallelism, b64Salt, b64Key)
 	return buf.String()
 }
 
@@ -167,16 +167,15 @@ func DecodeHash(hash string) (Params, string, string, error) {
 	idx = strings.IndexByte(hash, '$')
 	salt := hash[:idx]
 
-	saltLen := (len(salt) * 6) / 8 // assumes un padded base64
+	// saltLen := base64.RawStdEncoding.DecodedLen(len(salt))
 
 	key := hash[idx+1:]
-	keyLen := (len(key) * 6) / 8
+	keyLen := base64.RawStdEncoding.DecodedLen(len(key))
 
 	params := Params{
 		Memory:      uint32(memoryNum),
 		Iterations:  uint32(iterationsNum),
 		Parallelism: uint8(parallelismNum),
-		SaltLength:  uint32(saltLen),
 		KeyLength:   uint32(keyLen),
 	}
 	return params, salt, key, nil
