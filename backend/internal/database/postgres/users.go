@@ -207,6 +207,12 @@ func (pg Users) UpdateAddTotp(ctx context.Context, id uuid.UUID, secretKey strin
 	}
 	return nil
 }
+func (pg Users) UpdateEmail(ctx context.Context, id uuid.UUID, email string) error {
+	return pg.update(ctx, id, "email", email)
+}
+func (pg Users) UpdatePhone(ctx context.Context, id uuid.UUID, phone string) error {
+	return pg.update(ctx, id, "phone", phone)
+}
 
 // ? -----+-----+----- Delete -----+-----+-----
 
