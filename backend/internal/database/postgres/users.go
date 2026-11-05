@@ -103,13 +103,9 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 
 // wrapper for get methods
 func (pg Users) get(ctx context.Context, by string, value any) (*entity.User, error) {
-	var buf strings.Builder
-	buf.Grow(125 + len(database.TableUsers) + len(by))
-	buf.WriteString("SELECT id, email, phone, password_hash, dob::text, status, totp_secret_key, two_fas, created_at, updated_at FROM " + database.TableUsers + " WHERE ")
-	buf.WriteString(by)
-	buf.WriteString(" = $1")
+	sql := "SELECT id, email, phone, password_hash, dob::text, status, totp_secret_key, two_fas, created_at, updated_at FROM " + database.TableUsers + " WHERE " + by + " = $1"
 	var user entity.User
-	err := pg.Pool.QueryRow(ctx, buf.String(), value).
+	err := pg.Pool.QueryRow(ctx, sql, value).
 		Scan(
 			&user.ID,
 			&user.Email,
@@ -171,13 +167,8 @@ func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel
 
 // wrapper for update methods
 func (pg Users) update(ctx context.Context, id uuid.UUID, col string, val any) error {
-	var buf strings.Builder
-	buf.Grow(31 + len(database.TableUsers) + len(col))
-	buf.WriteString("UPDATE " + database.TableUsers + " SET ")
-	buf.WriteString(col)
-	buf.WriteString(" = $1 WHERE id = $2")
-
-	cmdTag, err := pg.Pool.Exec(ctx, buf.String(), val, id)
+	sql := "UPDATE " + database.TableUsers + " SET " + col + " = $1 WHERE id = $2"
+	cmdTag, err := pg.Pool.Exec(ctx, sql, val, id)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user update col %s, %w", col, err))
 	}

@@ -72,13 +72,9 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 // ? -----+-----+----- Get -----+-----+-----
 
 func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.UserSession, error) {
-	var buf strings.Builder
-	buf.Grow(128 + len(database.TableUserSessions) + len(by))
-	buf.WriteString("SELECT id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at FROM " + database.TableUserSessions + " WHERE ")
-	buf.WriteString(by)
-	buf.WriteString(" = $1")
+	sql := "SELECT id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at FROM " + database.TableUserSessions + " WHERE " + by + " = $1"
 	var session entity.UserSession
-	err := pg.Pool.QueryRow(ctx, buf.String(), value).
+	err := pg.Pool.QueryRow(ctx, sql, value).
 		Scan(
 			&session.ID,
 			&session.JwtID,
@@ -108,13 +104,8 @@ func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*e
 // ? -----+-----+----- Update -----+-----+-----
 
 func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val any) error {
-	var buf strings.Builder
-	buf.Grow(31 + len(database.TableUserSessions) + len(col))
-	buf.WriteString("UPDATE " + database.TableUserSessions + " SET ")
-	buf.WriteString(col)
-	buf.WriteString(" = $1 WHERE id = $2")
-
-	cmdTag, err := pg.Pool.Exec(ctx, buf.String(), val, id)
+	sql := "UPDATE " + database.TableUserSessions + " SET " + col + " = $1 WHERE id = $2"
+	cmdTag, err := pg.Pool.Exec(ctx, sql, val, id)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user sessions update col %s, %w", col, err))
 	}
@@ -142,12 +133,8 @@ func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUI
 // ? -----+-----+----- Delete -----+-----+-----
 
 func (pg UserSessions) delete(ctx context.Context, col string, val any) error {
-	var buf strings.Builder
-	buf.Grow(24 + len(database.TableUserSessions) + len(col))
-	buf.WriteString("DELETE FROM " + database.TableUserSessions + " WHERE ")
-	buf.WriteString(col)
-	buf.WriteString(" = $1")
-	cmdTag, err := pg.Pool.Exec(ctx, buf.String(), val)
+	sql := "DELETE FROM " + database.TableUserSessions + " WHERE " + col + " = $1"
+	cmdTag, err := pg.Pool.Exec(ctx, sql, val)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user sessions delete by %s, %w", col, err))
 	}

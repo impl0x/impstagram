@@ -75,13 +75,9 @@ func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 // ? -----+-----+----- Get -----+-----+-----
 
 func (pg Profiles) get(ctx context.Context, by string, value any) (*entity.Profile, error) {
-	var buf strings.Builder
-	buf.Grow(97 + len(database.TableProfiles) + len(by))
-	buf.WriteString("SELECT user_id, username, display_name, avatar_url, is_private, bio, updated_at FROM " + database.TableUsers + " WHERE ")
-	buf.WriteString(by)
-	buf.WriteString(" = $1")
+	sql := "SELECT user_id, username, display_name, avatar_url, is_private, bio, updated_at FROM " + database.TableUsers + " WHERE " + by + " = $1"
 	var profile entity.Profile
-	err := pg.Pool.QueryRow(ctx, buf.String(), value).
+	err := pg.Pool.QueryRow(ctx, sql, value).
 		Scan(
 			&profile.UserID,
 			&profile.Username,
@@ -107,13 +103,8 @@ func (pg Profiles) GetByUsername(ctx context.Context, username string) (*entity.
 // ? -----+-----+----- Update -----+-----+-----
 
 func (pg Profiles) update(ctx context.Context, id uuid.UUID, col string, val any) error {
-	var buf strings.Builder
-	buf.Grow(48 + len(database.TableProfiles) + len(col))
-	buf.WriteString("UPDATE " + database.TableProfiles + " SET ")
-	buf.WriteString(col)
-	buf.WriteString(" = $1, updated_at = $2 WHERE id = $3")
-
-	cmdTag, err := pg.Pool.Exec(ctx, buf.String(), val, time.Now(), id)
+	sql := "UPDATE " + database.TableProfiles + " SET " + col + " = $1, updated_at = $2 WHERE id = $3"
+	cmdTag, err := pg.Pool.Exec(ctx, sql, val, time.Now(), id)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user sessions update col %s, %w", col, err))
 	}
