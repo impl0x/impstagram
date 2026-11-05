@@ -25,157 +25,153 @@ var (
 	ErrIncompatibleVersion = errors.New("argon2id: incompatible version of argon2")
 )
 
-type Params struct {
+// password hashing configuration/parameters
+type Config struct {
 	// The amount of memory used by the algorithm (in kilobytes).
 	Memory uint32
-
 	// The number of iterations over the memory.
 	Iterations uint32
-
 	// The number of threads (or lanes) used by the algorithm.
 	// Recommended value is between 1 and runtime.NumCPU().
 	Parallelism uint8
-
+	// Length of the salt used in the hash, 8 bytes or more is recommended.
+	SaltLength uint32
 	// Length of the generated key. 16 bytes or more is recommended.
 	KeyLength uint32
 }
 
 // implements [cryptoutil.PasswordHasher]
-type Argon2ID struct {
-	Params             Params
+type Manager struct {
+	c                  Config
 	formattedFirstPart string
 	totalStrLen        int
 }
 
-func NewArgon2ID(p Params, saltLen int) Argon2ID {
+// returns a new argon2id implementation of [cryptoutil.PasswordHasher]
+// Manager struct which can be used to manage password hashes
+func New(c Config, saltLen uint) Manager {
 	s := "$argon2id$v=" +
 		strconv.Itoa(argon2.Version) +
 		"$m=" +
-		strconv.Itoa(int(p.Memory)) +
+		strconv.Itoa(int(c.Memory)) +
 		",t=" +
-		strconv.Itoa(int(p.Iterations)) +
+		strconv.Itoa(int(c.Iterations)) +
 		",p=" +
-		strconv.Itoa(int(p.Parallelism)) +
+		strconv.Itoa(int(c.Parallelism)) +
 		"$"
 
 	l := len(s)
-	l += base64.RawStdEncoding.EncodedLen(saltLen)
-	l += base64.RawStdEncoding.EncodedLen(int(p.KeyLength))
-	return Argon2ID{
-		Params:             p,
+	l += base64.RawStdEncoding.EncodedLen(int(saltLen))
+	l += base64.RawStdEncoding.EncodedLen(int(c.KeyLength))
+	return Manager{
+		c:                  c,
 		formattedFirstPart: s,
 		totalStrLen:        l,
 	}
 }
 
 // creates a raw hash with salt and params provided
-func CreateRawHashWithParams(password string, salt []byte, params Params) []byte {
+func CreateRawHashWithParams(password string, salt []byte, params Config) []byte {
 	return argon2.IDKey([]byte(password), salt, params.Iterations, params.Memory, params.Parallelism, params.KeyLength)
 }
 
 // creates a raw hash without formatting
-func (a Argon2ID) CreateRawHash(password string, salt []byte) []byte {
-	return argon2.IDKey([]byte(password), salt, a.Params.Iterations, a.Params.Memory, a.Params.Parallelism, a.Params.KeyLength)
+func (m Manager) createRawHash(password string, salt []byte) []byte {
+	return argon2.IDKey([]byte(password), salt, m.c.Iterations, m.c.Memory, m.c.Parallelism, m.c.KeyLength)
 }
 
 // creates a formatted hash with the params in struct
-func (a Argon2ID) CreateHash(password string, salt []byte) string {
-	key := a.CreateRawHash(password, salt)
+func (m Manager) createHash(password string, salt []byte) string {
+	key := m.createRawHash(password, salt)
 	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
 	b64Key := base64.RawStdEncoding.EncodeToString(key)
 
 	// we store it in this format: $argon2id$v=19$m=65536,t=1,p=4$ZWFzeXNhbHQ$R01...NDA
 	// where, v is version, m for memory, t for time/iterations, p for parallelism/threads
-
-	var buf strings.Builder
-	buf.Grow(a.totalStrLen)
-	buf.WriteString(a.formattedFirstPart)
-	buf.WriteString(b64Salt)
-	buf.WriteString("$")
-	buf.WriteString(b64Key)
-	return buf.String()
+	return m.formattedFirstPart + b64Salt + "$" + b64Key
 }
 
 // expects format example:
 //
 // $argon2id$v=19$m=19456,t=2,p=2$LPz5gLBKWtk$cZXDRxSOh1JAImjgmo2vOs+IClCyGQyS+sFM9CKYzXk
 //
-// returns params, salt, key, error
-func DecodeHash(hash string) (Params, string, string, error) {
+// returns config, salt, key, error
+func DecodeHash(hash string) (Config, string, string, error) {
 	if hash[0] != '$' {
-		return Params{}, "", "", ErrInvalidHash
+		return Config{}, "", "", ErrInvalidHash
 	}
 
 	hash = hash[1:]
 	idx := strings.IndexByte(hash, '$')
 	if hash[:idx] != "argon2id" {
-		return Params{}, "", "", ErrIncompatibleVariant
+		return Config{}, "", "", ErrIncompatibleVariant
 	}
 
 	hash = hash[idx+1:]
 	if hash[:2] != "v=" {
-		return Params{}, "", "", ErrInvalidHash
+		return Config{}, "", "", ErrInvalidHash
 	}
 
 	hash = hash[2:]
 	idx = strings.IndexByte(hash, '$')
 	versionNum, err := strconv.ParseUint(hash[:idx], 10, 32)
 	if err != nil {
-		return Params{}, "", "", ErrInvalidHash
+		return Config{}, "", "", ErrInvalidHash
 	}
 	if versionNum != argon2.Version {
-		return Params{}, "", "", ErrIncompatibleVersion
+		return Config{}, "", "", ErrIncompatibleVersion
 	}
 
 	hash = hash[idx+1:]
 	if hash[:2] != "m=" {
-		return Params{}, "", "", ErrInvalidHash
+		return Config{}, "", "", ErrInvalidHash
 	}
 
 	hash = hash[2:]
 	idx = strings.IndexByte(hash, ',')
 	memoryNum, err := strconv.ParseUint(hash[:idx], 10, 32)
 	if err != nil {
-		return Params{}, "", "", ErrInvalidHash
+		return Config{}, "", "", ErrInvalidHash
 	}
 
 	hash = hash[idx+1:]
 	if hash[:2] != "t=" {
-		return Params{}, "", "", ErrInvalidHash
+		return Config{}, "", "", ErrInvalidHash
 	}
 
 	hash = hash[2:]
 	idx = strings.IndexByte(hash, ',')
 	iterationsNum, err := strconv.ParseUint(hash[:idx], 10, 32)
 	if err != nil {
-		return Params{}, "", "", ErrInvalidHash
+		return Config{}, "", "", ErrInvalidHash
 	}
 
 	hash = hash[idx+1:]
 	if hash[:2] != "p=" {
-		return Params{}, "", "", ErrInvalidHash
+		return Config{}, "", "", ErrInvalidHash
 	}
 
 	hash = hash[2:]
 	idx = strings.IndexByte(hash, '$')
 	parallelismNum, err := strconv.ParseUint(hash[:idx], 10, 8)
 	if err != nil {
-		return Params{}, "", "", ErrInvalidHash
+		return Config{}, "", "", ErrInvalidHash
 	}
 
 	hash = hash[idx+1:]
 	idx = strings.IndexByte(hash, '$')
 	salt := hash[:idx]
 
-	// saltLen := base64.RawStdEncoding.DecodedLen(len(salt))
+	saltLen := base64.RawStdEncoding.DecodedLen(len(salt))
 
 	key := hash[idx+1:]
 	keyLen := base64.RawStdEncoding.DecodedLen(len(key))
 
-	params := Params{
+	params := Config{
 		Memory:      uint32(memoryNum),
 		Iterations:  uint32(iterationsNum),
 		Parallelism: uint8(parallelismNum),
+		SaltLength:  uint32(saltLen),
 		KeyLength:   uint32(keyLen),
 	}
 	return params, salt, key, nil
