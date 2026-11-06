@@ -1,14 +1,14 @@
 package auth
 
 import (
-	"backend/internal/config"
 	"backend/internal/entity"     // entity data objects
 	"backend/internal/repository" // repository
 	"backend/internal/service"
-	"backend/pkg/cryptoutil" // generate cryptographically random IDs and OTPs and hash passwords
-	"backend/pkg/email"      // send emails
-	"backend/pkg/email/render"
-	"backend/pkg/jwt" // generate and verify jwt tokens
+	"backend/internal/service/auth/config" // config values
+	"backend/pkg/cryptoutil"               // generate cryptographically random IDs and OTPs and hash passwords
+	"backend/pkg/email"                    // send emails
+	"backend/pkg/email/render"             // render emails
+	"backend/pkg/jwt"                      // generate and verify jwt tokens
 	"context"
 	"slices"
 	"time"
@@ -32,14 +32,14 @@ const (
 )
 
 type Service struct {
-	log      logger.Logger
-	config   config.AuthService
 	cache    serviceCaches
 	repo     Repositories
 	otp      cryptoutil.OtpManager
 	password cryptoutil.PasswordHasher
 	token    _token
 	email    _email
+	log      logger.Logger
+	config   config.Config
 }
 
 type _email struct {
@@ -73,7 +73,7 @@ type profileRepository interface {
 
 type Dependencies struct {
 	Log                logger.Logger             // logging
-	Config             config.AuthService        // configuration and buisness rules
+	Config             config.Config             // configuration and business rules
 	Repos              Repositories              // store and retrieve data
 	Otp                cryptoutil.OtpManager     // generate otps and totps
 	Password           cryptoutil.PasswordHasher // hash and verify passwords
@@ -90,10 +90,10 @@ func NewService(d Dependencies) *Service {
 		log:    d.Log,
 		config: d.Config,
 		cache: serviceCaches{
-			jwtBlocklist:  cache.NewTTLCache[uuid.UUID, struct{}](d.Config.TTLCacheCleanIntervalJWTBlockList),
-			otp:           cache.NewTTLCache[string, *otpSession](d.Config.TTLCacheCleanIntervalOTP),
-			resetPassword: cache.NewTTLCache[string, resetPasswordSession](d.Config.TTLCacheCleanIntervalReset),
-			totp:          cache.NewTTLCache[string, *totpSession](d.Config.TTLCacheCleanIntervalTOTP),
+			jwtBlocklist:  cache.NewTTLCache[uuid.UUID, struct{}](d.Config.TTLCacheCleanInterval.JWTBlockList),
+			otp:           cache.NewTTLCache[string, *otpSession](d.Config.TTLCacheCleanInterval.OTP),
+			resetPassword: cache.NewTTLCache[string, resetPasswordSession](d.Config.TTLCacheCleanInterval.ResetPassword),
+			totp:          cache.NewTTLCache[string, *totpSession](d.Config.TTLCacheCleanInterval.TOTP),
 		},
 		repo:     d.Repos,
 		otp:      d.Otp,
@@ -117,7 +117,7 @@ type otpSession struct {
 	channel  entity.AuthChannel
 	purpose  authPurpose
 	otp      string
-	attempts int
+	attempts uint
 }
 
 // Used to store the pending reset password sessions
@@ -129,29 +129,29 @@ type resetPasswordSession struct {
 type totpSession struct {
 	userID    uuid.UUID
 	secretKey string
-	attempts  int
+	attempts  uint
 }
 
 // ? ----+-----+-----Wrapper functions for cryptoutil-----+-----+-----
 
 // generates a new random string with the prefix [Service.config.PrefixRefreshToken] and size [Service.config.SizeRefreshToken]
 func (s *Service) generateRefreshToken() string {
-	return cryptoutil.GenerateToken(s.config.PrefixRefreshToken, s.config.SizeRefreshToken)
+	return cryptoutil.GenerateToken(s.config.Prefix.RefreshToken, s.config.Size.RefreshToken)
 }
 
 // generates a new random string with the prefix [Service.config.PrefixOTPSession] and size [Service.config.SizeSessionID]
 func (s *Service) generateOTPSessionID() string {
-	return cryptoutil.GenerateToken(s.config.PrefixOTPSession, s.config.SizeSessionID)
+	return cryptoutil.GenerateToken(s.config.Prefix.OTPSession, s.config.Size.SessionID)
 }
 
 // generates a new random string with the prefix [Service.config.PrefixResetSession] and size [Service.config.SizeSessionID]
 func (s *Service) generateResetSessionID() string {
-	return cryptoutil.GenerateToken(s.config.PrefixResetSession, s.config.SizeSessionID)
+	return cryptoutil.GenerateToken(s.config.Prefix.ResetSession, s.config.Size.SessionID)
 }
 
 // generates a new random string with the prefix [Service.config.PrefixTOTPSession] and size [Service.config.SizeSessionID]
 func (s *Service) generateTotpSessionID() string {
-	return cryptoutil.GenerateToken(s.config.PrefixTOTPSession, s.config.SizeSessionID)
+	return cryptoutil.GenerateToken(s.config.Prefix.TOTPSession, s.config.Size.SessionID)
 }
 
 // ? ----+-----+-----Helper functions-----+-----+-----
@@ -172,7 +172,7 @@ func (s *Service) sendOTP(ctx service.Context, channel entity.AuthChannel, purpo
 	case entity.ChannelEmail:
 		var sub render.Subject
 		var html string
-		r := s.email.renderer.Otp(otp, timeDurationToString(s.config.ExpiryTimeOTP)) // renderer
+		r := s.email.renderer.Otp(otp, timeDurationToString(s.config.ExpiryTime.OTP)) // renderer
 		switch purpose {
 		case purpose2FA:
 			sub = render.Sub2FA
@@ -232,12 +232,12 @@ func (s *Service) verifyOTP(refID string, otp string) (*otpSession, verifyOTPRes
 	}
 	session.attempts++      // increment on every successful attempt
 	if session.otp != otp { // we check the otp if it does not match we return early with a incorrect otp error
-		remainingAttempts := s.config.AttemptsOTP - session.attempts
+		remainingAttempts := s.config.MaxAttempts.OTP - session.attempts
 		if remainingAttempts <= 0 {
 			s.cache.otp.Delete(refID) // delete the session not allowing for any more verification attempts
 			return nil, verifyOTPResult{}, errCommonAttemptsExhausted
 		}
-		return nil, verifyOTPResult{uint(remainingAttempts)}, errVerifyOTPIncorrect
+		return nil, verifyOTPResult{remainingAttempts}, errVerifyOTPIncorrect
 	}
 	// if the otp matches then we remove the reference id from our cache, to not allow duplicate requests with the same id ofcourse
 	s.cache.otp.Delete(refID)
@@ -254,7 +254,7 @@ func (s *Service) generateTokensAndCreateSession(ctx service.Context, user *enti
 		newAccessToken( // generating a new access token struct and taking its payload version with json compatible tags
 			user.ID,
 			jwtID,
-			s.config.ExpiryTimeAccessToken,
+			s.config.ExpiryTime.AccessToken,
 		).Claims(),
 	)
 	// new refresh token
@@ -264,7 +264,7 @@ func (s *Service) generateTokensAndCreateSession(ctx service.Context, user *enti
 		JwtID:     jwtID,
 		UserID:    user.ID,
 		TokenHash: cryptoutil.GenerateMD5Hash(refreshToken),
-		ExpiresAt: time.Now().Add(s.config.ExpiryTimeRefreshToken),
+		ExpiresAt: time.Now().Add(s.config.ExpiryTime.RefreshToken),
 	}
 
 	// populating the optional fields
@@ -310,9 +310,9 @@ func (s *Service) Register(ctx service.Context, req RegisterRequest) (RegisterRe
 
 	// validate the user's age against our business rules
 	userAge := req.Dob.Age()
-	if userAge < s.config.AgeMin {
+	if userAge < s.config.Age.Min {
 		return RegisterResult{}, errRegisterNotOldEnough
-	} else if userAge > s.config.AgeMax {
+	} else if userAge > s.config.Age.Max {
 		return RegisterResult{}, errRegisterTooOld
 	}
 
@@ -364,7 +364,7 @@ func (s *Service) Register(ctx service.Context, req RegisterRequest) (RegisterRe
 	}
 	// generate a new reference id for a otp session
 	refID := s.generateOTPSessionID()
-	expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
+	expiresAt := time.Now().Add(s.config.ExpiryTime.OTP)
 	// add a new otp session to our timed cache
 	s.cache.otp.Add(
 		refID,
@@ -441,7 +441,7 @@ func (s *Service) Login(ctx service.Context, req LoginRequest, md entity.ClientM
 	// If user has 2FA enabled ask for otp.
 	if user.TwoFAs != nil {
 		refID := s.generateOTPSessionID()
-		expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
+		expiresAt := time.Now().Add(s.config.ExpiryTime.OTP)
 		primaryTwoFAChannel := user.TwoFAs[0] // by default the first element is the primary 2FA identifier
 		// if it is TOTP
 		if primaryTwoFAChannel == entity.ChannelTOTP { // if its a time based otp we don't bother generating or sending it anywhere
@@ -595,7 +595,7 @@ func (s *Service) ResendOTP(ctx service.Context, req ResendOTPRequest) (ResendRe
 
 	// Now we send the otp and store it in our cache and return the user a new reference id
 	refId := s.generateOTPSessionID() // new otp session id
-	expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
+	expiresAt := time.Now().Add(s.config.ExpiryTime.OTP)
 	otp, err := s.sendOTP(ctx, req.Channel, purpose, req.Value)
 	if err != nil {
 		return ResendResult{}, err
@@ -694,7 +694,7 @@ func (s *Service) VerifyOTPForResetPassword(ctx service.Context, req VerifyOTPRe
 
 	// create new session for reset password and add to cache
 	refID := s.generateResetSessionID()
-	expiresAt := time.Now().Add(s.config.ExpiryTimeResetPassword)
+	expiresAt := time.Now().Add(s.config.ExpiryTime.ResetPassword)
 	s.cache.resetPassword.Add(
 		refID,
 		resetPasswordSession{
@@ -731,7 +731,7 @@ func (s *Service) VerifyOTPForChangeIdentifier(ctx service.Context, req VerifyOT
 
 	// create new session for reset password and add to cache
 	refID := s.generateResetSessionID()
-	expiresAt := time.Now().Add(s.config.ExpiryTimeResetPassword)
+	expiresAt := time.Now().Add(s.config.ExpiryTime.ResetPassword)
 	s.cache.resetPassword.Add(
 		refID,
 		resetPasswordSession{
@@ -764,7 +764,7 @@ func (s *Service) ForgotPassword(ctx service.Context, req ForgotPasswordRequest)
 	otp, err := s.sendOTP(ctx, req.Channel, purposeResetPass, req.Value)
 	// generate a otp session id and add it to our ttlcache
 	refID := s.generateOTPSessionID()
-	expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
+	expiresAt := time.Now().Add(s.config.ExpiryTime.OTP)
 	s.cache.otp.Add(
 		refID,
 		&otpSession{
@@ -842,7 +842,7 @@ func (s *Service) Refresh(ctx service.Context, req RefreshRequest) (RefreshResul
 		newAccessToken(
 			userSesh.UserID,
 			userSesh.JwtID,
-			s.config.ExpiryTimeAccessToken,
+			s.config.ExpiryTime.AccessToken,
 		).Claims(),
 	)
 	refreshToken := s.generateRefreshToken()
@@ -852,7 +852,7 @@ func (s *Service) Refresh(ctx service.Context, req RefreshRequest) (RefreshResul
 		ctx,
 		userSesh.ID,
 		cryptoutil.GenerateMD5Hash(refreshToken), // we store a hash of the token
-		time.Now().Add(s.config.ExpiryTimeRefreshToken),
+		time.Now().Add(s.config.ExpiryTime.RefreshToken),
 	)
 	if err != nil {
 		if err == repository.ErrNoResults { // if the user logged out instantly somehow
@@ -995,7 +995,7 @@ func (s *Service) TotpSetup(ctx service.Context, token AccessToken) (TotpSetupRe
 	// generating the secret key and uri
 	secretKey, totpUri := s.otp.SetupTOTP(identifier)
 	refId := s.generateTotpSessionID()
-	expiresAt := time.Now().Add(s.config.ExpiryTimeTOTPSetup)
+	expiresAt := time.Now().Add(s.config.ExpiryTime.TOTPSetup)
 	// adding to cache session
 	s.cache.totp.Add(
 		refId,
@@ -1015,7 +1015,7 @@ func (s *Service) TotpSetup(ctx service.Context, token AccessToken) (TotpSetupRe
 // ? ----+-----+-----Totp Verify-----+-----+-----
 
 type TotpVerifyResult struct {
-	RemainingAttempts int
+	RemainingAttempts uint
 }
 
 // verifies the otp from totp setup and sets secret in database
@@ -1041,7 +1041,7 @@ func (s *Service) TotpVerify(ctx service.Context, token AccessToken, req TotpVer
 	session.attempts++ // increment on every attempt
 	// comparing against the otp sent
 	if req.OTP != otp {
-		remainingAttempts := s.config.AttemptsTOTPVerify - session.attempts
+		remainingAttempts := s.config.MaxAttempts.TOTPVerify - session.attempts
 		if remainingAttempts <= 0 {
 			s.cache.totp.Delete(req.ReferenceID) // delete the session not allowing for any more verification attempts
 			return TotpVerifyResult{}, errCommonAttemptsExhausted
@@ -1085,7 +1085,7 @@ func (s *Service) ChangeIdentifier(ctx service.Context, token AccessToken, req C
 		return err
 	}
 	refId := s.generateOTPSessionID()
-	expiresAt := time.Now().Add(s.config.ExpiryTimeOTP)
+	expiresAt := time.Now().Add(s.config.ExpiryTime.OTP)
 	s.cache.otp.Add(
 		refId,
 		&otpSession{
