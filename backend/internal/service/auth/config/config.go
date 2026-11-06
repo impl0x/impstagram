@@ -1,6 +1,11 @@
 package config
 
-import "time"
+// validations are not done by service and are just present
+// as rules that be enforced by the provider providing the config
+
+import (
+	"time"
+)
 
 // auth config
 type Config struct {
