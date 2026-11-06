@@ -2,7 +2,7 @@ package postgres
 
 import (
 	"backend/internal/config"
-	"backend/pkg/postgres"
+	"backend/pkg/database/postgres"
 
 	"github.com/impl0x/go-utils/logger"
 	"github.com/jackc/pgx/v5/pgxpool"

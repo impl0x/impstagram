@@ -1,9 +1,9 @@
 package postgres
 
 import (
-	"backend/internal/database"
+	"backend/internal/database/sql"
 	"backend/internal/entity"
-	"backend/pkg/postgres"
+	"backend/pkg/database/postgres"
 	"context"
 	"fmt"
 	"strings"
@@ -23,7 +23,7 @@ type UserSessions struct {
 // ? -----+-----+----- Create -----+-----+-----
 
 func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) error {
-	totalLen := 72 + len(database.TableUserSessions)
+	totalLen := 72 + len(sql.TableUserSessions)
 	cols := make([]string, 0, 9)
 	vals := make([]any, 0, 9)
 	if session.ID != uuid.Nil() {
@@ -56,7 +56,7 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 
 	var buf strings.Builder
 	buf.Grow(totalLen)
-	buf.WriteString("INSERT INTO " + database.TableUserSessions + " (")
+	buf.WriteString("INSERT INTO " + sql.TableUserSessions + " (")
 	colWriter(&buf, cols)
 	buf.WriteString(") VALUES (")
 	valWriter(&buf, len(vals))
@@ -72,7 +72,7 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 // ? -----+-----+----- Get -----+-----+-----
 
 func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.UserSession, error) {
-	sql := "SELECT id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at FROM " + database.TableUserSessions + " WHERE " + by + " = $1"
+	sql := "SELECT id, jwt_id, user_id, token_hash, ip_address, os_name, browser_name, device_type, expires_at, created_at FROM " + sql.TableUserSessions + " WHERE " + by + " = $1"
 	var session entity.UserSession
 	err := pg.Pool.QueryRow(ctx, sql, value).
 		Scan(
@@ -104,7 +104,7 @@ func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*e
 // ? -----+-----+----- Update -----+-----+-----
 
 func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val any) error {
-	sql := "UPDATE " + database.TableUserSessions + " SET " + col + " = $1 WHERE id = $2"
+	sql := "UPDATE " + sql.TableUserSessions + " SET " + col + " = $1 WHERE id = $2"
 	cmdTag, err := pg.Pool.Exec(ctx, sql, val, id)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user sessions update col %s: %w", col, err))
@@ -118,7 +118,7 @@ func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val
 func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUID, tokenHash string, expiry time.Time) error {
 	cmdTag, err := pg.Pool.Exec(
 		ctx,
-		"UPDATE "+database.TableUserSessions+" SET token_hash = $1, expires_at = $2 WHERE id = $3",
+		"UPDATE "+sql.TableUserSessions+" SET token_hash = $1, expires_at = $2 WHERE id = $3",
 		tokenHash, expiry, id,
 	)
 	if err != nil {
@@ -133,7 +133,7 @@ func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUI
 // ? -----+-----+----- Delete -----+-----+-----
 
 func (pg UserSessions) delete(ctx context.Context, col string, val any) error {
-	sql := "DELETE FROM " + database.TableUserSessions + " WHERE " + col + " = $1"
+	sql := "DELETE FROM " + sql.TableUserSessions + " WHERE " + col + " = $1"
 	cmdTag, err := pg.Pool.Exec(ctx, sql, val)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user sessions delete by %s: %w", col, err))

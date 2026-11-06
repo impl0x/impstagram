@@ -1,7 +1,7 @@
 package app
 
 import (
-	"backend/internal/database/postgres"
+	"backend/internal/database/sql/postgres"
 	"backend/internal/repository"
 )
 

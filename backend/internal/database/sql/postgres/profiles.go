@@ -1,9 +1,9 @@
 package postgres
 
 import (
-	"backend/internal/database"
+	"backend/internal/database/sql"
 	"backend/internal/entity"
-	"backend/pkg/postgres"
+	"backend/pkg/database/postgres"
 	"context"
 	"fmt"
 	"strings"
@@ -25,7 +25,7 @@ type Profiles struct {
 func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 	cols := make([]string, 0, 7)
 	vals := make([]any, 0, 7)
-	totalLen := 43 + len(database.TableProfiles)
+	totalLen := 43 + len(sql.TableProfiles)
 	if profile.DisplayName != nil {
 		cols = append(cols, "display_name")
 		vals = append(vals, profile.DisplayName)
@@ -59,7 +59,7 @@ func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 
 	var buf strings.Builder
 	buf.Grow(totalLen)
-	buf.WriteString("INSERT INTO " + database.TableUsers + " (")
+	buf.WriteString("INSERT INTO " + sql.TableUsers + " (")
 	colWriter(&buf, cols)
 	buf.WriteString(") VALUES (")
 	valWriter(&buf, len(vals))
@@ -75,7 +75,7 @@ func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 // ? -----+-----+----- Get -----+-----+-----
 
 func (pg Profiles) get(ctx context.Context, by string, value any) (*entity.Profile, error) {
-	sql := "SELECT user_id, username, display_name, avatar_url, is_private, bio, updated_at FROM " + database.TableUsers + " WHERE " + by + " = $1"
+	sql := "SELECT user_id, username, display_name, avatar_url, is_private, bio, updated_at FROM " + sql.TableUsers + " WHERE " + by + " = $1"
 	var profile entity.Profile
 	err := pg.Pool.QueryRow(ctx, sql, value).
 		Scan(
@@ -103,7 +103,7 @@ func (pg Profiles) GetByUsername(ctx context.Context, username string) (*entity.
 // ? -----+-----+----- Update -----+-----+-----
 
 func (pg Profiles) update(ctx context.Context, id uuid.UUID, col string, val any) error {
-	sql := "UPDATE " + database.TableProfiles + " SET " + col + " = $1, updated_at = $2 WHERE id = $3"
+	sql := "UPDATE " + sql.TableProfiles + " SET " + col + " = $1, updated_at = $2 WHERE id = $3"
 	cmdTag, err := pg.Pool.Exec(ctx, sql, val, time.Now(), id)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user sessions update col %s: %w", col, err))
@@ -138,7 +138,7 @@ func (pg Profiles) UpdateBio(ctx context.Context, id uuid.UUID, bio string) erro
 
 func (pg Profiles) CheckUsername(ctx context.Context, username string) (bool, error) {
 	var id uuid.UUID
-	err := pg.Pool.QueryRow(ctx, "SELECT user_id FROM "+database.TableProfiles+" WHERE username = $1", username).Scan(&id)
+	err := pg.Pool.QueryRow(ctx, "SELECT user_id FROM "+sql.TableProfiles+" WHERE username = $1", username).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil

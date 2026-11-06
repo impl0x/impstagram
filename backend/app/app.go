@@ -1,9 +1,10 @@
 package app
 
 import (
+	appconfig "backend/app/config"
 	"backend/internal/config"
 	serviceconfig "backend/internal/config/services"
-	"backend/internal/database/postgres"
+	postgres "backend/internal/database/sql/postgres"
 	authservice "backend/internal/service/auth"
 	"backend/pkg/cryptoutil"
 	"backend/pkg/cryptoutil/argon2id"
@@ -34,7 +35,6 @@ type pkgs struct {
 	jwt           jwt.Manager
 	emailSender   email.Sender
 	emailRenderer *render.Renderer
-	postgres      postgres.Postgres
 }
 
 // returns a new configured http client
@@ -72,20 +72,24 @@ func newHttpServer(cfg config.HttpServer) *http.Server {
 }
 
 // returns all packages with their configured values
-func newPkgs(cfg *config.Config, log logger.Logger) (*pkgs, error) {
-	// create database connection
-	pg, err := postgres.New(cfg.Infra.Postgres, log)
-	if err != nil {
-		return nil, fmt.Errorf("App: Could not instantiate postgres: %w", err)
+func newPkgs(cfg *config.Config) (*pkgs, error) {
+
+	// create new email sender
+	httpClient := newHttpClient(cfg.Infra.HttpClient)
+	var emailSender email.Sender
+	switch appconfig.CurrentEmailSender {
+	case appconfig.Resend:
+		emailSender = resend.New(httpClient, cfg.Infra.Email.EmailID, cfg.Infra.Email.ResendApiKey)
+	default:
+		panic("invalid email sender present in app config")
 	}
+
 	// create email renderer
 	emailRenderer, err := render.New(cfg.App.Name, cfg.App.LogoUrl, cfg.App.HomePageLink)
 	if err != nil {
-		return nil, fmt.Errorf("App: Email renderer fail: %w", err)
+		return nil, fmt.Errorf("App: Email renderer: %w", err)
 	}
-	// create a email sender, for that we are using the Resend API as of now
-	httpClient := newHttpClient(cfg.Infra.HttpClient)
-	emailSender := resend.New(httpClient, cfg.Infra.Email.EmailID, cfg.Infra.Email.ResendApiKey)
+
 	return &pkgs{
 		otp: cryptoutil.NewOtpManager(cfg.App.Name, *cfg.Services.AuthPkgs.OTP.Map()),
 		// we use argon2id as the current password hashing implementation algorithm
@@ -93,7 +97,6 @@ func newPkgs(cfg *config.Config, log logger.Logger) (*pkgs, error) {
 		jwt:           jwt.NewManager(cfg.Services.AuthPkgs.JWT.Secret),
 		emailSender:   emailSender,
 		emailRenderer: emailRenderer,
-		postgres:      pg,
 	}, nil
 }
 
@@ -123,19 +126,35 @@ func New(cfg *config.Config) (*App, error) {
 	log := logger.New(logger.Level(cfg.Log.Int()))
 
 	// pkgs
-	p, err := newPkgs(cfg, log)
+	p, err := newPkgs(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// repositories
-	r := newRepositoriesFromPostgres(p.postgres)
+	var r repositories
+	switch appconfig.CurrentDatabase {
+	case appconfig.Postgres:
+		pg, err := postgres.New(cfg.Infra.Postgres, log)
+		if err != nil {
+			return nil, fmt.Errorf("App: instantiate postgres: %w", err)
+		}
+		r = newRepositoriesFromPostgres(pg)
+	default:
+		panic("invalid database present in app config")
+	}
 
 	// services
 	s := newServices(cfg.Services.Auth, log, r, p)
 
 	// transport
-	t := newHttpTransport(log, s, cfg.Infra.HttpServer)
+	var t transport
+	switch appconfig.CurrentTransport {
+	case appconfig.HTTP:
+		t = newHttpTransport(log, s, cfg.Infra.HttpServer)
+	default:
+		panic("invalid transport present in app config")
+	}
 
 	return &App{
 		t: t,

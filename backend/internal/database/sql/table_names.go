@@ -1,4 +1,4 @@
-package database
+package sql
 
 type tableName = string
 

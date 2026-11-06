@@ -1,9 +1,9 @@
 package postgres
 
 import (
-	"backend/internal/database"
+	"backend/internal/database/sql"
 	"backend/internal/entity"
-	"backend/pkg/postgres"
+	"backend/pkg/database/postgres"
 	"context"
 	"fmt"
 	"strings"
@@ -53,7 +53,7 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 	}
 	defer tx.Rollback(ctx)
 
-	totalLen := 108 + len(database.TableUsers) // calculated number of bytes
+	totalLen := 108 + len(sql.TableUsers) // calculated number of bytes
 	cols := make([]string, 0, 8)
 	vals := make([]any, 0, 8)
 	// if provided a ID then don't rely on the database to make one again, use the id given
@@ -75,7 +75,7 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 
 	var buf strings.Builder
 	buf.Grow(totalLen) // should fit according to our calculations
-	buf.WriteString("INSERT INTO " + database.TableUsers + " (")
+	buf.WriteString("INSERT INTO " + sql.TableUsers + " (")
 	colWriter(&buf, cols)
 	buf.WriteString(") VALUES (")
 	valWriter(&buf, len(vals))
@@ -87,7 +87,7 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 		return uuid.UUID{}, handlePgxError(fmt.Errorf("user create: %w", err))
 	}
 
-	_, err = tx.Exec(ctx, "INSERT INTO "+database.TableProfiles+" (user_id,username) VALUES ($1,$2)", userID, username)
+	_, err = tx.Exec(ctx, "INSERT INTO "+sql.TableProfiles+" (user_id,username) VALUES ($1,$2)", userID, username)
 
 	if err != nil {
 		return uuid.UUID{}, handlePgxError(fmt.Errorf("user profile create: %w", err))
@@ -103,7 +103,7 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 
 // wrapper for get methods
 func (pg Users) get(ctx context.Context, by string, value any) (*entity.User, error) {
-	sql := "SELECT id, email, phone, password_hash, dob::text, status, totp_secret_key, two_fas, created_at, updated_at FROM " + database.TableUsers + " WHERE " + by + " = $1"
+	sql := "SELECT id, email, phone, password_hash, dob::text, status, totp_secret_key, two_fas, created_at, updated_at FROM " + sql.TableUsers + " WHERE " + by + " = $1"
 	var user entity.User
 	err := pg.Pool.QueryRow(ctx, sql, value).
 		Scan(
@@ -134,9 +134,9 @@ func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel
 		err := pg.Pool.QueryRow(
 			ctx,
 			"SELECT t1.id, t1.email, t1.phone, t1.password_hash, t1.dob, t1.status, t1.totp_secret_key, t1.two_fas, t1.created_at, t1.updated_at FROM "+
-				database.TableUsers+
+				sql.TableUsers+
 				" t1 JOIN "+
-				database.TableProfiles+
+				sql.TableProfiles+
 				" t2 ON t1.id = t2.user_id WHERE t2.username = $1",
 			target,
 		).
@@ -167,7 +167,7 @@ func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel
 
 // wrapper for update methods
 func (pg Users) update(ctx context.Context, id uuid.UUID, col string, val any) error {
-	sql := "UPDATE " + database.TableUsers + " SET " + col + " = $1 WHERE id = $2"
+	sql := "UPDATE " + sql.TableUsers + " SET " + col + " = $1 WHERE id = $2"
 	cmdTag, err := pg.Pool.Exec(ctx, sql, val, id)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user update col %s: %w", col, err))
@@ -189,7 +189,7 @@ func (pg Users) UpdateTwoFAs(ctx context.Context, id uuid.UUID, twoFAs []entity.
 	return pg.update(ctx, id, "two_fas", twoFAs)
 }
 func (pg Users) UpdateAddTotp(ctx context.Context, id uuid.UUID, secretKey string) error {
-	cmdTag, err := pg.Pool.Exec(ctx, "UPDATE "+database.TableUsers+" SET two_fas = array_append(two_fas, 'totp'), totp_secret_key = $1 WHERE id = $2", secretKey, id)
+	cmdTag, err := pg.Pool.Exec(ctx, "UPDATE "+sql.TableUsers+" SET two_fas = array_append(two_fas, 'totp'), totp_secret_key = $1 WHERE id = $2", secretKey, id)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user update add totp: %w", err))
 	}
@@ -209,7 +209,7 @@ func (pg Users) UpdatePhone(ctx context.Context, id uuid.UUID, phone string) err
 
 // both user account and profile is deleted, permanently.
 func (pg Users) Delete(ctx context.Context, id uuid.UUID) error {
-	cmdTag, err := pg.Pool.Exec(ctx, "DELETE FROM "+database.TableUsers+" WHERE id = $1", id)
+	cmdTag, err := pg.Pool.Exec(ctx, "DELETE FROM "+sql.TableUsers+" WHERE id = $1", id)
 	if err != nil {
 		return handlePgxError(fmt.Errorf("user delete: %w", err))
 	}
