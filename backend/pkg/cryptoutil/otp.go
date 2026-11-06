@@ -1,7 +1,6 @@
 package cryptoutil
 
 import (
-	"backend/internal/config"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
@@ -15,6 +14,12 @@ import (
 	"time"
 )
 
+type OTPConfig struct {
+	OTPLen      uint // the length of a standard random one time password
+	TOTPLen     uint // the length of a time based one time password
+	TOTPKeySize uint // the secret key byte size for a time based OTP
+}
+
 // Manager for generating OTPs and TOTPs
 type OtpManager struct {
 	serviceName string // required for totp uri generation
@@ -26,15 +31,15 @@ type OtpManager struct {
 	}
 }
 
-func NewOtpGenerator(serviceName string, c config.OTPConfig) OtpManager {
+func NewOtpManager(serviceName string, cfg OTPConfig) OtpManager {
 	return OtpManager{
 		serviceName: serviceName,
-		otpLimit:    big.NewInt(int64(math.Pow(10, float64(c.OTPLen)))),
-		otpLen:      c.OTPLen,
+		otpLimit:    big.NewInt(int64(math.Pow(10, float64(cfg.OTPLen)))),
+		otpLen:      int(cfg.OTPLen),
 		totp: struct {
 			length        int
 			secretKeySize int
-		}{c.TOTPLen, c.TOTPKeySize},
+		}{int(cfg.TOTPLen), int(cfg.TOTPKeySize)},
 	}
 }
 
@@ -50,7 +55,7 @@ func (og OtpManager) Generate() string {
 	return padLeftWithZeros(int(num.Int64()), og.otpLen)
 }
 
-var ErrInvalidSecretKey = errors.New("cryptoutil: invalid secret key")
+var ErrInvalidSecretKey = errors.New("cryptoutil: invalid secret key for totp generation")
 
 // Generates a 6 digit time based otp with the given secret key
 //
