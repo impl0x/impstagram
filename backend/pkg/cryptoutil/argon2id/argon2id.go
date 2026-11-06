@@ -49,7 +49,7 @@ type Manager struct {
 
 // returns a new argon2id implementation of [cryptoutil.PasswordHasher]
 // Manager struct which can be used to manage password hashes
-func New(c Config, saltLen uint) Manager {
+func New(c Config) Manager {
 	s := "$argon2id$v=" +
 		strconv.Itoa(argon2.Version) +
 		"$m=" +
@@ -61,7 +61,7 @@ func New(c Config, saltLen uint) Manager {
 		"$"
 
 	l := len(s)
-	l += base64.RawStdEncoding.EncodedLen(int(saltLen))
+	l += base64.RawStdEncoding.EncodedLen(int(c.SaltLength))
 	l += base64.RawStdEncoding.EncodedLen(int(c.KeyLength))
 	return Manager{
 		c:                  c,
