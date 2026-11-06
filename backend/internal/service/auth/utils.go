@@ -114,36 +114,44 @@ func channelIsValidForOTP(channel entity.AuthChannel) bool {
 	return channelIsValidForRegister(channel)
 }
 
-// converts [time.Duration] to a string format, only supports hours and minutes
+// converts [time.Duration] to a string format, from years to nano seconds
 // and outputs in "1 hour 20 minutes" / "20 minutes" / "1 minute" / "2 hours"
-//
-// panics if duration is less than a minute or more than a day
 func timeDurationToString(d time.Duration) string {
-	if d < time.Minute {
-		panic("duration cannot be less than a minute")
-	} else if d > time.Hour*24 {
-		panic("duration cannot be more than a day")
-	}
-	var buf strings.Builder
-	buf.Grow(64) // why not.
-	h := d / time.Hour
-	if h != 0 {
-		buf.WriteString(strconv.Itoa(int(h)))
-		buf.WriteString(" hour")
-		if h != 1 {
-			buf.WriteByte('s')
+	helper := func(b *strings.Builder, td time.Duration, t time.Duration, n string) time.Duration {
+		v := td / t
+		if v > 0 {
+			td = td - v*t
+			b.WriteString(strconv.Itoa(int(v)))
+			b.WriteByte(' ')
+			b.WriteString(n)
+			if v > 1 {
+				b.WriteByte('s')
+			}
+			b.WriteByte(' ')
 		}
+		return td
 	}
-	if d%time.Hour != 0 {
-		if h != 0 {
-			buf.WriteByte(' ') // if there was hour
-		}
-		m := (d - h*time.Hour) / time.Minute
-		buf.WriteString(strconv.Itoa(int(m)))
-		buf.WriteString(" minute")
-		if m != 1 {
-			buf.WriteByte('s')
-		}
-	}
-	return buf.String()
+
+	var b strings.Builder
+	b.Grow(32) // pretty enough for most strings
+
+	d = helper(&b, d, 365*24*time.Hour, "year")
+
+	d = helper(&b, d, 30*24*time.Hour, "month")
+
+	d = helper(&b, d, 24*time.Hour, "day")
+
+	d = helper(&b, d, time.Hour, "hour")
+
+	d = helper(&b, d, time.Minute, "minute")
+
+	d = helper(&b, d, time.Second, "second")
+
+	d = helper(&b, d, time.Millisecond, "millisecond")
+
+	d = helper(&b, d, time.Microsecond, "microsecond")
+
+	d = helper(&b, d, time.Nanosecond, "nanosecond")
+
+	return b.String()[:b.Len()-1]
 }
