@@ -1,6 +1,8 @@
 package config
 
 import (
+	"backend/internal/config/services"
+
 	"backend/pkg/env"
 	"backend/pkg/structutils"
 	"fmt"
@@ -11,7 +13,8 @@ import (
 const _APP_VERSION = "0.5.0"
 
 type Config struct {
-	App      App
+	App App
+	// Settings Settings
 	Infra    Infrastructure
 	Log      Log
 	Services Services
@@ -23,6 +26,10 @@ type App struct {
 	LogoUrl      string `env:"APP_LOGO_URL,required"`
 	HomePageLink string `env:"APP_HOME_PAGE_LINK,required"`
 }
+
+// type Settings struct{
+// WebFramework
+// }
 
 type Log struct {
 	Level string `env:"LOG_LEVEL" validate:"oneof=TRACE DEBUG INFO WARN ERROR FATAL"`
@@ -52,7 +59,8 @@ var DefaultLog = Log{
 }
 
 type Services struct {
-	Auth Auth
+	Auth     services.Auth
+	AuthPkgs services.AuthPkgs
 }
 
 // wrapper over [structutils.CopyFields] to panic if an error is returned
@@ -68,7 +76,7 @@ func copyFields(a, b any) {
 
 // Loads configs.
 func Load() (*Config, error) {
-	cfg := Config{}
+	var cfg Config
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("config parsing error: %w", err)
 	}
@@ -89,7 +97,8 @@ func Load() (*Config, error) {
 
 	// -+-+- Services -+-+-
 	// auth
-	copyFields(&cfg.Services.Auth, &DefaultAuth)
+	copyFields(&cfg.Services.Auth, &services.DefaultAuth)
+	copyFields(&cfg.Services.AuthPkgs, &services.DefaultAuthPkgs)
 
 	return &cfg, nil
 }
