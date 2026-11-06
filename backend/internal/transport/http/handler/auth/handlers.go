@@ -506,7 +506,7 @@ func (h Handler) TotpVerify(c *mo.Context) error {
 				c,
 				err,
 				struct {
-					AttemptsRemaining int `json:"attempts_remaining"`
+					AttemptsRemaining uint `json:"attempts_remaining"`
 				}{result.RemainingAttempts},
 			)
 		}
