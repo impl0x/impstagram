@@ -90,7 +90,7 @@ func (r *Renderer) render(path string, data any) HTML {
 	buf.Grow(5000) // enough for a html, change when adding bigger html files
 	err := r.templates.ExecuteTemplate(&buf, path, data)
 	if err != nil {
-		panic(fmt.Errorf("template panic while email rendering, %w", err))
+		panic(fmt.Errorf("template panic while email rendering: %w", err))
 	}
 	return buf.String()
 }

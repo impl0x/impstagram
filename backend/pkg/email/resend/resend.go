@@ -64,7 +64,7 @@ func (m Resend) send(ctx context.Context, sub string, to []string, html string) 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, err := io.ReadAll(resp.Body) // only read body if api return error
 		if err != nil {
-			return fmt.Errorf("email: resend returned unexpected status - %s, body could not be read, %w", resp.Status, err)
+			return fmt.Errorf("email: resend returned unexpected status - %s, body could not be read: %w", resp.Status, err)
 		}
 		return fmt.Errorf("email: resend returned unexpected status - %s, body - %s", resp.Status, string(body))
 	}

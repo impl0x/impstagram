@@ -67,7 +67,7 @@ func (pg Profiles) Create(ctx context.Context, profile *entity.Profile) error {
 
 	_, err := pg.Pool.Exec(ctx, buf.String(), vals...)
 	if err != nil {
-		handlePgxError(fmt.Errorf("profiles create, %w", err))
+		handlePgxError(fmt.Errorf("profiles create: %w", err))
 	}
 	return nil
 }
@@ -88,7 +88,7 @@ func (pg Profiles) get(ctx context.Context, by string, value any) (*entity.Profi
 			&profile.UpdatedAt,
 		)
 	if err != nil {
-		return nil, handlePgxError(fmt.Errorf("profiles get by %s, %w", by, err))
+		return nil, handlePgxError(fmt.Errorf("profiles get by %s: %w", by, err))
 	}
 	return &profile, nil
 }
@@ -106,7 +106,7 @@ func (pg Profiles) update(ctx context.Context, id uuid.UUID, col string, val any
 	sql := "UPDATE " + database.TableProfiles + " SET " + col + " = $1, updated_at = $2 WHERE id = $3"
 	cmdTag, err := pg.Pool.Exec(ctx, sql, val, time.Now(), id)
 	if err != nil {
-		return handlePgxError(fmt.Errorf("user sessions update col %s, %w", col, err))
+		return handlePgxError(fmt.Errorf("user sessions update col %s: %w", col, err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)
@@ -143,7 +143,7 @@ func (pg Profiles) CheckUsername(ctx context.Context, username string) (bool, er
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}
-		return false, fmt.Errorf("profiles check username, %w", err)
+		return false, fmt.Errorf("profiles check username: %w", err)
 	}
 	return true, nil
 }

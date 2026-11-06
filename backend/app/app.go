@@ -76,12 +76,12 @@ func newPkgs(cfg *config.Config, log logger.Logger) (*pkgs, error) {
 	// create database connection
 	pg, err := postgres.New(cfg.Infra.Postgres, log)
 	if err != nil {
-		return nil, fmt.Errorf("App: Could not instantiate postgres, %w", err)
+		return nil, fmt.Errorf("App: Could not instantiate postgres: %w", err)
 	}
 	// create email renderer
 	emailRenderer, err := render.New(cfg.App.Name, cfg.App.LogoUrl, cfg.App.HomePageLink)
 	if err != nil {
-		return nil, fmt.Errorf("App: Email renderer fail, %w", err)
+		return nil, fmt.Errorf("App: Email renderer fail: %w", err)
 	}
 	// create a email sender, for that we are using the Resend API as of now
 	httpClient := newHttpClient(cfg.Infra.HttpClient)

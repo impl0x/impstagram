@@ -93,7 +93,7 @@ func parse(v reflect.Value) error {
 
 		if !ok {
 			if isRequired {
-				return errors.New("env: required variable not found in environment, name: " + envName)
+				return errors.New("env: required variable \"" + envName + "\" not found")
 			}
 			envVal = defaultValue
 		}
@@ -103,7 +103,7 @@ func parse(v reflect.Value) error {
 		}
 		err := setValueFromString(cv, envVal)
 		if err != nil {
-			return fmt.Errorf("env: cannot set field value, %w, field: %s", err, ct.Name)
+			return fmt.Errorf("env: cannot set field value: %w, field: %s", err, ct.Name)
 		}
 	}
 	return nil
@@ -126,7 +126,7 @@ func setValueFromString(v reflect.Value, strVal string) error {
 			}
 			t, err := time.ParseDuration(strVal)
 			if err != nil {
-				return fmt.Errorf("invalid time.Duration value, %w", err)
+				return fmt.Errorf("invalid time.Duration value: %w", err)
 			}
 			v.SetInt(int64(t))
 			return nil

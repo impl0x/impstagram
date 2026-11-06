@@ -49,7 +49,7 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 	}
 	tx, err := pg.Pool.Begin(ctx)
 	if err != nil {
-		return uuid.UUID{}, handlePgxError(fmt.Errorf("user create transaction start, %w", err))
+		return uuid.UUID{}, handlePgxError(fmt.Errorf("user create transaction start: %w", err))
 	}
 	defer tx.Rollback(ctx)
 
@@ -84,17 +84,17 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 	var userID uuid.UUID
 	err = tx.QueryRow(ctx, buf.String(), vals...).Scan(&userID)
 	if err != nil {
-		return uuid.UUID{}, handlePgxError(fmt.Errorf("user create, %w", err))
+		return uuid.UUID{}, handlePgxError(fmt.Errorf("user create: %w", err))
 	}
 
 	_, err = tx.Exec(ctx, "INSERT INTO "+database.TableProfiles+" (user_id,username) VALUES ($1,$2)", userID, username)
 
 	if err != nil {
-		return uuid.UUID{}, handlePgxError(fmt.Errorf("user profile create, %w", err))
+		return uuid.UUID{}, handlePgxError(fmt.Errorf("user profile create: %w", err))
 	}
 	err = tx.Commit(ctx)
 	if err != nil {
-		return uuid.UUID{}, handlePgxError(fmt.Errorf("user create transaction commit, %w", err))
+		return uuid.UUID{}, handlePgxError(fmt.Errorf("user create transaction commit: %w", err))
 	}
 	return userID, nil
 }
@@ -119,7 +119,7 @@ func (pg Users) get(ctx context.Context, by string, value any) (*entity.User, er
 			&user.UpdatedAt,
 		)
 	if err != nil {
-		return nil, handlePgxError(fmt.Errorf("user get by %s, %w", by, err))
+		return nil, handlePgxError(fmt.Errorf("user get by %s: %w", by, err))
 	}
 	return &user, nil
 }
@@ -153,7 +153,7 @@ func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel
 				&user.UpdatedAt,
 			)
 		if err != nil {
-			return nil, handlePgxError(fmt.Errorf("user get by username, %w", err))
+			return nil, handlePgxError(fmt.Errorf("user get by username: %w", err))
 		}
 		return &user, nil
 	case entity.ChannelEmail, entity.ChannelPhone:
@@ -170,7 +170,7 @@ func (pg Users) update(ctx context.Context, id uuid.UUID, col string, val any) e
 	sql := "UPDATE " + database.TableUsers + " SET " + col + " = $1 WHERE id = $2"
 	cmdTag, err := pg.Pool.Exec(ctx, sql, val, id)
 	if err != nil {
-		return handlePgxError(fmt.Errorf("user update col %s, %w", col, err))
+		return handlePgxError(fmt.Errorf("user update col %s: %w", col, err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)
@@ -191,7 +191,7 @@ func (pg Users) UpdateTwoFAs(ctx context.Context, id uuid.UUID, twoFAs []entity.
 func (pg Users) UpdateAddTotp(ctx context.Context, id uuid.UUID, secretKey string) error {
 	cmdTag, err := pg.Pool.Exec(ctx, "UPDATE "+database.TableUsers+" SET two_fas = array_append(two_fas, 'totp'), totp_secret_key = $1 WHERE id = $2", secretKey, id)
 	if err != nil {
-		return handlePgxError(fmt.Errorf("user update add totp, %w", err))
+		return handlePgxError(fmt.Errorf("user update add totp: %w", err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)
@@ -211,7 +211,7 @@ func (pg Users) UpdatePhone(ctx context.Context, id uuid.UUID, phone string) err
 func (pg Users) Delete(ctx context.Context, id uuid.UUID) error {
 	cmdTag, err := pg.Pool.Exec(ctx, "DELETE FROM "+database.TableUsers+" WHERE id = $1", id)
 	if err != nil {
-		return handlePgxError(fmt.Errorf("user delete, %w", err))
+		return handlePgxError(fmt.Errorf("user delete: %w", err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)

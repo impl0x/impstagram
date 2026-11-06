@@ -70,7 +70,7 @@ type Services struct {
 func copyFields(a, b any) {
 	err := structutils.CopyFields(a, b)
 	if err != nil {
-		panic(fmt.Errorf("util.CopyFields: unexpected error returned, %w", err))
+		panic(fmt.Errorf("util.CopyFields: unexpected error returned: %w", err))
 	}
 }
 
@@ -78,11 +78,11 @@ func copyFields(a, b any) {
 func Load() (*Config, error) {
 	var cfg Config
 	if err := env.Parse(&cfg); err != nil {
-		return nil, fmt.Errorf("config parsing error: %w", err)
+		return nil, fmt.Errorf("parsing fail: %w", err)
 	}
 	err := validator.Validate(&cfg)
 	if err != nil {
-		return nil, fmt.Errorf("config: validation fail for config, %w", err)
+		return nil, fmt.Errorf("validation fail: %w", err)
 	}
 
 	// -+-+- app -+-+-

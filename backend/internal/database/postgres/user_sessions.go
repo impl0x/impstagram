@@ -64,7 +64,7 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 
 	_, err := pg.Pool.Exec(ctx, buf.String(), vals...)
 	if err != nil {
-		handlePgxError(fmt.Errorf("user sessions create, %w", err))
+		handlePgxError(fmt.Errorf("user sessions create: %w", err))
 	}
 	return nil
 }
@@ -88,7 +88,7 @@ func (pg UserSessions) get(ctx context.Context, by string, value any) (*entity.U
 			&session.CreatedAt,
 		)
 	if err != nil {
-		return nil, handlePgxError(fmt.Errorf("user sessions get by %s, %w", by, err))
+		return nil, handlePgxError(fmt.Errorf("user sessions get by %s: %w", by, err))
 	}
 	return &session, nil
 }
@@ -107,7 +107,7 @@ func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val
 	sql := "UPDATE " + database.TableUserSessions + " SET " + col + " = $1 WHERE id = $2"
 	cmdTag, err := pg.Pool.Exec(ctx, sql, val, id)
 	if err != nil {
-		return handlePgxError(fmt.Errorf("user sessions update col %s, %w", col, err))
+		return handlePgxError(fmt.Errorf("user sessions update col %s: %w", col, err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)
@@ -122,7 +122,7 @@ func (pg UserSessions) UpdateTokenHashAndExpiry(ctx context.Context, id uuid.UUI
 		tokenHash, expiry, id,
 	)
 	if err != nil {
-		return handlePgxError(fmt.Errorf("user sessions update token hash and expiry, %w", err))
+		return handlePgxError(fmt.Errorf("user sessions update token hash and expiry: %w", err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)
@@ -136,7 +136,7 @@ func (pg UserSessions) delete(ctx context.Context, col string, val any) error {
 	sql := "DELETE FROM " + database.TableUserSessions + " WHERE " + col + " = $1"
 	cmdTag, err := pg.Pool.Exec(ctx, sql, val)
 	if err != nil {
-		return handlePgxError(fmt.Errorf("user sessions delete by %s, %w", col, err))
+		return handlePgxError(fmt.Errorf("user sessions delete by %s: %w", col, err))
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return handlePgxError(pgx.ErrNoRows)

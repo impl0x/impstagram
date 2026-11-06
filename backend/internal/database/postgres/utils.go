@@ -39,9 +39,9 @@ func handlePgxError(err error) error {
 		case "23505":
 			return repository.ErrAlreadyExists
 		}
-		return fmt.Errorf("postgres: sql error, %w, Code: %s", err, pgErr.Code) // we let the error bubble to the handler where it will eventually be turned into a internal error and be logged
+		return fmt.Errorf("postgres: sql error: %w, Code: %s", err, pgErr.Code) // we let the error bubble to the handler where it will eventually be turned into a internal error and be logged
 	default:
-		return fmt.Errorf("postgres: unknown error, %w", err)
+		return fmt.Errorf("postgres: unknown error: %w", err)
 	}
 }
 

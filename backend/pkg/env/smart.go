@@ -121,7 +121,7 @@ func smartParse(v reflect.Value, st smartParseSettings, opts ...SmartParseOption
 		}
 		err := setValueFromString(cv, envVal)
 		if err != nil {
-			return fmt.Errorf("env: cannot set field value, %w, field: %s", err, ct.Name)
+			return fmt.Errorf("env: cannot set field value: %w, field: %s", err, ct.Name)
 		}
 	}
 	return nil
