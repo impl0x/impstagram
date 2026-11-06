@@ -2,10 +2,11 @@ package app
 
 import (
 	"backend/internal/config"
+	serviceconfig "backend/internal/config/services"
 	"backend/internal/database/postgres"
-
 	authservice "backend/internal/service/auth"
 	"backend/pkg/cryptoutil"
+	"backend/pkg/cryptoutil/argon2id"
 	"backend/pkg/email"
 	"backend/pkg/email/render"
 	"backend/pkg/email/resend"
@@ -29,7 +30,7 @@ type services struct {
 // all extra utility packages used by services
 type pkgs struct {
 	otp           cryptoutil.OtpManager
-	password      cryptoutil.PasswordManager
+	password      cryptoutil.PasswordHasher
 	jwt           jwt.Manager
 	emailSender   email.Sender
 	emailRenderer *render.Renderer
@@ -86,9 +87,10 @@ func newPkgs(cfg *config.Config, log logger.Logger) (*pkgs, error) {
 	httpClient := newHttpClient(cfg.Infra.HttpClient)
 	emailSender := resend.New(httpClient, cfg.Infra.Email.EmailID, cfg.Infra.Email.ResendApiKey)
 	return &pkgs{
-		otp:           cryptoutil.NewOtpGenerator(cfg.App.Name, cfg.Services.Auth.OTP),
-		password:      cryptoutil.NewPasswordManager(config.DefaultAuth.Password),
-		jwt:           jwt.NewManager(cfg.Services.Auth.JWT.Secret),
+		otp: cryptoutil.NewOtpManager(cfg.App.Name, *cfg.Services.AuthPkgs.OTP.Map()),
+		// we use argon2id as the current password hashing implementation algorithm
+		password:      argon2id.New(*cfg.Services.AuthPkgs.Password.Argon2ID.Map()),
+		jwt:           jwt.NewManager(cfg.Services.AuthPkgs.JWT.Secret),
 		emailSender:   emailSender,
 		emailRenderer: emailRenderer,
 		postgres:      pg,
@@ -96,11 +98,11 @@ func newPkgs(cfg *config.Config, log logger.Logger) (*pkgs, error) {
 }
 
 // returns services injected with their respective configs, repositories, packages and logger.
-func newServices(cfg config.Services, log logger.Logger, r repositories, p *pkgs) services {
+func newServices(cfg serviceconfig.Auth, log logger.Logger, r repositories, p *pkgs) services {
 	return services{
 		auth: authservice.NewService(authservice.Dependencies{
 			Log:    log,
-			Config: cfg.Auth.Service,
+			Config: *cfg.Map(),
 			Repos: authservice.Repositories{
 				User:    r.user,
 				Session: r.userSession,
@@ -130,7 +132,7 @@ func New(cfg *config.Config) (*App, error) {
 	r := newRepositoriesFromPostgres(p.postgres)
 
 	// services
-	s := newServices(cfg.Services, log, r, p)
+	s := newServices(cfg.Services.Auth, log, r, p)
 
 	// transport
 	t := newHttpTransport(log, s, cfg.Infra.HttpServer)
