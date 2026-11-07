@@ -9,7 +9,42 @@ import (
 	"strings"
 	"time"
 	"uuid"
+
+	"github.com/impl0x/go-utils/cache"
 )
+
+// ? ----+-----+----- TTL Cache Leased Item -----+-----+-----
+
+// wrapper over the cache leased item to make it easier to use
+type ttlLeasedItemWrapper[K comparable, V any] struct {
+	cache.TTLLeasedItem[K, V]
+	flag bool
+}
+
+const _defaultFlag = true
+
+func newTTLLeasedItemWrapper[K comparable, V any](i cache.TTLLeasedItem[K, V]) *ttlLeasedItemWrapper[K, V] {
+	return &ttlLeasedItemWrapper[K, V]{
+		i, _defaultFlag,
+	}
+}
+
+// defer this
+func (t *ttlLeasedItemWrapper[K, V]) d() {
+	if t.flag {
+		t.TTLLeasedItem.Release()
+	}
+}
+
+// deletes the item not letting it stay
+func (t *ttlLeasedItemWrapper[K, V]) delete() {
+	t.flag = false
+}
+
+// keeps the item
+func (t *ttlLeasedItemWrapper[K, V]) keep() {
+	t.flag = true
+}
 
 // ? ----+-----+----- TOKEN & JWT -----+-----+-----
 // Contains access token related stuff and utility to convert to jwt acceptable format
