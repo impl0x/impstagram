@@ -10,11 +10,8 @@ import (
 	"github.com/impl0x/mo/validator/v3"
 )
 
-const _APP_VERSION = "0.5.0"
-
 type Config struct {
-	App App
-	// Settings Settings
+	App      App
 	Infra    Infrastructure
 	Log      Log
 	Services Services
@@ -22,14 +19,9 @@ type Config struct {
 
 type App struct {
 	Name         string `env:"APP_NAME,required"`
-	Version      string // to be set by the program, as version changes by each compile not by deployment
 	LogoUrl      string `env:"APP_LOGO_URL,required"`
 	HomePageLink string `env:"APP_HOME_PAGE_LINK,required"`
 }
-
-// type Settings struct{
-// WebFramework
-// }
 
 type Log struct {
 	Level string `env:"LOG_LEVEL" validate:"oneof=TRACE DEBUG INFO WARN ERROR FATAL"`
@@ -80,13 +72,6 @@ func Load() (*Config, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return nil, fmt.Errorf("parsing fail: %w", err)
 	}
-	err := validator.Validate(&cfg)
-	if err != nil {
-		return nil, fmt.Errorf("validation fail: %w", err)
-	}
-
-	// -+-+- app -+-+-
-	cfg.App.Version = _APP_VERSION
 
 	// -+-+- Infra -+-+-
 	// http
@@ -99,6 +84,11 @@ func Load() (*Config, error) {
 	// auth
 	copyFields(&cfg.Services.Auth, &services.DefaultAuth)
 	copyFields(&cfg.Services.AuthPkgs, &services.DefaultAuthPkgs)
+
+	err := validator.Validate(&cfg)
+	if err != nil {
+		return nil, fmt.Errorf("validation fail: %w", err)
+	}
 
 	return &cfg, nil
 }
