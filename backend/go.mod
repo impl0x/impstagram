@@ -3,8 +3,8 @@ module backend
 go 1.27.1
 
 require (
-	github.com/impl0x/go-utils v0.8.12 // used for /cache.TTLCache short lived caches, and logger
-	github.com/impl0x/mo v1.7.1 // web api framework
+	github.com/impl0x/go-utils v0.9.0 // used for /cache.TTLCache short lived caches, and logger
+	github.com/impl0x/mo v1.7.4 // web api framework
 	github.com/jackc/pgx/v5 v5.10.0 // postgresql driver
 	github.com/mileusna/useragent v1.3.5 // user agent parsing
 	golang.org/x/crypto v0.55.0 // password hashing
