@@ -4,6 +4,6 @@ import "context"
 
 // wrapper over context.Context to include important fields
 type Context struct {
-	ReqId string
+	RequestId string
 	context.Context
 }
