@@ -65,5 +65,5 @@ var DefaultPostgres = Postgres{
 
 type Email struct {
 	ResendApiKey string `env:"EMAIL_RESEND_API_KEY,required" validate:"startswith=re_"`
-	EmailID      string `env:"EMAIL_ID,required" validate:"email"`
+	EmailID      string `env:"EMAIL_ID,required"`
 }
