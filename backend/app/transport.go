@@ -67,6 +67,7 @@ func newHttpTransport(log logger.Logger, s services, cfg config.HttpServer) http
 	a := httpTransport{
 		server: newHttpServer(cfg),
 		mo:     m,
+		log:    log,
 	}
 	return a
 }
