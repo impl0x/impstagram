@@ -74,6 +74,15 @@ func newHttpServer(cfg config.HttpServer) *http.Server {
 // returns all packages with their configured values
 func newPkgs(cfg *config.Config) (*pkgs, error) {
 
+	// create new password hasher
+	var passwordHasher cryptoutil.PasswordHasher
+	switch appconfig.CurrentPasswordHasher {
+	case appconfig.Argon2ID:
+		passwordHasher = argon2id.New(*cfg.Services.AuthPkgs.Password.Argon2ID.Map())
+	default:
+		panic("invalid password hasher present in app config")
+	}
+
 	// create new email sender
 	httpClient := newHttpClient(cfg.Infra.HttpClient)
 	var emailSender email.Sender
@@ -91,9 +100,8 @@ func newPkgs(cfg *config.Config) (*pkgs, error) {
 	}
 
 	return &pkgs{
-		otp: cryptoutil.NewOtpManager(cfg.App.Name, *cfg.Services.AuthPkgs.OTP.Map()),
-		// we use argon2id as the current password hashing implementation algorithm
-		password:      argon2id.New(*cfg.Services.AuthPkgs.Password.Argon2ID.Map()),
+		otp:           cryptoutil.NewOtpManager(cfg.App.Name, *cfg.Services.AuthPkgs.OTP.Map()),
+		password:      passwordHasher,
 		jwt:           jwt.NewManager(cfg.Services.AuthPkgs.JWT.Secret),
 		emailSender:   emailSender,
 		emailRenderer: emailRenderer,
