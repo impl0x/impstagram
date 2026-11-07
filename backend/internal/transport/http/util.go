@@ -15,8 +15,8 @@ import (
 // therefore it can panic if request id is not present in context store.
 func ToServiceContext(c *mo.Context) service.Context {
 	return service.Context{
-		ReqId:   c.GetTypedMust[string](KeyRequestID),
-		Context: c.Request().Context(),
+		RequestId: c.GetTypedMust[string](KeyRequestID),
+		Context:   c.Request().Context(),
 	}
 }
 
