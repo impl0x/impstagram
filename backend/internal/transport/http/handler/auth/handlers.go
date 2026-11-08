@@ -8,6 +8,7 @@ import (
 	"backend/pkg/apperr"
 	"backend/pkg/dob"
 	"net/http"
+	"time"
 
 	"github.com/impl0x/mo"
 )
@@ -60,6 +61,7 @@ func (h Handler) RegisterPaths(g mo.Grouped) {
 	g.POST("/refresh", h.Refresh)
 	g.POST("/forgot-password", h.ForgotPassword)
 	g.POST("/reset-password", h.ResetPassword)
+	g.POST("/reset-password/verify-otp", h.VerifyOTPForResetPassword)
 
 	g.POST("/logout", h.Logout, h.Middleware)
 	g.DELETE("/account", h.DeleteAccount, h.Middleware)
@@ -239,7 +241,40 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 			RefreshToken string `json:"refresh_token"`
 		}{result.AccessToken, result.RefreshToken},
 	)
+}
 
+// Verifies a otp for reset password
+//   - POST - [verifyOTPRequest]
+func (h Handler) VerifyOTPForResetPassword(c *mo.Context) error {
+	var req verifyOTPRequest
+	err := c.DecodeAndValidateBody(&req)
+	if err != nil {
+		return err
+	}
+	result, err := h.Service.VerifyOTPForResetPassword(
+		httpserver.ToServiceContext(c),
+		req.service(),
+		httpserver.GetClientMetadata(c.Request()),
+	)
+	if err != nil {
+		if result.RemainingAttempts != 0 { // it means this was populated, so we need to add it to the error data and send it now
+			return httpserver.SendJSONWithAppErrMaybe(
+				c,
+				err,
+				struct {
+					AttemptsRemaining uint `json:"attempts_remaining"`
+				}{result.RemainingAttempts},
+			)
+		}
+		return err
+	}
+	return c.JSON(
+		http.StatusAccepted,
+		struct {
+			ReferenceID string    `json:"reference_id"`
+			ExpiresAt   time.Time `json:"expires_at"`
+		}{result.ReferenceID, result.ExpiresAt},
+	)
 }
 
 // resend otp for any purpose
