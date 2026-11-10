@@ -51,12 +51,12 @@ var (
 // Middleware errors, prefix: Middleware
 var (
 	// internal error
-	errAuthTokenInvalidPayload     = errors.New("auth.Middleware: Auth token has invalid payload")
-	errMiddlewareAuthHeaderMissing = apperr.NewUnauthorized(
+	errAuthTokenInvalidPayload       = errors.New("auth.Middleware: Auth token has invalid payload")
+	erAuthorizationAuthHeaderMissing = apperr.NewUnauthorized(
 		apperr.CodeUnauthorized,
 		"Authorization header missing or empty",
 	)
-	errMiddlewareAuthTokenInvalid = apperr.NewUnauthorized(
+	errAuthorizationAuthTokenInvalid = apperr.NewUnauthorized(
 		codeCommonTokenInvalid,
 		"Invalid authorization token")
 	// errMiddlewareInvalidAuthTokenPayload = apperr.New(
@@ -64,7 +64,7 @@ var (
 	// response.CodeInternal,
 	// "Invalid data in the JSON payload for authorization token",
 	// ) // internal error because server should not issue wrong tokens
-	errMiddlewareAuthTokenExpired = apperr.NewUnauthorized(
+	errAuthorizationAuthTokenExpired = apperr.NewUnauthorized(
 		codeCommonTokenExpired,
 		"Token has expired, please refresh it using the refresh token",
 	)
@@ -111,10 +111,14 @@ var (
 
 // Resend otp errors, prefix: Resend
 var (
-	errResendInvalidIdentifier = apperr.NewValidation(
+	errResendOTPSessionNotFound = apperr.NewNotFound(
+		apperr.CodeNotFound,
+		"OTP Session is either invalid or has expired",
+	)
+	errResendOTPInvalidIdentifier = apperr.NewValidation(
 		"Invalid identifier for resending OTP",
 	)
-	errResend2FANotEnabled = apperr.NewForbidden(
+	errResendOTP2FANotEnabled = apperr.NewForbidden(
 		"2FA_NOT_ENABLED",
 		"User does not have 2FA enabled, cannot know where to send otp",
 	)
@@ -122,11 +126,11 @@ var (
 
 // Reset password errors, prefix: Reset
 var (
-	errResetSessionNotFound = apperr.NewNotFound(
+	errResetPasswordSessionNotFound = apperr.NewNotFound(
 		apperr.CodeNotFound,
 		"Session not found, please try to raise a reset password request again",
 	)
-	errResetSessionExpired = apperr.NewUnauthorized(
+	errResetPasswordSessionExpired = apperr.NewUnauthorized(
 		codeCommonSessionExpired,
 		"Session has expired, please try to raise a reset password request again",
 	)
@@ -134,9 +138,9 @@ var (
 
 // Verify otp errors, prefix: Verify
 var (
-	errVerifyOTPRefIDNotFound = apperr.NewNotFound(
+	errVerifyOTPSessionNotFound = apperr.NewNotFound(
 		apperr.CodeNotFound,
-		"Reference ID for this verify request not found, please request a new otp again",
+		"OTP Session not found, please request a new otp again",
 	)
 	errVerifyOTPExpired = apperr.NewUnauthorized(
 		"OTP_EXPIRED",
