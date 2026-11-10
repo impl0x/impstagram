@@ -30,6 +30,10 @@ func newTTLLeasedItemWrapper[K comparable, V any](i cache.TTLLeasedItem[K, V]) *
 }
 
 // defer this
+//
+// checks if release flag is true and releases the item after its used,
+// else does not release letting it be deleted automatically if delete was
+// called previously making the flag false
 func (t *ttlLeasedItemWrapper[K, V]) d() {
 	if t.flag {
 		t.TTLLeasedItem.Release()
@@ -107,7 +111,7 @@ func (s *Service) IsAuthorized(token string) (AccessToken, error) {
 
 	// Check if jwt decode fails or if the signature is incorrect
 	if err != nil {
-		return AccessToken{}, errMiddlewareAuthTokenInvalid
+		return AccessToken{}, errAuthorizationAuthTokenInvalid
 	}
 
 	// Converting the json struct into a usable data type for our app
@@ -118,14 +122,14 @@ func (s *Service) IsAuthorized(token string) (AccessToken, error) {
 
 	// Checking if the token has expired
 	if accessToken.ExpiresAt.Before(time.Now()) {
-		return AccessToken{}, errMiddlewareAuthTokenExpired
+		return AccessToken{}, errAuthorizationAuthTokenExpired
 	}
 
 	// Checking if the jwt is in jwt token block list
 	_, _, ok := s.cache.jwtBlocklist.Get(accessToken.JwtID)
 	if ok {
 		// try not to give the client much info about *why* it is unauthorized, even though we know that this jwt is blacklisted
-		return AccessToken{}, errMiddlewareAuthTokenInvalid
+		return AccessToken{}, errAuthorizationAuthTokenInvalid
 	}
 	return accessToken, nil
 }
