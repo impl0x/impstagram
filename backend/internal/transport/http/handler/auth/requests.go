@@ -55,10 +55,7 @@ func (r loginRequest) service(c entity.AuthChannel, v string) auth.LoginRequest 
 }
 
 type resendOTPRequest struct {
-	Purpose  string `json:"purpose" validate:"required,oneof=registration 2fa reset_password"`
-	Username string `json:"username" validate:"optional,min=3,max=30,username"`
-	Email    string `json:"email" validate:"optional,email"`
-	Phone    string `json:"phone" validate:"optional,e.164"`
+	SessionID string `json:"session_id" validate:"required"` // TODO: do
 }
 
 func (r resendOTPRequest) service(c entity.AuthChannel, v string) auth.ResendOTPRequest {
@@ -82,26 +79,26 @@ func (r forgotPasswordRequest) service(c entity.AuthChannel, v string) auth.Forg
 }
 
 type resetPasswordRequest struct {
-	ReferenceID string `json:"reference_id" validate:"required"`
+	SessionID   string `json:"session_id" validate:"required"`
 	NewPassword string `json:"new_password" validate:"required,min=8,max=20"`
 }
 
 func (r resetPasswordRequest) service() auth.ResetPasswordRequest {
 	return auth.ResetPasswordRequest{
-		ReferenceID: r.ReferenceID,
+		SessionID:   r.SessionID,
 		NewPassword: r.NewPassword,
 	}
 }
 
 type verifyOTPRequest struct {
-	ReferenceID string `json:"reference_id" validate:"required"`
-	OTP         string `json:"otp" validate:"required,numeric"`
+	SessionID string `json:"session_id" validate:"required"`
+	OTP       string `json:"otp" validate:"required,numeric"`
 }
 
 func (r verifyOTPRequest) service() auth.VerifyOTPRequest {
 	return auth.VerifyOTPRequest{
-		ReferenceID: r.ReferenceID,
-		OTP:         r.OTP,
+		SessionID: r.SessionID,
+		OTP:       r.OTP,
 	}
 }
 
@@ -136,14 +133,14 @@ func (r remove2FARequest) service() auth.Remove2FARequest {
 }
 
 type totpVerifyRequest struct {
-	ReferenceID string `json:"reference_id" validate:"required"`
-	OTP         string `json:"otp" validate:"required,numeric"`
+	SessionID string `json:"session_id" validate:"required"`
+	OTP       string `json:"otp" validate:"required,numeric"`
 }
 
 func (r totpVerifyRequest) service() auth.TotpVerifyRequest {
 	return auth.TotpVerifyRequest{
-		ReferenceID: r.ReferenceID,
-		OTP:         r.OTP,
+		SessionID: r.SessionID,
+		OTP:       r.OTP,
 	}
 }
 
