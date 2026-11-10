@@ -55,14 +55,12 @@ func (r loginRequest) service(c entity.AuthChannel, v string) auth.LoginRequest 
 }
 
 type resendOTPRequest struct {
-	SessionID string `json:"session_id" validate:"required"` // TODO: do
+	SessionID string `json:"session_id" validate:"required"`
 }
 
-func (r resendOTPRequest) service(c entity.AuthChannel, v string) auth.ResendOTPRequest {
+func (r resendOTPRequest) service() auth.ResendOTPRequest {
 	return auth.ResendOTPRequest{
-		Channel: c,
-		Value:   v,
-		Purpose: r.Purpose,
+		SessionID: r.SessionID,
 	}
 }
 
