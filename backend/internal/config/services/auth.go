@@ -11,6 +11,7 @@ type Auth struct {
 	AgeMax                             uint          `env:"AUTH_SERVICE_AGE_MAX"`
 	MaxAttemptsOTP                     uint          `env:"AUTH_SERVICE_MAX_ATTEMPTS_OTP"`
 	MaxAttemptsTOTPVerify              uint          `env:"AUTH_SERVICE_MAX_ATTEMPTS_TOTP_VERIFY"`
+	MaxAttemptsResendOTP               uint          `env:"AUTH_SERVICE_MAX_ATTEMPTS_RESEND_OTP"`
 	ExpiryTimeOTP                      time.Duration `env:"AUTH_SERVICE_EXPIRY_TIME_OTP"`
 	ExpiryTimeTOTPSetup                time.Duration `env:"AUTH_SERVICE_EXPIRY_TIME_TOTP_SETUP"`
 	ExpiryTimeAccessToken              time.Duration `env:"AUTH_SERVICE_EXPIRY_TIME_ACCESS_TOKEN"`
@@ -40,6 +41,7 @@ func (a *Auth) Map() *auth.Config {
 		MaxAttempts: auth.MaxAttempts{
 			OTP:        a.MaxAttemptsOTP,
 			TOTPVerify: a.MaxAttemptsTOTPVerify,
+			ResendOTP:  a.MaxAttemptsResendOTP,
 		},
 		ExpiryTime: auth.ExpiryTime{
 			OTP:           a.ExpiryTimeOTP,

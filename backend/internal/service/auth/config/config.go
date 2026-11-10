@@ -36,6 +36,7 @@ type Age struct {
 type MaxAttempts struct {
 	OTP        uint
 	TOTPVerify uint
+	ResendOTP  uint
 }
 
 type ExpiryTime struct {
