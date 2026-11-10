@@ -24,9 +24,7 @@ type LoginRequest struct {
 }
 
 type ResendOTPRequest struct {
-	Channel entity.AuthChannel // only in "email" / "phone"
-	Value   string
-	Purpose string
+	SessionID string
 }
 
 type ForgotPasswordRequest struct {
@@ -35,13 +33,13 @@ type ForgotPasswordRequest struct {
 }
 
 type ResetPasswordRequest struct {
-	ReferenceID string
+	SessionID   string
 	NewPassword string
 }
 
 type VerifyOTPRequest struct {
-	ReferenceID string
-	OTP         string
+	SessionID string
+	OTP       string
 }
 
 type RefreshRequest struct {
@@ -57,8 +55,8 @@ type Remove2FARequest struct {
 }
 
 type TotpVerifyRequest struct {
-	ReferenceID string
-	OTP         string
+	SessionID string
+	OTP       string
 }
 
 type ChangePasswordRequest struct {
