@@ -24,6 +24,14 @@ const (
 	ChannelTOTP     AuthChannel = "totp"     // Used for 2FA validation only
 )
 
+// INFO
+// Contains the database models, struct tags are metadata.
+// db tags represent the field name used in the database.
+// json tags are used to send the entities in a json format.
+// db_constraints are the constraints that each field has in the database.
+// constraints helps the service decide how to populate and deal with fields
+// db name tag helps database implementations use these entities
+
 type User struct {
 	// user data
 	ID           uuid.UUID     `db:"id" json:"id" db_constraints:"primary key default gen_random_uuid()"`
