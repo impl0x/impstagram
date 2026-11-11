@@ -27,9 +27,10 @@ func handleUserNotFound(e error) error {
 
 // Common codes, prefix: common
 const (
-	codeCommonSessionExpired apperr.Code = "SESSION_EXPIRED"
-	codeCommonTokenInvalid   apperr.Code = "TOKEN_INVALID"
-	codeCommonTokenExpired   apperr.Code = "TOKEN_EXPIRED"
+	codeCommonSessionExpired    apperr.Code = "SESSION_EXPIRED"
+	codeCommonTokenInvalid      apperr.Code = "TOKEN_INVALID"
+	codeCommonTokenExpired      apperr.Code = "TOKEN_EXPIRED"
+	codeCommonAttemptsExhausted apperr.Code = "ATTEMPTS_EXHAUSTED"
 )
 
 // Common errors, prefix: common
@@ -42,8 +43,8 @@ var (
 		apperr.CodeUnauthorized,
 		"Unauthorized user",
 	)
-	errCommonAttemptsExhausted = apperr.NewForbidden(
-		"ATTEMPTS_EXHAUSTED",
+	errCommonAttemptsExhausted = apperr.NewRatelimit(
+		codeCommonAttemptsExhausted,
 		"No attempts remaining",
 	)
 )
@@ -115,12 +116,13 @@ var (
 		apperr.CodeNotFound,
 		"OTP Session is either invalid or has expired",
 	)
-	errResendOTPInvalidIdentifier = apperr.NewValidation(
-		"Invalid identifier for resending OTP",
+	errResendOTPSessionExpired = apperr.NewUnauthorized(
+		"SESSION_EXPIRED",
+		"OTP Session has expired",
 	)
-	errResendOTP2FANotEnabled = apperr.NewForbidden(
-		"2FA_NOT_ENABLED",
-		"User does not have 2FA enabled, cannot know where to send otp",
+	errResendOTPAttemptsExhausted = apperr.NewRatelimit(
+		codeCommonAttemptsExhausted,
+		"You cannot request for any more resends at the moment",
 	)
 )
 
@@ -153,7 +155,7 @@ var (
 
 	errVerifyOTPIncorrectPurpose = apperr.NewForbidden(
 		"OTP_UNACCEPTABLE",
-		"This OTP can not be used for this purpose, and this OTP has been invalidated",
+		"This OTP can not be used for this purpose",
 	)
 )
 
