@@ -56,8 +56,9 @@ func (h Handler) RegisterPaths(g mo.Grouped) {
 	g.POST("/check/username", h.CheckUsername)
 	g.POST("/register", h.Register)
 	g.POST("/login", h.Login)
-	g.POST("/verify-otp", h.VerifyOTP)
-	g.POST("/resend-otp", h.ResendOTP)
+	g.POST("/otp/verify", h.VerifyOTP)
+	g.POST("/otp/resend", h.ResendOTP)
+
 	g.POST("/refresh", h.Refresh)
 	g.POST("/forgot-password", h.ForgotPassword)
 	g.POST("/reset-password", h.ResetPassword)
@@ -146,9 +147,9 @@ func (h Handler) Register(c *mo.Context) error {
 			codeNonErrRegisterSuccess,
 			"Registration successful, please check your "+string(ch)+" for the OTP to verify your account",
 			struct { // using anon structs instead of maps to reduce allocation
-				ReferenceID string `json:"reference_id"`
-				ExpiresAt   int64  `json:"expires_at"`
-			}{result.ReferenceID, result.ExpiresAt.Unix()},
+				SessionID string `json:"session_id"`
+				ExpiresAt int64  `json:"expires_at"`
+			}{result.SessionID, result.ExpiresAt.Unix()},
 		),
 	)
 }
@@ -190,9 +191,9 @@ func (h Handler) Login(c *mo.Context) error {
 				codeNonErrTwoFARequired,
 				"Two-factor authentication is required, please check your "+string(ch),
 				struct {
-					ReferenceID string `json:"reference_id"`
-					ExpiresAt   int64  `json:"expires_at"`
-				}{result.ReferenceID, result.ExpiresAt.Unix()},
+					SessionID string `json:"session_id"`
+					ExpiresAt int64  `json:"expires_at"`
+				}{result.SessionID, result.ExpiresAt.Unix()},
 			),
 		)
 	}
@@ -271,13 +272,13 @@ func (h Handler) VerifyOTPForResetPassword(c *mo.Context) error {
 	return c.JSON(
 		http.StatusAccepted,
 		struct {
-			ReferenceID string    `json:"reference_id"`
-			ExpiresAt   time.Time `json:"expires_at"`
-		}{result.ReferenceID, result.ExpiresAt},
+			SessionID string    `json:"session_id"`
+			ExpiresAt time.Time `json:"expires_at"`
+		}{result.SessionID, result.ExpiresAt},
 	)
 }
 
-// resend otp for any purpose
+// resend otp for a session id
 //   - POST - [resendOTPRequest]
 func (h Handler) ResendOTP(c *mo.Context) error {
 	var req resendOTPRequest
@@ -285,23 +286,9 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	var ch entity.AuthChannel
-	var v string
-	if req.Email != "" {
-		ch = entity.ChannelEmail
-		v = req.Email
-	} else if req.Phone != "" {
-		ch = entity.ChannelPhone
-		v = req.Phone
-	} else if req.Username != "" {
-		ch = entity.ChannelUsername
-		v = req.Username
-	} else {
-		return errIdentifierNotProvided("Need an Email/Phone/Username to send otp")
-	}
 	result, err := h.Service.ResendOTP(
 		httpserver.ToServiceContext(c),
-		req.service(ch, v),
+		req.service(),
 	)
 	if err != nil {
 		return err
@@ -310,11 +297,11 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 		http.StatusOK,
 		response.Success(
 			codeNonErrOTPSent,
-			"OTP sent successfully to user's "+string(ch),
+			"OTP sent",
 			struct {
-				ReferenceID string `json:"reference_id"`
-				ExpiresAt   int64  `json:"expires_at"`
-			}{result.ReferenceID, result.ExpiresAt.Unix()},
+				SessionID string `json:"session_id"`
+				ExpiresAt int64  `json:"expires_at"`
+			}{result.SessionID, result.ExpiresAt.Unix()},
 		),
 	)
 }
@@ -379,9 +366,9 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 			apperr.CodeOk,
 			"An OTP has been sent to your "+string(ch),
 			struct {
-				ReferenceID string `json:"reference_id"`
-				ExpiresAt   int64  `json:"expires_at"`
-			}{result.ReferenceID, result.ExpiresAt.Unix()},
+				SessionID string `json:"session_id"`
+				ExpiresAt int64  `json:"expires_at"`
+			}{result.SessionID, result.ExpiresAt.Unix()},
 		),
 	)
 }
@@ -513,10 +500,10 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 			apperr.CodeOk,
 			"Setup initiated",
 			struct {
-				ReferenceId string `json:"reference_id"`
-				Uri         string `json:"uri"`
-				ExpiresAt   int64  `json:"expires_at"`
-			}{result.ReferenceID, result.TotpUri, result.ExpiresAt.Unix()},
+				SessionID string `json:"session_id"`
+				Uri       string `json:"uri"`
+				ExpiresAt int64  `json:"expires_at"`
+			}{result.SessionID, result.TotpUri, result.ExpiresAt.Unix()},
 		),
 	)
 }
