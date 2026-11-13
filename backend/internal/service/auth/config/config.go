@@ -29,14 +29,14 @@ type Config struct {
 }
 
 type Age struct {
-	Min uint `validate:"min=1"`
-	Max uint `validate:"max=120"`
+	Min uint8 `validate:"min=1"`
+	Max uint8 `validate:"max=120"`
 }
 
 type MaxAttempts struct {
-	OTP        uint
-	TOTPVerify uint
-	ResendOTP  uint
+	OTP        uint8
+	TOTPVerify uint8
+	ResendOTP  uint8
 }
 
 type ExpiryTime struct {
@@ -55,8 +55,8 @@ type TTLCacheCleanInterval struct {
 }
 
 type Size struct {
-	SessionID    uint
-	RefreshToken uint
+	SessionID    uint16
+	RefreshToken uint16
 }
 
 type Prefix struct {

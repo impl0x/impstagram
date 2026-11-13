@@ -7,11 +7,11 @@ import (
 
 // auth config, directly business related
 type Auth struct {
-	AgeMin                             uint          `env:"AUTH_SERVICE_AGE_MIN"`
-	AgeMax                             uint          `env:"AUTH_SERVICE_AGE_MAX"`
-	MaxAttemptsOTP                     uint          `env:"AUTH_SERVICE_MAX_ATTEMPTS_OTP"`
-	MaxAttemptsTOTPVerify              uint          `env:"AUTH_SERVICE_MAX_ATTEMPTS_TOTP_VERIFY"`
-	MaxAttemptsResendOTP               uint          `env:"AUTH_SERVICE_MAX_ATTEMPTS_RESEND_OTP"`
+	AgeMin                             uint8         `env:"AUTH_SERVICE_AGE_MIN"`
+	AgeMax                             uint8         `env:"AUTH_SERVICE_AGE_MAX"`
+	MaxAttemptsOTP                     uint8         `env:"AUTH_SERVICE_MAX_ATTEMPTS_OTP"`
+	MaxAttemptsTOTPVerify              uint8         `env:"AUTH_SERVICE_MAX_ATTEMPTS_TOTP_VERIFY"`
+	MaxAttemptsResendOTP               uint8         `env:"AUTH_SERVICE_MAX_ATTEMPTS_RESEND_OTP"`
 	ExpiryTimeOTP                      time.Duration `env:"AUTH_SERVICE_EXPIRY_TIME_OTP"`
 	ExpiryTimeTOTPSetup                time.Duration `env:"AUTH_SERVICE_EXPIRY_TIME_TOTP_SETUP"`
 	ExpiryTimeAccessToken              time.Duration `env:"AUTH_SERVICE_EXPIRY_TIME_ACCESS_TOKEN"`
@@ -21,8 +21,8 @@ type Auth struct {
 	TTLCacheCleanIntervalTOTP          time.Duration `env:"AUTH_SERVICE_TTLCACHE_CLEAN_INTERVAL_TOTP"`
 	TTLCacheCleanIntervalResetPassword time.Duration `env:"AUTH_SERVICE_TTLCACHE_CLEAN_INTERVAL_RESET_PASSWORD"`
 	TTLCacheCleanIntervalJWTBlockList  time.Duration `env:"AUTH_SERVICE_TTLCACHE_CLEAN_INTERVAL_JWT_BLOCKLIST"`
-	SizeSessionID                      uint          `env:"AUTH_SERVICE_SIZE_SESSION_ID"`
-	SizeRefreshToken                   uint          `env:"AUTH_SERVICE_SIZE_REFRESH_TOKEN"`
+	SizeSessionID                      uint16         `env:"AUTH_SERVICE_SIZE_SESSION_ID"`
+	SizeRefreshToken                   uint16         `env:"AUTH_SERVICE_SIZE_REFRESH_TOKEN"`
 	PrefixRefreshToken                 string        `env:"AUTH_SERVICE_PREFIX_REFRESH_TOKEN"`
 	PrefixOTPSession                   string        `env:"AUTH_SERVICE_PREFIX_OTP_SESSION"`
 	PrefixTOTPSession                  string        `env:"AUTH_SERVICE_PREFIX_TOTP_SESSION"`
