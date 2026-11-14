@@ -53,7 +53,7 @@ func Username(s string) error {
 
 // Dob errors
 var (
-	errEmptyDob           = errors.New("Dob is " + dob.ErrEmpty.Error()[5:])
+	errEmptyDob           = errors.New("Dob is " + dob.ErrEmpty.Error()[5:]) // slicing out the "dob: " part from the error message.
 	errDobIncorrectFormat = errors.New("Dob has " + dob.ErrIncorrectFormat.Error()[5:])
 	errDobNotParseable    = errors.New("Dob is " + dob.ErrNotParseable.Error()[5:])
 	errDobImpossible      = errors.New("Dob is impossible")
