@@ -88,7 +88,7 @@ func MustParse(s string) Dob {
 // and this can panic if string indexing fails (incorrect string format).
 // if format matches and the values have invalid/impossible year/month/date values
 // then it will not fail and return bad data which will inevitably panic if called [Dob.Age] later on.
-// Always make sure string is validated according to [Parse]
+// Always make sure string is validated beforehand with [Parse]
 func AlwaysParse(s string) Dob {
 	y, _ := strconv.ParseUint(s[:4], 10, 16)
 	m, _ := strconv.ParseUint(s[5:7], 10, 8)
