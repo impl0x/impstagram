@@ -11,15 +11,16 @@ import (
 	"net/http"
 )
 
+// Email implementation using Resend API, do not copy after first use.
 type Resend struct {
-	httpClient *http.Client
+	httpClient http.Client
 	emailID    string
 	apiKey     string
 }
 
 func New(h *http.Client, emailID, apiKey string) Resend {
 	return Resend{
-		h, emailID, apiKey,
+		*h, emailID, apiKey, // copy http client to struct as its safe to copy before using it
 	}
 }
 
@@ -30,7 +31,7 @@ type sendRequest struct {
 	HTML    string   `json:"html"`
 }
 
-func (m Resend) send(ctx context.Context, sub string, to []string, html string) error {
+func (m *Resend) send(ctx context.Context, sub string, to []string, html string) error {
 	req := sendRequest{
 		From:    m.emailID,
 		To:      to,
@@ -39,7 +40,7 @@ func (m Resend) send(ctx context.Context, sub string, to []string, html string) 
 	}
 	body, err := json.Marshal(req)
 	if err != nil {
-		return fmt.Errorf("email: marshal email: %w", err) // should not happen
+		panic(fmt.Errorf("email: marshal email: %w", err)) // should not happen
 	}
 
 	httpReq, err := http.NewRequestWithContext(
@@ -49,7 +50,7 @@ func (m Resend) send(ctx context.Context, sub string, to []string, html string) 
 		bytes.NewReader(body),
 	)
 	if err != nil {
-		return fmt.Errorf("email: create request: %w", err) // should not happen
+		panic(fmt.Errorf("email: create request: %w", err)) // should not happen
 	}
 
 	httpReq.Header.Set("Authorization", "Bearer "+m.apiKey)
@@ -71,10 +72,10 @@ func (m Resend) send(ctx context.Context, sub string, to []string, html string) 
 	return nil
 }
 
-func (m Resend) SendSingle(ctx context.Context, sub string, to string, html string) error {
+func (m *Resend) SendSingle(ctx context.Context, sub string, to string, html string) error {
 	return m.send(ctx, sub, []string{to}, html)
 }
 
-func (m Resend) SendMultiple(ctx context.Context, sub string, to []string, html string) error {
+func (m *Resend) SendMultiple(ctx context.Context, sub string, to []string, html string) error {
 	return m.send(ctx, sub, to, html)
 }
