@@ -42,31 +42,31 @@ type Config struct {
 
 // implements [cryptoutil.PasswordHasher]
 type Manager struct {
-	c                  Config
-	formattedFirstPart string
-	totalStrLen        int
+	c     Config
+	cache struct {
+		configPrefixString string
+	}
 }
 
 // returns a new argon2id implementation of [cryptoutil.PasswordHasher]
 // Manager struct which can be used to manage password hashes
 func New(c Config) Manager {
-	s := "$argon2id$v=" +
-		strconv.Itoa(argon2.Version) +
-		"$m=" +
-		strconv.Itoa(int(c.Memory)) +
-		",t=" +
-		strconv.Itoa(int(c.Iterations)) +
-		",p=" +
-		strconv.Itoa(int(c.Parallelism)) +
-		"$"
-
-	l := len(s)
-	l += base64.RawStdEncoding.EncodedLen(int(c.SaltLength))
-	l += base64.RawStdEncoding.EncodedLen(int(c.KeyLength))
+	s := base64.RawStdEncoding.EncodeToString(
+		[]byte(
+			"$argon2id$v=" +
+				strconv.Itoa(argon2.Version) +
+				"$m=" +
+				strconv.Itoa(int(c.Memory)) +
+				",t=" +
+				strconv.Itoa(int(c.Iterations)) +
+				",p=" +
+				strconv.Itoa(int(c.Parallelism)) +
+				"$",
+		),
+	)
 	return Manager{
-		c:                  c,
-		formattedFirstPart: s,
-		totalStrLen:        l,
+		c:     c,
+		cache: struct{ configPrefixString string }{s},
 	}
 }
 
@@ -88,7 +88,7 @@ func (m Manager) createHash(password string, salt []byte) string {
 
 	// we store it in this format: $argon2id$v=19$m=65536,t=1,p=4$ZWFzeXNhbHQ$R01...NDA
 	// where, v is version, m for memory, t for time/iterations, p for parallelism/threads
-	return m.formattedFirstPart + b64Salt + "$" + b64Key
+	return m.cache.configPrefixString + b64Salt + "$" + b64Key
 }
 
 // expects format example:
