@@ -14,7 +14,7 @@ const (
 	StatusBanned     AccountStatus = "banned"
 )
 
-// AuthChannel defines WHAT medium is being used.
+// AuthChannel defines WHAT medium is being used, for whatever purpose may it be.
 type AuthChannel string
 
 const (
@@ -23,6 +23,14 @@ const (
 	ChannelUsername AuthChannel = "username" // Used for DB lookup only/ login
 	ChannelTOTP     AuthChannel = "totp"     // Used for 2FA validation only
 )
+
+// Represents a user's identity via a auth channel.
+//
+// examples can be, ([ChannelEmail], "bob@example.com"), ([ChannelPhone], "+123-4567-9810")
+type AuthIdentity struct {
+	Channel AuthChannel
+	Value   string
+}
 
 // INFO
 // Contains the database models, struct tags are metadata.
