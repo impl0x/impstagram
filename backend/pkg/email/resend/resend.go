@@ -18,8 +18,8 @@ type Resend struct {
 	apiKey     string
 }
 
-func New(h *http.Client, emailID, apiKey string) Resend {
-	return Resend{
+func New(h *http.Client, emailID, apiKey string) *Resend {
+	return &Resend{
 		*h, emailID, apiKey, // copy http client to struct as its safe to copy before using it
 	}
 }
