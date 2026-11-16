@@ -40,18 +40,18 @@ type MaxAttempts struct {
 }
 
 type ExpiryTime struct {
-	OTP           time.Duration
-	TOTPSetup     time.Duration
-	AccessToken   time.Duration
-	RefreshToken  time.Duration
-	ResetPassword time.Duration
+	OTP            time.Duration
+	TOTPSetup      time.Duration
+	AccessToken    time.Duration
+	RefreshToken   time.Duration
+	ForgotPassword time.Duration
 }
 
 type TTLCacheCleanInterval struct {
-	OTP           time.Duration
-	TOTP          time.Duration
-	ResetPassword time.Duration
-	JWTBlockList  time.Duration
+	OTP            time.Duration
+	TOTP           time.Duration
+	ForgotPassword time.Duration
+	JWTBlockList   time.Duration
 }
 
 type Size struct {
@@ -60,10 +60,10 @@ type Size struct {
 }
 
 type Prefix struct {
-	RefreshToken string
-	OTPSession   string
-	TOTPSession  string
-	ResetSession string
+	RefreshToken          string
+	OTPSession            string
+	TOTPSession           string
+	ForgotPasswordSession string
 }
 
 // Default values for the configuration, to be used when not provided explicit
@@ -78,26 +78,26 @@ var Default = Config{
 		TOTPVerify: 5,
 	},
 	ExpiryTime: ExpiryTime{
-		OTP:           10 * time.Minute,
-		TOTPSetup:     30 * time.Minute,
-		AccessToken:   30 * time.Minute,
-		RefreshToken:  7 * 24 * time.Hour,
-		ResetPassword: 30 * time.Minute,
+		OTP:            10 * time.Minute,
+		TOTPSetup:      30 * time.Minute,
+		AccessToken:    30 * time.Minute,
+		RefreshToken:   7 * 24 * time.Hour,
+		ForgotPassword: 30 * time.Minute,
 	},
 	TTLCacheCleanInterval: TTLCacheCleanInterval{
-		OTP:           10 * time.Minute,
-		TOTP:          10 * time.Minute,
-		ResetPassword: 10 * time.Minute,
-		JWTBlockList:  15 * time.Minute, // half the time of access time expiry token
+		OTP:            10 * time.Minute,
+		TOTP:           10 * time.Minute,
+		ForgotPassword: 10 * time.Minute,
+		JWTBlockList:   15 * time.Minute, // half the time of access time expiry token
 	},
 	Size: Size{
 		SessionID:    24,
 		RefreshToken: 32,
 	},
 	Prefix: Prefix{
-		RefreshToken: "ref_",
-		OTPSession:   "otp_",
-		TOTPSession:  "totp_",
-		ResetSession: "pwd_",
+		RefreshToken:          "ref_",
+		OTPSession:            "otp_",
+		TOTPSession:           "totp_",
+		ForgotPasswordSession: "pwd_",
 	},
 }
