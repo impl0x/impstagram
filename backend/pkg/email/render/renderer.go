@@ -34,7 +34,7 @@ const (
 	otpConResetPass       = "Reset password"
 	otpSubConResetPass    = "Use this one time authorization code below to reset your password on your account."
 	otpConChangeEmail     = "Change email"
-	otpSubConChangeEmail  = "Use this one time verification code to verify the email change for your account"
+	otpSubConChangeEmail  = "Use this one time authorization code to verify the email change for your account"
 )
 
 //go:embed templates/*.html
