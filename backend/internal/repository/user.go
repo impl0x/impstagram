@@ -8,6 +8,7 @@ import (
 
 // Contains user related methods
 type UserRepository interface {
+
 	// ? -----+-----+----- Create -----+-----+-----
 
 	// Creates new user to both users table and profiles table, uses transactions to prevent dirty state
@@ -18,7 +19,7 @@ type UserRepository interface {
 	// Gets a user by ID
 	GetByID(ctx context.Context, id uuid.UUID) (*entity.User, error)
 	// Gets a user by [entity.AuthChannel], must be a valid channel for fetching users otherwise *panics*.
-	GetByAuthChannel(ctx context.Context, channel entity.AuthChannel, value string) (*entity.User, error)
+	GetByAuthIdentity(ctx context.Context, identity entity.AuthIdentity) (*entity.User, error)
 
 	// ? -----+-----+----- Update -----+-----+-----
 
@@ -34,6 +35,7 @@ type UserRepository interface {
 	UpdateEmail(ctx context.Context, id uuid.UUID, email string) error
 	// Updates the email
 	UpdatePhone(ctx context.Context, id uuid.UUID, phone string) error
+
 	// ? -----+-----+----- Delete -----+-----+-----
 
 	// Deletes a user by ID
