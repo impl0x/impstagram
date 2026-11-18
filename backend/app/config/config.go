@@ -1,9 +1,19 @@
 package config
 
+import "backend/pkg/cryptoutil"
+
 // contains constant values that should not be injected as environment variables
 
 // App version according to release
 const AppVersion = "0.5.0"
+
+// Current values for the app configurations
+const (
+	CurrentDatabase       = Postgres
+	CurrentTransport      = HTTP
+	CurrentPasswordHasher = Argon2ID
+	CurrentEmailSender    = Resend
+)
 
 // database type represents a database storage which implements repository
 type Database uint8
@@ -34,10 +44,5 @@ const (
 	Resend EmailSender = iota
 )
 
-// Current values for the app configurations
-const (
-	CurrentDatabase       = Postgres
-	CurrentTransport      = HTTP
-	CurrentPasswordHasher = Argon2ID
-	CurrentEmailSender    = Resend
-)
+// Bit size for request IDs
+const RequestIDBitSize = cryptoutil.Bit64
