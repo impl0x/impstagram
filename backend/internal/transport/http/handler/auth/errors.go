@@ -27,6 +27,4 @@ var (
 		}
 		return apperr.NewValidation(str)
 	}
-	errInvalidDob    = apperr.NewValidation("Invalid date of birth string")
-	errImpossibleDob = apperr.NewValidation("Impossible date of birth")
 )
