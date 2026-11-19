@@ -1,7 +1,6 @@
 package postgres
 
 import (
-	"backend/internal/config"
 	"backend/pkg/database/postgres"
 
 	"github.com/impl0x/go-utils/logger"
@@ -14,7 +13,12 @@ type Postgres struct {
 	Profiles     Profiles
 }
 
-func New(c config.Postgres, log logger.Logger) (Postgres, error) {
+type PostgresConfig struct {
+	PoolMax uint32
+	URL     string
+}
+
+func New(c PostgresConfig, log logger.Logger) (Postgres, error) {
 	pg, err := postgres.New(
 		c.URL,
 		log,
