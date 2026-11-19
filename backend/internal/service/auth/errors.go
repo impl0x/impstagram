@@ -39,24 +39,20 @@ var (
 		"USER_NOT_FOUND",
 		"User not found",
 	)
-	errCommonUnauthorized = apperr.NewUnauthorized(
-		apperr.CodeUnauthorized,
-		"Unauthorized user",
-	)
 	errCommonAttemptsExhausted = apperr.NewRatelimit(
 		codeCommonAttemptsExhausted,
 		"No attempts remaining",
 	)
 )
 
-// Middleware errors, prefix: Middleware
+// Authorization errors, prefix: Authorization
 var (
 	// internal error
-	errAuthTokenInvalidPayload       = errors.New("auth.Middleware: Auth token has invalid payload")
-	erAuthorizationAuthHeaderMissing = apperr.NewUnauthorized(
-		apperr.CodeUnauthorized,
-		"Authorization header missing or empty",
-	)
+	errAuthTokenInvalidPayload = errors.New("auth.Middleware: Auth token has invalid payload")
+	// errAuthorizationAuthHeaderMissing = apperr.NewUnauthorized(
+	// 	apperr.CodeUnauthorized,
+	// 	"Authorization header missing or empty",
+	// )
 	errAuthorizationAuthTokenInvalid = apperr.NewUnauthorized(
 		codeCommonTokenInvalid,
 		"Invalid authorization token")
@@ -71,11 +67,37 @@ var (
 	)
 )
 
+// otp manager errors, prefix: Authorization
+var (
+	errOTPSessionNotFound = apperr.NewNotFound(
+		"SESSION_NOT_FOUND",
+		"OTP Session is either invalid or has expired",
+	)
+	errOTPExpired = apperr.NewUnauthorized(
+		"OTP_EXPIRED",
+		"The OTP provided is expired",
+	)
+	errOTPIncorrect = apperr.NewUnauthorized(
+		"OTP_INCORRECT",
+		"The OTP provided is incorrect",
+	)
+	errOTPIncorrectPurpose = apperr.NewForbidden(
+		"OTP_UNACCEPTABLE",
+		"This OTP can not be used for this purpose",
+	)
+	errOTPResendAttemptsExhausted = apperr.NewRatelimit(
+		codeCommonAttemptsExhausted,
+		"You cannot request for any more resends at the moment",
+	)
+	errOTPCannotSendOTPHere = apperr.New(
+		apperr.KindValidation,
+		"NOT_ALLOWED",
+		"Invalid channel, cannot send an OTP here",
+	)
+)
+
 // Register errors, prefix: Register
 var (
-	errRegisterMissingIdentifier = apperr.NewValidation(
-		"Need at least email or phone to register",
-	)
 	errRegisterNotOldEnough = apperr.NewForbidden(
 		"USER_NOT_OLD_ENOUGH",
 		"User not old enough to use this service",
@@ -108,21 +130,9 @@ var (
 		"USER_UNVERIFIED",
 		"User account is unverified. Please verify with your account identifier, i.e. email or phone whichever you used to register",
 	)
-)
-
-// Resend otp errors, prefix: Resend
-var (
-	errResendOTPSessionNotFound = apperr.NewNotFound(
-		apperr.CodeNotFound,
-		"OTP Session is either invalid or has expired",
-	)
-	errResendOTPSessionExpired = apperr.NewUnauthorized(
-		"SESSION_EXPIRED",
-		"OTP Session has expired",
-	)
-	errResendOTPAttemptsExhausted = apperr.NewRatelimit(
-		codeCommonAttemptsExhausted,
-		"You cannot request for any more resends at the moment",
+	errLoginRequires2FA = apperr.NewUnauthorized(
+		"REQUIRES_2FA",
+		"This account has 2FA enabled, please verify using OTP",
 	)
 )
 
@@ -135,27 +145,6 @@ var (
 	errResetPasswordSessionExpired = apperr.NewUnauthorized(
 		codeCommonSessionExpired,
 		"Session has expired, please try to raise a reset password request again",
-	)
-)
-
-// Verify otp errors, prefix: Verify
-var (
-	errVerifyOTPSessionNotFound = apperr.NewNotFound(
-		apperr.CodeNotFound,
-		"OTP Session not found, please request a new otp again",
-	)
-	errVerifyOTPExpired = apperr.NewUnauthorized(
-		"OTP_EXPIRED",
-		"The OTP provided is expired",
-	)
-	errVerifyOTPIncorrect = apperr.NewUnauthorized(
-		"OTP_INCORRECT",
-		"The OTP provided is incorrect",
-	)
-
-	errVerifyOTPIncorrectPurpose = apperr.NewForbidden(
-		"OTP_UNACCEPTABLE",
-		"This OTP can not be used for this purpose",
 	)
 )
 
@@ -205,15 +194,15 @@ var (
 
 // Totp verify errors, prefix: TotpVerify
 var (
-	errTotpVerifySessionNotFound = apperr.NewNotFound(
+	errTotpSetupVerifySessionNotFound = apperr.NewNotFound(
 		apperr.CodeNotFound,
 		"Session not found, please try to raise a TOTP setup request again",
 	)
-	errTotpVerifySessionExpired = apperr.NewUnauthorized(
+	errTotpSetupVerifySessionExpired = apperr.NewUnauthorized(
 		codeCommonSessionExpired,
 		"Session has expired, please try to raise a TOTP setup request again",
 	)
-	errTotpVerifyTOTPIncorrect = apperr.NewForbidden(
+	errTotpSetupVerifyTOTPIncorrect = apperr.NewForbidden(
 		"TOTP_INCORRECT",
 		"Incorrect OTP",
 	)
