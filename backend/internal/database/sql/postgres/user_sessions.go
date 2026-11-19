@@ -64,7 +64,7 @@ func (pg UserSessions) Create(ctx context.Context, session *entity.UserSession) 
 
 	_, err := pg.Pool.Exec(ctx, buf.String(), vals...)
 	if err != nil {
-		handlePgxError(fmt.Errorf("user sessions create: %w", err))
+		return handlePgxError(fmt.Errorf("user sessions create: %w", err))
 	}
 	return nil
 }
@@ -103,7 +103,7 @@ func (pg UserSessions) GetByTokenHash(ctx context.Context, tokenHash string) (*e
 
 // ? -----+-----+----- Update -----+-----+-----
 
-func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val any) error {
+func (pg UserSessions) update(ctx context.Context, id uuid.UUID, col string, val any) error { //nolint:unused, in future we might need this method
 	sql := "UPDATE " + sql.TableUserSessions + " SET " + col + " = $1 WHERE id = $2"
 	cmdTag, err := pg.Pool.Exec(ctx, sql, val, id)
 	if err != nil {
