@@ -85,6 +85,11 @@ func Load() (*Config, error) {
 	copyFields(&cfg.Services.Auth, &services.DefaultAuth)
 	copyFields(&cfg.Services.AuthPkgs, &services.DefaultAuthPkgs)
 
+	// populating repeating fields
+	{
+		cfg.Services.AuthPkgs.TOTP.ServiceName = cfg.App.Name
+	}
+
 	err := validator.Validate(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("validation fail: %w", err)
