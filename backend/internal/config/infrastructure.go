@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"backend/internal/database/sql/postgres"
+	"time"
+)
 
 // Contains infrastructure related configs such as database, webserver, etc.
 type Infrastructure struct {
@@ -57,6 +60,13 @@ var DefaultHttpServer = HttpServer{
 type Postgres struct {
 	PoolMax uint32 `env:"PG_POOL_MAX"`
 	URL     string `env:"PG_URL,required" validate:"url"`
+}
+
+func (p *Postgres) Map() *postgres.PostgresConfig {
+	return &postgres.PostgresConfig{
+		PoolMax: p.PoolMax,
+		URL:     p.URL,
+	}
 }
 
 var DefaultPostgres = Postgres{
