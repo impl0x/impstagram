@@ -39,7 +39,7 @@ func afterConnectUsers(ctx context.Context, conn *pgx.Conn) error {
 }
 
 // ? -----+-----+----- Create -----+-----+-----
-//
+
 // user parameter must only have populated values according to the db model constructor defined in models
 //
 // extra populated fields will not be inserted
@@ -51,7 +51,7 @@ func (pg Users) Create(ctx context.Context, user *entity.User, username string) 
 	if err != nil {
 		return uuid.UUID{}, handlePgxError(fmt.Errorf("user create transaction start: %w", err))
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	totalLen := 108 + len(sql.TableUsers) // calculated number of bytes
 	cols := make([]string, 0, 8)
@@ -127,8 +127,8 @@ func (pg Users) get(ctx context.Context, by string, value any) (*entity.User, er
 func (pg Users) GetByID(ctx context.Context, ID uuid.UUID) (*entity.User, error) {
 	return pg.get(ctx, "id", ID)
 }
-func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel, target string) (*entity.User, error) {
-	switch channel {
+func (pg Users) GetByAuthIdentity(ctx context.Context, identity entity.AuthIdentity) (*entity.User, error) {
+	switch identity.Channel {
 	case entity.ChannelUsername:
 		var user entity.User
 		err := pg.Pool.QueryRow(
@@ -138,7 +138,7 @@ func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel
 				" t1 JOIN "+
 				sql.TableProfiles+
 				" t2 ON t1.id = t2.user_id WHERE t2.username = $1",
-			target,
+			identity.Value,
 		).
 			Scan(
 				&user.ID,
@@ -157,9 +157,9 @@ func (pg Users) GetByAuthChannel(ctx context.Context, channel entity.AuthChannel
 		}
 		return &user, nil
 	case entity.ChannelEmail, entity.ChannelPhone:
-		return pg.get(ctx, string(channel), target)
+		return pg.get(ctx, string(identity.Channel), identity.Value)
 	default:
-		panic("postgres: invalid channel, provided channel: " + string(channel))
+		panic("postgres: invalid channel, provided channel: " + string(identity.Channel))
 	}
 }
 
