@@ -2,53 +2,21 @@ package auth
 
 import (
 	"backend/internal/entity"
+	"backend/internal/service"
+	"backend/pkg/cryptoutil"
+	"backend/pkg/email/render"
 	"backend/pkg/jwt"
+	"crypto/subtle"
 	"errors"
-	"slices"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 	"uuid"
 
 	"github.com/impl0x/go-utils/cache"
+	"github.com/impl0x/go-utils/logger"
 )
-
-// ? ----+-----+----- TTL Cache Leased Item -----+-----+-----
-
-// wrapper over the cache leased item to make it easier to use
-type ttlLeasedItemWrapper[K comparable, V any] struct {
-	cache.TTLLeasedItem[K, V]
-	flag bool
-}
-
-const _defaultFlag = true
-
-func newTTLLeasedItemWrapper[K comparable, V any](i cache.TTLLeasedItem[K, V]) *ttlLeasedItemWrapper[K, V] {
-	return &ttlLeasedItemWrapper[K, V]{
-		i, _defaultFlag,
-	}
-}
-
-// defer this
-//
-// checks if release flag is true and releases the item after its used,
-// else does not release letting it be deleted automatically if delete was
-// called previously making the flag false
-func (t *ttlLeasedItemWrapper[K, V]) d() {
-	if t.flag {
-		t.TTLLeasedItem.Release()
-	}
-}
-
-// deletes the item not letting it stay
-func (t *ttlLeasedItemWrapper[K, V]) delete() {
-	t.flag = false
-}
-
-// keeps the item
-func (t *ttlLeasedItemWrapper[K, V]) keep() {
-	t.flag = true
-}
 
 // ? ----+-----+----- TOKEN & JWT -----+-----+-----
 // Contains access token related stuff and utility to convert to jwt acceptable format
@@ -136,21 +104,20 @@ func (s *Service) IsAuthorized(token string) (AccessToken, error) {
 
 // ? ----+-----+-----Utility funcs-----+-----+-----
 
-// checks if a auth channel is in the slice of auth channels.
-func checkChannel(channel entity.AuthChannel, chans ...entity.AuthChannel) bool {
-	return slices.Contains(chans, channel)
-}
-
 func channelIsValidForRegister(channel entity.AuthChannel) bool {
-	return checkChannel(channel, entity.ChannelEmail, entity.ChannelPhone)
+	switch channel {
+	case entity.ChannelEmail, entity.ChannelPhone:
+		return true
+	}
+	return false
 }
 
 func channelIsValidForLogin(channel entity.AuthChannel) bool {
-	return checkChannel(channel, entity.ChannelEmail, entity.ChannelPhone, entity.ChannelUsername)
-}
-
-func channelIsValidForOTP(channel entity.AuthChannel) bool {
-	return channelIsValidForRegister(channel)
+	switch channel {
+	case entity.ChannelEmail, entity.ChannelPhone, entity.ChannelUsername:
+		return true
+	}
+	return false
 }
 
 // converts [time.Duration] to a string format, from years to nano seconds
@@ -190,7 +157,189 @@ func timeDurationToString(d time.Duration) string {
 
 	d = helper(&b, d, time.Microsecond, "microsecond")
 
-	d = helper(&b, d, time.Nanosecond, "nanosecond")
+	helper(&b, d, time.Nanosecond, "nanosecond")
 
 	return b.String()[:b.Len()-1]
+}
+
+// ? ----+-----+----- OTP Management -----+-----+-----
+
+// used to store otp session details
+type otpSession struct {
+	otp      string
+	identity entity.AuthIdentity
+	userID   uuid.UUID
+	purpose  authPurpose
+	attempts uint8
+	resends  uint8
+}
+
+// Manager represents a OTP manager which can instantiate sessions,
+// store them in cache memory, send otps and verify them using the stored sessions.
+//
+// can be used by value
+type otpManager struct {
+	otp                cryptoutil.OTPManager
+	sessionIDGenerator func() string
+	channels           otpManagerChannels // channels to send otps
+	sessions           *cache.TTLLeaseCache[string, *otpSession]
+	expiryTime         time.Duration
+	expiryTimeString   string // cached version
+	maxAttempts        uint8
+	maxResends         uint8
+	log                logger.Logger
+}
+
+type otpManagerChannels struct {
+	email *_email // reference to [Service]'s email field
+}
+
+// sends otp according to channel provided, and prepares message according to purpose
+//
+// note: this just sends an otp, and does not generate or save a session
+//
+// error is returned if sending fails
+func (o *otpManager) sendOTP(ctx service.Context, otp string, i entity.AuthIdentity, purpose authPurpose) error {
+	o.log.Debug("Service: Sending OTP", "code", otp, "req", ctx.RequestId)
+	var err error
+	// Send otp based on the identifier
+	switch i.Channel {
+	case entity.ChannelEmail:
+		var sub render.Subject
+		var html string
+		r := o.channels.email.renderer.Otp(otp, o.expiryTimeString) // start rendering a otp email template
+		switch purpose {                                            // pick the subject and render html based on the purpose we have received
+		case purpose2FA:
+			sub = render.Sub2FA
+			html = r.TwoFA()
+		case purposeRegistration:
+			sub = render.SubVerifyEmail
+			html = r.Registration()
+		case purposeForgotPassword:
+			sub = render.SubResetPassword
+			html = r.ResetPass()
+		case purposeChangeIdentifier:
+			sub = render.SubChangeEmail
+			html = r.ChangeEmail()
+		}
+		err = o.channels.email.sender.SendSingle(ctx, o.channels.email.renderer.Subject(sub), i.Value, html)
+	case entity.ChannelPhone:
+		// IMPORTANT
+		// we can never send otp to phone numbers as its not possible as of now to afford sms service or telegram's gateway service.
+		// will not change the code but anyone signing up on the backend with a phone will simply not receive an otp and will not be able to continue.
+		// not returning an error or anything, its intentional, due to future compatibility. the frontend should not have phone supported.
+		return fmt.Errorf("Service: Request to send otp on phone arrived, impossible! to do")
+	default:
+		return errOTPCannotSendOTPHere
+	}
+	if err != nil { // send otp error
+		return err
+	}
+	return nil
+}
+
+// saves session
+func (m *otpManager) save(otp string, i entity.AuthIdentity, userID uuid.UUID, purpose authPurpose) (string, time.Time) {
+	// save session to cache
+	s := m.sessionIDGenerator()
+	e := time.Now().Add(m.expiryTime)
+	m.sessions.Add(
+		s,
+		&otpSession{
+			otp:      otp,
+			identity: i,
+			userID:   userID,
+			purpose:  purpose,
+		},
+		e,
+	)
+	return s, e
+}
+
+// Sends a generated otp to the auth identity and saves the session.
+//
+// this is a wrapper around both [otpManager.sendOTP] and [otpManager.save]
+//
+// returns the session id, expiry time and optional error
+//
+// error is returned if [otpManager.sendOTP] returns one
+func (m *otpManager) send(ctx service.Context, i entity.AuthIdentity, userID uuid.UUID, purpose authPurpose) (string, time.Time, error) {
+	otp := m.otp.Generate()
+	err := m.sendOTP(ctx, otp, i, purpose)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	s, e := m.save(otp, i, userID, purpose)
+	return s, e, nil
+}
+
+// Resends an otp using the session id.
+//
+// Sends the same otp, and expiration still remains the same.
+// after max amount of resends has happened, it does not allow
+// for any more resends.
+func (m *otpManager) resend(ctx service.Context, sessionID string) error {
+	item, ok := m.sessions.Acquire(sessionID)
+	if !ok {
+		return errOTPSessionNotFound
+	}
+	defer item.Release()
+	session, expiresAt := item.Value(), item.ExpiresAt()
+	switch session.identity.Channel {
+	case entity.ChannelTOTP, entity.ChannelUsername:
+		return errOTPCannotSendOTPHere
+	}
+	if expiresAt.Before(time.Now()) {
+		item.Delete()
+		return errOTPExpired
+	}
+	// not allow for any more resends if limit has been reached
+	if session.resends >= m.maxResends {
+		return errOTPResendAttemptsExhausted
+	}
+	session.resends++
+	err := m.sendOTP(ctx, session.otp, session.identity, session.purpose)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Verifies a otp using the session id provided.
+func (m *otpManager) verify(sessionID, otp string, purpose authPurpose) (*otpSession, uint8, error) {
+	item, ok := m.sessions.Acquire(sessionID)
+	if !ok {
+		return nil, 0, errOTPSessionNotFound
+	}
+	defer item.Release() // defer releasing the item, (delete calls dont let this happen so its safe)
+
+	session, expiresAt := item.Value(), item.ExpiresAt()
+	if expiresAt.Before(time.Now()) {
+		// we delete the session if its expired
+		item.Delete()
+		return session, 0, errOTPExpired
+	}
+
+	remainingAttempts := m.maxAttempts - session.attempts
+	if remainingAttempts == 0 {
+		// this prevents any more verification attempts
+		// on this session essentially destroying this session.
+		item.Delete()
+		return session, 0, errCommonAttemptsExhausted
+	}
+
+	// validation function
+	if session.purpose != purpose {
+		return session, 0, errOTPIncorrectPurpose
+	}
+
+	session.attempts++
+
+	if subtle.ConstantTimeCompare([]byte(session.otp), []byte(otp)) == 1 {
+		return session, remainingAttempts, errOTPIncorrect
+	}
+	// if otp matches then we delete session
+	item.Delete()
+	// return result without any errors
+	return session, 0, nil
 }
