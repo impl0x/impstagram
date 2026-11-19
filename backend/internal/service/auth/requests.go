@@ -7,8 +7,7 @@ import (
 
 type RegisterRequest struct {
 	Username string
-	Channel  entity.AuthChannel // only in "email" / "phone"
-	Value    string             // the value for the email or phone
+	Identity entity.AuthIdentity
 	Dob      dob.Dob
 	Password string
 }
@@ -18,8 +17,7 @@ type CheckUsernameRequest struct {
 }
 
 type LoginRequest struct {
-	Channel  entity.AuthChannel // only in "email" / "phone" / "username"
-	Value    string             // the value for the channel
+	Identity entity.AuthIdentity // the value for the channel
 	Password string
 }
 
@@ -28,8 +26,7 @@ type ResendOTPRequest struct {
 }
 
 type ForgotPasswordRequest struct {
-	Channel entity.AuthChannel
-	Value   string
+	Identity entity.AuthIdentity
 }
 
 type ResetPasswordRequest struct {
@@ -65,6 +62,5 @@ type ChangePasswordRequest struct {
 }
 
 type ChangeIdentifierRequest struct {
-	Channel entity.AuthChannel // only in "email" / "phone"
-	Value   string
+	Identity entity.AuthIdentity
 }
