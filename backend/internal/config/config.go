@@ -66,7 +66,10 @@ func copyFields(a, b any) {
 	}
 }
 
-// Loads configs.
+// Loads configs
+//
+// compares the default compile time values and populated run time values,
+// where populated values are given precedence over default values.
 func Load() (*Config, error) {
 	var cfg Config
 	if err := env.Parse(&cfg); err != nil {
