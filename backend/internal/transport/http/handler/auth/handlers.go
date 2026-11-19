@@ -2,13 +2,13 @@ package auth
 
 import (
 	"backend/internal/entity"
+	"backend/internal/service"
 	"backend/internal/service/auth"
 	httpserver "backend/internal/transport/http"
 	"backend/internal/transport/http/response"
 	"backend/pkg/apperr"
 	"backend/pkg/dob"
 	"net/http"
-	"time"
 
 	"github.com/impl0x/mo"
 )
@@ -56,20 +56,22 @@ func (h Handler) RegisterPaths(g mo.Grouped) {
 	g.POST("/check/username", h.CheckUsername)
 	g.POST("/register", h.Register)
 	g.POST("/login", h.Login)
-	g.POST("/otp/verify", h.VerifyOTP)
-	g.POST("/otp/resend", h.ResendOTP)
-
+	g.POST("/otp/verify/register", h.VerifyOTPRegister)
+	g.POST("/2fa/otp", h.VerifyOTP2FA)
+	// g.POST("/2fa/totp", h.VerifyTOTP2FA)
+	g.POST("/otp/verify/forgot-password", h.VerifyOTPForForgotPassword)
 	g.POST("/refresh", h.Refresh)
-	g.POST("/forgot-password", h.ForgotPassword)
-	g.POST("/reset-password", h.ResetPassword)
-	g.POST("/reset-password/verify-otp", h.VerifyOTPForResetPassword)
+	g.POST("/otp/resend", h.ResendOTP)
+	g.POST("/password/forgot", h.ForgotPassword)
+	g.POST("/password/reset", h.ResetPassword)
 
 	g.POST("/logout", h.Logout, h.Middleware)
+	// g.GET("/account", h.GetAccount, h.Middleware)
 	g.DELETE("/account", h.DeleteAccount, h.Middleware)
 	g.PUT("/2fa", h.Add2FA, h.Middleware)
 	g.DELETE("/2fa", h.Remove2FA, h.Middleware)
 	g.POST("/2fa/totp/setup", h.TotpSetup, h.Middleware)
-	g.POST("/2fa/totp/verify", h.TotpVerify, h.Middleware)
+	g.POST("/2fa/totp/setup/verify", h.TotpSetupVerify, h.Middleware)
 	g.POST("/change/password", h.ChangePassword, h.Middleware)
 	g.POST("/change/email", h.ChangeEmail, h.Middleware)
 	g.POST("/change/phone", h.ChangePhone, h.Middleware)
@@ -121,21 +123,20 @@ func (h Handler) Register(c *mo.Context) error {
 	if err != nil {
 		return err // returns validation error / json error, the mo error Handler / custom error handler defined knows how to handle these, at least assuming so.
 	}
-	var ch entity.AuthChannel
-	var v string
+	var i entity.AuthIdentity
 	if req.Email != "" {
-		ch = entity.ChannelEmail
-		v = req.Email
+		i.Channel = entity.ChannelEmail
+		i.Value = req.Email
 	} else if req.Phone != "" {
-		ch = entity.ChannelPhone
-		v = req.Phone
+		i.Channel = entity.ChannelPhone
+		i.Value = req.Phone
 	} else {
 		return errIdentifierNotProvided("Need an Email or Phone to register an account")
 	}
-	d := dob.MustParse(req.Dob) // assuming validator has already validated this.
+	d := dob.AlwaysParse(req.Dob) // assuming validation has been done.
 	result, err := h.Service.Register(
 		httpserver.ToServiceContext(c),
-		req.service(ch, v, d),
+		req.service(i, d),
 	)
 	if err != nil {
 		return err
@@ -145,7 +146,7 @@ func (h Handler) Register(c *mo.Context) error {
 		http.StatusCreated,
 		response.Success(
 			codeNonErrRegisterSuccess,
-			"Registration successful, please check your "+string(ch)+" for the OTP to verify your account",
+			"Registration successful, please check your "+string(i.Channel)+" for the OTP to verify your account",
 			struct { // using anon structs instead of maps to reduce allocation
 				SessionID string `json:"session_id"`
 				ExpiresAt int64  `json:"expires_at"`
@@ -162,23 +163,22 @@ func (h Handler) Login(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	var ch entity.AuthChannel
-	var v string
+	var i entity.AuthIdentity
 	if req.Email != "" {
-		ch = entity.ChannelEmail
-		v = req.Email
+		i.Channel = entity.ChannelEmail
+		i.Value = req.Email
 	} else if req.Phone != "" {
-		ch = entity.ChannelPhone
-		v = req.Phone
+		i.Channel = entity.ChannelPhone
+		i.Value = req.Phone
 	} else if req.Username != "" {
-		ch = entity.ChannelUsername
-		v = req.Username
+		i.Channel = entity.ChannelUsername
+		i.Value = req.Username
 	} else {
 		return errIdentifierNotProvided("Need an Email/Phone/Username to login into an account")
 	}
 	result, err := h.Service.Login(
 		httpserver.ToServiceContext(c),
-		req.service(ch, v),
+		req.service(i),
 		httpserver.GetClientMetadata(c.Request()),
 	)
 	if err != nil {
@@ -189,7 +189,7 @@ func (h Handler) Login(c *mo.Context) error {
 			http.StatusAccepted,
 			response.Success(
 				codeNonErrTwoFARequired,
-				"Two-factor authentication is required, please check your "+string(ch),
+				"Two-factor authentication is required, please check your "+string(i.Channel),
 				struct {
 					SessionID string `json:"session_id"`
 					ExpiresAt int64  `json:"expires_at"`
@@ -210,15 +210,21 @@ func (h Handler) Login(c *mo.Context) error {
 	)
 }
 
-// Verifies a otp for authentication
-//   - POST - [verifyOTPRequest]
-func (h Handler) VerifyOTP(c *mo.Context) error {
+// helper method for both register and login 2fa otp verification
+func (h Handler) verifyOTPForAuth(c *mo.Context, flag uint8) error {
 	var req verifyOTPRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.VerifyOTPForNewAuthentication(
+	var fn func(ctx service.Context, req auth.VerifyOTPRequest, md entity.ClientMetadata) (auth.VerifyOTPAuthResult, error)
+	switch flag {
+	case 0:
+		fn = h.Service.VerifyOTPForRegister
+	case 1:
+		fn = h.Service.VerifyOTPFor2FA
+	}
+	result, err := fn(
 		httpserver.ToServiceContext(c),
 		req.service(),
 		httpserver.GetClientMetadata(c.Request()),
@@ -229,7 +235,7 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 				c,
 				err,
 				struct {
-					AttemptsRemaining uint `json:"attempts_remaining"`
+					AttemptsRemaining uint8 `json:"attempts_remaining"`
 				}{result.RemainingAttempts},
 			)
 		}
@@ -244,18 +250,29 @@ func (h Handler) VerifyOTP(c *mo.Context) error {
 	)
 }
 
-// Verifies a otp for reset password
+// Verifies a otp for register
 //   - POST - [verifyOTPRequest]
-func (h Handler) VerifyOTPForResetPassword(c *mo.Context) error {
+func (h Handler) VerifyOTPRegister(c *mo.Context) error {
+	return h.verifyOTPForAuth(c, 0)
+}
+
+// Verifies a otp for login 2fa
+//   - POST - [verifyOTPRequest]
+func (h Handler) VerifyOTP2FA(c *mo.Context) error {
+	return h.verifyOTPForAuth(c, 1)
+}
+
+// Verifies a otp for a forgot password password
+//   - POST - [verifyOTPRequest]
+func (h Handler) VerifyOTPForForgotPassword(c *mo.Context) error {
 	var req verifyOTPRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.VerifyOTPForResetPassword(
+	result, err := h.Service.VerifyOTPForForgotPassword(
 		httpserver.ToServiceContext(c),
 		req.service(),
-		httpserver.GetClientMetadata(c.Request()),
 	)
 	if err != nil {
 		if result.RemainingAttempts != 0 { // it means this was populated, so we need to add it to the error data and send it now
@@ -263,7 +280,7 @@ func (h Handler) VerifyOTPForResetPassword(c *mo.Context) error {
 				c,
 				err,
 				struct {
-					AttemptsRemaining uint `json:"attempts_remaining"`
+					AttemptsRemaining uint8 `json:"attempts_remaining"`
 				}{result.RemainingAttempts},
 			)
 		}
@@ -272,9 +289,9 @@ func (h Handler) VerifyOTPForResetPassword(c *mo.Context) error {
 	return c.JSON(
 		http.StatusAccepted,
 		struct {
-			SessionID string    `json:"session_id"`
-			ExpiresAt time.Time `json:"expires_at"`
-		}{result.SessionID, result.ExpiresAt},
+			SessionID string `json:"session_id"`
+			ExpiresAt int64  `json:"expires_at"`
+		}{result.SessionID, result.ExpiresAt.Unix()},
 	)
 }
 
@@ -286,24 +303,14 @@ func (h Handler) ResendOTP(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.ResendOTP(
+	err = h.Service.ResendOTP(
 		httpserver.ToServiceContext(c),
 		req.service(),
 	)
 	if err != nil {
 		return err
 	}
-	return c.JSON(
-		http.StatusOK,
-		response.Success(
-			codeNonErrOTPSent,
-			"OTP sent",
-			struct {
-				SessionID string `json:"session_id"`
-				ExpiresAt int64  `json:"expires_at"`
-			}{result.SessionID, result.ExpiresAt.Unix()},
-		),
-	)
+	return c.NoContent(http.StatusNoContent)
 }
 
 // refreshes the token and provides a new set of tokens
@@ -342,20 +349,19 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 	if err != nil {
 		return err
 	}
-	var ch entity.AuthChannel
-	var v string
+	var i entity.AuthIdentity
 	if req.Email != "" {
-		ch = entity.ChannelEmail
-		v = req.Email
+		i.Channel = entity.ChannelEmail
+		i.Value = req.Email
 	} else if req.Phone != "" {
-		ch = entity.ChannelPhone
-		v = req.Phone
+		i.Channel = entity.ChannelPhone
+		i.Value = req.Phone
 	} else {
 		return errIdentifierNotProvided("Need an Email/Phone to send reset password")
 	}
 	result, err := h.Service.ForgotPassword(
 		httpserver.ToServiceContext(c),
-		req.service(ch, v),
+		req.service(i),
 	)
 	if err != nil {
 		return err
@@ -364,7 +370,7 @@ func (h Handler) ForgotPassword(c *mo.Context) error {
 		http.StatusOK,
 		response.Success(
 			apperr.CodeOk,
-			"An OTP has been sent to your "+string(ch),
+			"An OTP has been sent to your "+string(i.Channel),
 			struct {
 				SessionID string `json:"session_id"`
 				ExpiresAt int64  `json:"expires_at"`
@@ -509,15 +515,15 @@ func (h Handler) TotpSetup(c *mo.Context) error {
 }
 
 // verifies a totp session and adds it to the user's 2fas
-//   - POST - [totpVerifyRequest]
-func (h Handler) TotpVerify(c *mo.Context) error {
+//   - POST - [totpSetupVerifyRequest]
+func (h Handler) TotpSetupVerify(c *mo.Context) error {
 	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
-	var req totpVerifyRequest
+	var req totpSetupVerifyRequest
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
 	}
-	result, err := h.Service.TotpVerify(
+	result, err := h.Service.TotpSetupVerify(
 		httpserver.ToServiceContext(c),
 		token,
 		req.service(),
@@ -528,7 +534,7 @@ func (h Handler) TotpVerify(c *mo.Context) error {
 				c,
 				err,
 				struct {
-					AttemptsRemaining uint `json:"attempts_remaining"`
+					AttemptsRemaining uint8 `json:"attempts_remaining"`
 				}{result.RemainingAttempts},
 			)
 		}
@@ -553,30 +559,40 @@ func (h Handler) ChangePassword(c *mo.Context) error {
 	return c.NoContent(http.StatusAccepted)
 }
 
-func (h Handler) ChangeEmail(c *mo.Context) error {
+func (h Handler) changeIdentifier[T interface {
+	service() auth.ChangeIdentifierRequest
+}](c *mo.Context, channel entity.AuthChannel) error {
 	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
-	var req changeEmailRequest
+	var req T
 	err := c.DecodeAndValidateBody(&req)
 	if err != nil {
 		return err
 	}
-	err = h.Service.ChangeIdentifier(httpserver.ToServiceContext(c), token, req.service())
+	result, err := h.Service.ChangeIdentifier(httpserver.ToServiceContext(c), token, req.service())
 	if err != nil {
 		return err
 	}
-	return c.NoContent(http.StatusAccepted)
+	return c.JSON(
+		http.StatusOK,
+		response.Success(
+			apperr.CodeOk,
+			"An OTP has been sent to your new "+string(channel)+", please use that to verify it",
+			struct {
+				SessionID string `json:"session_id"`
+				ExpiresAt int64  `json:"expires_at"`
+			}{result.SessionID, result.ExpiresAt.Unix()},
+		),
+	)
 }
 
+// changes email
+//   - POST - [changeEmailRequest]
+func (h Handler) ChangeEmail(c *mo.Context) error {
+	return h.changeIdentifier[changeEmailRequest](c, entity.ChannelEmail)
+}
+
+// changes phone
+//   - POST - [changePhoneRequest]
 func (h Handler) ChangePhone(c *mo.Context) error {
-	token := c.GetTypedMust[auth.AccessToken](keyAuthToken)
-	var req changePhoneRequest
-	err := c.DecodeAndValidateBody(&req)
-	if err != nil {
-		return err
-	}
-	err = h.Service.ChangeIdentifier(httpserver.ToServiceContext(c), token, req.service())
-	if err != nil {
-		return err
-	}
-	return c.NoContent(http.StatusAccepted)
+	return h.changeIdentifier[changePhoneRequest](c, entity.ChannelPhone)
 }
