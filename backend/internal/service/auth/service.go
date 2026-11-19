@@ -458,66 +458,49 @@ type verifyOTPResult struct {
 	RemainingAttempts uint8 // only populated on specific otp incorrect error
 }
 
-type VerifyOTPForRegisterResult struct {
+type VerifyOTPAuthResult struct {
 	AccessToken  string
 	RefreshToken string
 	verifyOTPResult
 }
 
-func (s *Service) VerifyOTPForRegister(ctx service.Context, req VerifyOTPRequest, md entity.ClientMetadata) (VerifyOTPForRegisterResult, error) {
-	session, ra, err := s.otp.verify(req.SessionID, req.OTP, purposeRegistration)
+func (s *Service) verifyOTPAuth(ctx service.Context, req VerifyOTPRequest, md entity.ClientMetadata, purpose authPurpose) (VerifyOTPAuthResult, error) {
+	session, ra, err := s.otp.verify(req.SessionID, req.OTP, purpose)
 	if err != nil {
-		return VerifyOTPForRegisterResult{RemainingAttempts: ra}, err
+		return VerifyOTPAuthResult{RemainingAttempts: ra}, err
 	}
 	// find the user
 	user, err := s.repo.User.GetByID(ctx, session.userID)
 	if err != nil {
-		return VerifyOTPForRegisterResult{}, handleUserNotFound(err)
+		return VerifyOTPAuthResult{}, handleUserNotFound(err)
 	}
 
-	// change user status from unverified to verified
-	err = s.repo.User.UpdateStatus(ctx, user.ID, entity.StatusVerified)
-	if err != nil {
-		return VerifyOTPForRegisterResult{}, err
+	if purpose == purposeRegistration {
+		// change user status from unverified to verified
+		err = s.repo.User.UpdateStatus(ctx, user.ID, entity.StatusVerified)
+		if err != nil {
+			return VerifyOTPAuthResult{}, err
+		}
 	}
 
 	// generate tokens and send them
 	accessToken, refreshToken, err := s.generateTokensAndCreateSession(ctx, user, md)
 	if err != nil {
-		return VerifyOTPForRegisterResult{}, err
+		return VerifyOTPAuthResult{}, err
 	}
 
-	return VerifyOTPForRegisterResult{
+	return VerifyOTPAuthResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
 }
 
-type VerifyOTPFor2FAResult struct {
-	VerifyOTPForRegisterResult // embedded as both have the exact same fields
+func (s *Service) VerifyOTPForRegister(ctx service.Context, req VerifyOTPRequest, md entity.ClientMetadata) (VerifyOTPAuthResult, error) {
+	return s.verifyOTPAuth(ctx, req, md, purposeRegistration)
 }
 
-func (s *Service) VerifyOTPFor2FA(ctx service.Context, req VerifyOTPRequest, md entity.ClientMetadata) (VerifyOTPFor2FAResult, error) {
-	session, ra, err := s.otp.verify(req.SessionID, req.OTP, purpose2FA)
-	if err != nil {
-		return VerifyOTPFor2FAResult{RemainingAttempts: ra}, err
-	}
-	// find the user
-	user, err := s.repo.User.GetByID(ctx, session.userID)
-	if err != nil {
-		return VerifyOTPFor2FAResult{}, handleUserNotFound(err)
-	}
-
-	// generate tokens and send them
-	accessToken, refreshToken, err := s.generateTokensAndCreateSession(ctx, user, md)
-	if err != nil {
-		return VerifyOTPFor2FAResult{}, err
-	}
-
-	return VerifyOTPFor2FAResult{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}, nil
+func (s *Service) VerifyOTPFor2FA(ctx service.Context, req VerifyOTPRequest, md entity.ClientMetadata) (VerifyOTPAuthResult, error) {
+	return s.verifyOTPAuth(ctx, req, md, purpose2FA)
 }
 
 type VerifyOTPForForgotPasswordResult struct {
@@ -840,55 +823,55 @@ func (s *Service) TotpSetup(ctx service.Context, token AccessToken) (TotpSetupRe
 	}, nil
 }
 
-// ? ----+-----+-----Totp Verify-----+-----+-----
+// ? ----+-----+-----Totp Setup Verify-----+-----+-----
 
-type TotpVerifyResult struct {
+type TotpSetupVerifyResult struct {
 	RemainingAttempts uint8
 }
 
 // verifies the otp from totp setup and sets secret in database
-func (s *Service) TotpSetupVerify(ctx service.Context, token AccessToken, req TotpVerifyRequest) (TotpVerifyResult, error) {
+func (s *Service) TotpSetupVerify(ctx service.Context, token AccessToken, req TotpSetupVerifyRequest) (TotpSetupVerifyResult, error) {
 	// Fetching session from cache
 	item, ok := s.cache.totpSetup.Acquire(req.SessionID)
 	if !ok {
-		return TotpVerifyResult{}, errTotpSetupVerifySessionNotFound
+		return TotpSetupVerifyResult{}, errTotpSetupVerifySessionNotFound
 	}
 	defer item.Release()
 	session, expiresAt := item.Value(), item.ExpiresAt()
 
 	// checking if session and token user's match, otherwise it is a stolen token/reference id
 	if session.userID != token.UserID {
-		return TotpVerifyResult{}, errTotpSetupVerifySessionNotFound
+		return TotpSetupVerifyResult{}, errTotpSetupVerifySessionNotFound
 	}
 	// checking if session has expired
 	if expiresAt.Before(time.Now()) {
 		item.Delete()
-		return TotpVerifyResult{}, errTotpSetupVerifySessionExpired
+		return TotpSetupVerifyResult{}, errTotpSetupVerifySessionExpired
 	}
 	// calculating the otp
 	otp, err := s.totp.Generate(session.secretKey)
 	if err != nil {
-		return TotpVerifyResult{}, err
+		return TotpSetupVerifyResult{}, err
 	}
 	session.attempts++ // increment on every attempt
 	remainingAttempts := s.config.MaxAttempts.Verify.TOTPSetup - session.attempts
 	// comparing against the otp sent
 	if remainingAttempts <= 0 {
 		item.Delete() // delete the session not allowing for any more verification attempts
-		return TotpVerifyResult{}, errCommonAttemptsExhausted
+		return TotpSetupVerifyResult{}, errCommonAttemptsExhausted
 	}
 	// compare both otps
 	if subtle.ConstantTimeCompare([]byte(req.OTP), []byte(otp)) == 1 {
-		return TotpVerifyResult{RemainingAttempts: remainingAttempts}, errTotpSetupVerifyTOTPIncorrect
+		return TotpSetupVerifyResult{RemainingAttempts: remainingAttempts}, errTotpSetupVerifyTOTPIncorrect
 	}
 	// delete the session if otp matches and verification is complete
 	item.Delete()
 	// enable totp in database
 	err = s.repo.User.UpdateAddTotp(ctx, session.userID, session.secretKey)
 	if err != nil {
-		return TotpVerifyResult{}, err
+		return TotpSetupVerifyResult{}, err
 	}
-	return TotpVerifyResult{}, nil
+	return TotpSetupVerifyResult{}, nil
 }
 
 // changes the users password
