@@ -51,7 +51,7 @@ type Remove2FARequest struct {
 	Channel entity.AuthChannel // only in "email" / "phone" / "totp"
 }
 
-type TotpVerifyRequest struct {
+type TotpSetupVerifyRequest struct {
 	SessionID string
 	OTP       string
 }
