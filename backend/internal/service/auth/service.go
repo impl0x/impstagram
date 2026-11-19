@@ -851,18 +851,19 @@ func (s *Service) TotpSetupVerify(ctx service.Context, token AccessToken, req To
 	// Fetching session from cache
 	item, ok := s.cache.totpSetup.Acquire(req.SessionID)
 	if !ok {
-		return TotpVerifyResult{}, errTotpVerifySessionNotFound
+		return TotpVerifyResult{}, errTotpSetupVerifySessionNotFound
 	}
 	defer item.Release()
 	session, expiresAt := item.Value(), item.ExpiresAt()
 
 	// checking if session and token user's match, otherwise it is a stolen token/reference id
 	if session.userID != token.UserID {
-		return TotpVerifyResult{}, errCommonUnauthorized
+		return TotpVerifyResult{}, errTotpSetupVerifySessionNotFound
 	}
 	// checking if session has expired
 	if expiresAt.Before(time.Now()) {
-		return TotpVerifyResult{}, errTotpVerifySessionExpired
+		item.Delete()
+		return TotpVerifyResult{}, errTotpSetupVerifySessionExpired
 	}
 	// calculating the otp
 	otp, err := s.totp.Generate(session.secretKey)
@@ -878,7 +879,7 @@ func (s *Service) TotpSetupVerify(ctx service.Context, token AccessToken, req To
 	}
 	// compare both otps
 	if subtle.ConstantTimeCompare([]byte(req.OTP), []byte(otp)) == 1 {
-		return TotpVerifyResult{RemainingAttempts: remainingAttempts}, errTotpVerifyTOTPIncorrect
+		return TotpVerifyResult{RemainingAttempts: remainingAttempts}, errTotpSetupVerifyTOTPIncorrect
 	}
 	// delete the session if otp matches and verification is complete
 	item.Delete()
