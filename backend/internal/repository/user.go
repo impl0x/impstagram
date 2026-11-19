@@ -18,7 +18,7 @@ type UserRepository interface {
 
 	// Gets a user by ID
 	GetByID(ctx context.Context, id uuid.UUID) (*entity.User, error)
-	// Gets a user by [entity.AuthChannel], must be a valid channel for fetching users otherwise *panics*.
+	// Gets a user by [entity.AuthIdentity], must be a valid channel for fetching users otherwise panics.
 	GetByAuthIdentity(ctx context.Context, identity entity.AuthIdentity) (*entity.User, error)
 
 	// ? -----+-----+----- Update -----+-----+-----
