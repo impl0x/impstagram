@@ -34,9 +34,15 @@ type Age struct {
 }
 
 type MaxAttempts struct {
-	OTP        uint8
-	TOTPVerify uint8
-	ResendOTP  uint8
+	Verify Verify
+	Resend Resend
+}
+type Verify struct {
+	OTP       uint8
+	TOTPSetup uint8
+}
+type Resend struct {
+	OTP uint8
 }
 
 type ExpiryTime struct {
@@ -49,7 +55,7 @@ type ExpiryTime struct {
 
 type TTLCacheCleanInterval struct {
 	OTP            time.Duration
-	TOTP           time.Duration
+	TOTPSetup      time.Duration
 	ForgotPassword time.Duration
 	JWTBlockList   time.Duration
 }
@@ -74,8 +80,13 @@ var Default = Config{
 		Max: 120,
 	},
 	MaxAttempts: MaxAttempts{
-		OTP:        5,
-		TOTPVerify: 5,
+		Verify: Verify{
+			OTP:       5,
+			TOTPSetup: 10,
+		},
+		Resend: Resend{
+			OTP: 3,
+		},
 	},
 	ExpiryTime: ExpiryTime{
 		OTP:            10 * time.Minute,
@@ -86,7 +97,7 @@ var Default = Config{
 	},
 	TTLCacheCleanInterval: TTLCacheCleanInterval{
 		OTP:            10 * time.Minute,
-		TOTP:           10 * time.Minute,
+		TOTPSetup:      10 * time.Minute,
 		ForgotPassword: 10 * time.Minute,
 		JWTBlockList:   15 * time.Minute, // half the time of access time expiry token
 	},
