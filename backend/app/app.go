@@ -20,7 +20,7 @@ import (
 )
 
 type App struct {
-	t transport
+	t transporter
 }
 
 // all services
@@ -30,7 +30,8 @@ type services struct {
 
 // all extra utility packages used by services
 type pkgs struct {
-	otp           cryptoutil.OtpManager
+	otp           cryptoutil.OTPManager
+	totp          cryptoutil.TOTPManager
 	password      cryptoutil.PasswordHasher
 	jwt           jwt.Manager
 	emailSender   email.Sender
@@ -100,7 +101,8 @@ func newPkgs(cfg *config.Config) (*pkgs, error) {
 	}
 
 	return &pkgs{
-		otp:           cryptoutil.NewOtpManager(cfg.App.Name, *cfg.Services.AuthPkgs.OTP.Map()),
+		otp:           cryptoutil.NewOTPManager(*cfg.Services.AuthPkgs.OTP.Map()),
+		totp:          cryptoutil.NewTOTPManager(*cfg.Services.AuthPkgs.TOTP.Map()),
 		password:      passwordHasher,
 		jwt:           jwt.NewManager(cfg.Services.AuthPkgs.JWT.Secret),
 		emailSender:   emailSender,
@@ -121,6 +123,7 @@ func newServices(cfg serviceconfig.Auth, log logger.Logger, r repositories, p *p
 			},
 			Jwt:           p.jwt,
 			Otp:           p.otp,
+			Totp:          p.totp,
 			Password:      p.password,
 			EmailSender:   p.emailSender,
 			EmailRenderer: p.emailRenderer,
@@ -143,7 +146,7 @@ func New(cfg *config.Config) (*App, error) {
 	var r repositories
 	switch appconfig.CurrentDatabase {
 	case appconfig.Postgres:
-		pg, err := postgres.New(cfg.Infra.Postgres, log)
+		pg, err := postgres.New(*cfg.Infra.Postgres.Map(), log)
 		if err != nil {
 			return nil, fmt.Errorf("App: instantiate postgres: %w", err)
 		}
@@ -156,10 +159,17 @@ func New(cfg *config.Config) (*App, error) {
 	s := newServices(cfg.Services.Auth, log, r, p)
 
 	// transport
-	var t transport
+	tp := newTransport(
+		log,
+		s,
+		func() string {
+			return cryptoutil.GeneratePseudoHexToken(appconfig.RequestIDBitSize)
+		},
+	)
+	var t transporter
 	switch appconfig.CurrentTransport {
 	case appconfig.HTTP:
-		t = newHttpTransport(log, s, cfg.Infra.HttpServer)
+		t = tp.http(cfg.Infra.HttpServer)
 	default:
 		panic("invalid transport present in app config")
 	}
