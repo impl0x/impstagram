@@ -60,7 +60,7 @@ func (m *Resend) send(ctx context.Context, sub string, to []string, html string)
 	if err != nil {
 		return fmt.Errorf("email: send email: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, err := io.ReadAll(resp.Body) // only read body if api return error
