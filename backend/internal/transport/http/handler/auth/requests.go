@@ -19,11 +19,10 @@ type registerRequest struct {
 	Password string `json:"password" validate:"required,min=8,max=20"`
 }
 
-func (r registerRequest) service(c entity.AuthChannel, v string, d dob.Dob) auth.RegisterRequest {
+func (r registerRequest) service(i entity.AuthIdentity, d dob.Dob) auth.RegisterRequest {
 	return auth.RegisterRequest{
 		Username: r.Username,
-		Channel:  c,
-		Value:    v,
+		Identity: i,
 		Dob:      d,
 		Password: r.Password,
 	}
@@ -46,10 +45,9 @@ type loginRequest struct {
 	Password string `json:"password" validate:"required,min=8,max=20"`
 }
 
-func (r loginRequest) service(c entity.AuthChannel, v string) auth.LoginRequest {
+func (r loginRequest) service(i entity.AuthIdentity) auth.LoginRequest {
 	return auth.LoginRequest{
-		Channel:  c,
-		Value:    v,
+		Identity: i,
 		Password: r.Password,
 	}
 }
@@ -69,10 +67,9 @@ type forgotPasswordRequest struct {
 	Phone string `json:"phone" validate:"optional,e.164"`
 }
 
-func (r forgotPasswordRequest) service(c entity.AuthChannel, v string) auth.ForgotPasswordRequest {
+func (r forgotPasswordRequest) service(i entity.AuthIdentity) auth.ForgotPasswordRequest {
 	return auth.ForgotPasswordRequest{
-		Channel: c,
-		Value:   v,
+		Identity: i,
 	}
 }
 
@@ -130,13 +127,13 @@ func (r remove2FARequest) service() auth.Remove2FARequest {
 	}
 }
 
-type totpVerifyRequest struct {
+type totpSetupVerifyRequest struct {
 	SessionID string `json:"session_id" validate:"required"`
 	OTP       string `json:"otp" validate:"required,numeric"`
 }
 
-func (r totpVerifyRequest) service() auth.TotpVerifyRequest {
-	return auth.TotpVerifyRequest{
+func (r totpSetupVerifyRequest) service() auth.TotpSetupVerifyRequest {
+	return auth.TotpSetupVerifyRequest{
 		SessionID: r.SessionID,
 		OTP:       r.OTP,
 	}
@@ -160,8 +157,10 @@ type changeEmailRequest struct {
 
 func (r changeEmailRequest) service() auth.ChangeIdentifierRequest {
 	return auth.ChangeIdentifierRequest{
-		Channel: entity.ChannelEmail,
-		Value:   r.Email,
+		Identity: entity.AuthIdentity{
+			Channel: entity.ChannelEmail,
+			Value:   r.Email,
+		},
 	}
 }
 
@@ -171,7 +170,9 @@ type changePhoneRequest struct {
 
 func (r changePhoneRequest) service() auth.ChangeIdentifierRequest {
 	return auth.ChangeIdentifierRequest{
-		Channel: entity.ChannelPhone,
-		Value:   r.Phone,
+		Identity: entity.AuthIdentity{
+			Channel: entity.ChannelPhone,
+			Value:   r.Phone,
+		},
 	}
 }
