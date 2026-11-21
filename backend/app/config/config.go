@@ -7,42 +7,36 @@ import "backend/pkg/cryptoutil"
 // App version according to release
 const AppVersion = "0.5.0"
 
+type current struct {
+	Database  Database
+	Transport Transport
+	Extra     extra
+	Hasher    hasher
+}
+
+type hasher struct {
+	Password     HashingAlgorithm
+	RefreshToken HashingAlgorithm
+}
+
+type extra struct {
+	EmailSender      EmailSender
+	RequestIDBitSize cryptoutil.BitSize // Bit size for request IDs
+}
+
 // Current values for the app configurations
-const (
-	CurrentDatabase       = Postgres
-	CurrentTransport      = HTTP
-	CurrentPasswordHasher = Argon2ID
-	CurrentEmailSender    = Resend
-)
+var _current = current{
+	Database:  Postgres,
+	Transport: HTTP,
+	Extra: extra{
+		EmailSender:      Resend,
+		RequestIDBitSize: cryptoutil.Bit64,
+	},
+	Hasher: hasher{
+		Password:     Argon2ID,
+		RefreshToken: MD5,
+	},
+}
 
-// database type represents a database storage which implements repository
-type Database uint8
-
-const (
-	// Postgres sql
-	Postgres Database = iota
-)
-
-// Transport refers to the protocol used to talk to the frontend as a server
-type Transport uint8
-
-const (
-	HTTP Transport = iota
-)
-
-// Hashing algorithm used to hash passwords in the database
-type PasswordHasher uint8
-
-const (
-	Argon2ID PasswordHasher = iota
-)
-
-// Implementation used to send emails to users
-type EmailSender uint8
-
-const (
-	Resend EmailSender = iota
-)
-
-// Bit size for request IDs
-const RequestIDBitSize = cryptoutil.Bit64
+// Current app configuration
+var Current = func() current { return _current } // function returning a copy of [_current], preventing it from being modified
