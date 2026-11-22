@@ -77,7 +77,7 @@ func newPkgs(cfg *config.Config) (*pkgs, error) {
 
 	// create new password hasher
 	var passwordHasher cryptoutil.PasswordHasher
-	switch appconfig.CurrentPasswordHasher {
+	switch appconfig.Current().Hasher.Password {
 	case appconfig.Argon2ID:
 		passwordHasher = argon2id.New(*cfg.Services.AuthPkgs.Password.Argon2ID.Map())
 	default:
@@ -87,7 +87,7 @@ func newPkgs(cfg *config.Config) (*pkgs, error) {
 	// create new email sender
 	httpClient := newHttpClient(cfg.Infra.HttpClient)
 	var emailSender email.Sender
-	switch appconfig.CurrentEmailSender {
+	switch appconfig.Current().Extra.EmailSender {
 	case appconfig.Resend:
 		emailSender = resend.New(httpClient, cfg.Infra.Email.EmailID, cfg.Infra.Email.ResendApiKey)
 	default:
@@ -112,6 +112,17 @@ func newPkgs(cfg *config.Config) (*pkgs, error) {
 
 // returns services injected with their respective configs, repositories, packages and logger.
 func newServices(cfg serviceconfig.Auth, log logger.Logger, r repositories, p *pkgs) services {
+	var h cryptoutil.Hasher
+	switch appconfig.Current().Hasher.RefreshToken {
+	case appconfig.MD5:
+		h = cryptoutil.GenerateMD5Hash
+	case appconfig.SHA256:
+		h = cryptoutil.GenerateSHA256Hash
+	case appconfig.Argon2ID:
+		panic("argon2id is not supported for hashing refresh tokens")
+	default:
+		panic("invalid hashing algorithm")
+	}
 	return services{
 		auth: authservice.NewService(authservice.Dependencies{
 			Log:    log,
@@ -121,12 +132,13 @@ func newServices(cfg serviceconfig.Auth, log logger.Logger, r repositories, p *p
 				Session: r.userSession,
 				Profile: r.profile,
 			},
-			Jwt:           p.jwt,
-			Otp:           p.otp,
-			Totp:          p.totp,
-			Password:      p.password,
-			EmailSender:   p.emailSender,
-			EmailRenderer: p.emailRenderer,
+			Jwt:                p.jwt,
+			Otp:                p.otp,
+			Totp:               p.totp,
+			Password:           p.password,
+			EmailSender:        p.emailSender,
+			EmailRenderer:      p.emailRenderer,
+			RefreshTokenHasher: h,
 		}),
 	}
 }
@@ -144,7 +156,7 @@ func New(cfg *config.Config) (*App, error) {
 
 	// repositories
 	var r repositories
-	switch appconfig.CurrentDatabase {
+	switch appconfig.Current().Database {
 	case appconfig.Postgres:
 		pg, err := postgres.New(*cfg.Infra.Postgres.Map(), log)
 		if err != nil {
@@ -163,11 +175,11 @@ func New(cfg *config.Config) (*App, error) {
 		log,
 		s,
 		func() string {
-			return cryptoutil.GeneratePseudoHexToken(appconfig.RequestIDBitSize)
+			return cryptoutil.GeneratePseudoHexToken(appconfig.Current().Extra.RequestIDBitSize)
 		},
 	)
 	var t transporter
-	switch appconfig.CurrentTransport {
+	switch appconfig.Current().Transport {
 	case appconfig.HTTP:
 		t = tp.http(cfg.Infra.HttpServer)
 	default:
@@ -179,6 +191,6 @@ func New(cfg *config.Config) (*App, error) {
 	}, nil
 }
 
-func (a *App) Run() error {
+func (a App) Run() error {
 	return a.t.start()
 }
